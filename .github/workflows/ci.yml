@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  format:
+    name: Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - run: dotnet restore GameLauncher.sln
+
+      - name: Verify formatting
+        run: dotnet format GameLauncher.sln --verify-no-changes --no-restore
+
+  build-and-test:
+    name: Build and test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The client ships for all three desktop platforms, so all three are built here.
+        # macOS in particular is not verifiable on the maintainer's machine.
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore GameLauncher.sln
+
+      - run: dotnet build GameLauncher.sln -c Release --no-restore
+
+      - run: dotnet test GameLauncher.sln -c Release --no-build --verbosity normal
+
+  publish-check:
+    name: Publish check (${{ matrix.rid }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, linux-x64, osx-x64, osx-arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Catches runtime-identifier problems (trimming, native assets) that a plain build
+      # would not surface until release day.
+      - name: Publish self-contained
+        run: |
+          dotnet publish src/GameLauncher.App/GameLauncher.App.csproj \
+            -c Release -r ${{ matrix.rid }} --self-contained \
+            -o artifacts/${{ matrix.rid }}
