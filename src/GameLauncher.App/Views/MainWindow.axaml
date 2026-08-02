@@ -1,0 +1,63 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+        xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+        xmlns:core="clr-namespace:GameLauncher.Core.Localization;assembly=GameLauncher.Core"
+        mc:Ignorable="d"
+        x:Class="GameLauncher.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding AppName}"
+        Width="1100" Height="700"
+        MinWidth="900" MinHeight="600"
+        WindowStartupLocation="CenterScreen">
+
+  <Grid RowDefinitions="Auto,*,Auto">
+
+    <!-- Top bar: navigation and the language picker. -->
+    <Border Grid.Row="0" Padding="20,14" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
+          <TextBlock Text="{Binding AppName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
+          <TextBlock Text="{loc:Tr Nav.Library}" Opacity="0.8" VerticalAlignment="Center" />
+          <TextBlock Text="{loc:Tr Nav.Explore}" Opacity="0.5" VerticalAlignment="Center" />
+          <TextBlock Text="{loc:Tr Nav.Settings}" Opacity="0.5" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <TextBlock Text="{loc:Tr Common.Language}" VerticalAlignment="Center" Opacity="0.7" />
+          <ComboBox ItemsSource="{Binding Languages}"
+                    SelectedItem="{Binding SelectedLanguage}"
+                    MinWidth="130">
+            <ComboBox.ItemTemplate>
+              <DataTemplate x:DataType="core:LanguageOption">
+                <TextBlock Text="{Binding NativeName}" />
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+
+      </Grid>
+    </Border>
+
+    <!-- Placeholder body. Library, Explore and the dev dashboard land in milestones 6-8. -->
+    <StackPanel Grid.Row="1" Spacing="10"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+      <TextBlock Text="{Binding WelcomeMessage}"
+                 FontSize="28" FontWeight="Light" HorizontalAlignment="Center" />
+      <TextBlock Text="{loc:Tr Shell.Tagline}"
+                 FontSize="14" Opacity="0.6" HorizontalAlignment="Center" />
+      <TextBlock Text="{loc:Tr Library.Empty}"
+                 FontSize="13" Opacity="0.45" Margin="0,24,0,0"
+                 MaxWidth="420" TextWrapping="Wrap" TextAlignment="Center" />
+    </StackPanel>
+
+    <Border Grid.Row="2" Padding="20,10" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+      <TextBlock Text="{loc:Tr Status.Connecting}" FontSize="12" Opacity="0.6" />
+    </Border>
+
+  </Grid>
+
+</Window>

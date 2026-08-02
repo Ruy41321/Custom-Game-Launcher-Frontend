@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GameLauncher.Updater</RootNamespace>
+    <AssemblyName>GameLauncher.Updater</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameLauncher.Core\GameLauncher.Core.csproj" />
+  </ItemGroup>
+
+</Project>

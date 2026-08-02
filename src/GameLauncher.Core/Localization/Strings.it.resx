@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Nav.Library" xml:space="preserve">
+    <value>Libreria</value>
+  </data>
+  <data name="Nav.Explore" xml:space="preserve">
+    <value>Esplora</value>
+  </data>
+  <data name="Nav.Settings" xml:space="preserve">
+    <value>Impostazioni</value>
+  </data>
+  <data name="Common.Search" xml:space="preserve">
+    <value>Cerca</value>
+  </data>
+  <data name="Common.Cancel" xml:space="preserve">
+    <value>Annulla</value>
+  </data>
+  <data name="Common.Retry" xml:space="preserve">
+    <value>Riprova</value>
+  </data>
+  <data name="Common.Language" xml:space="preserve">
+    <value>Lingua</value>
+  </data>
+  <data name="Library.Empty" xml:space="preserve">
+    <value>Non hai ancora installato niente. Vai su Esplora per trovare qualcosa da giocare.</value>
+  </data>
+  <data name="Library.Install" xml:space="preserve">
+    <value>Installa</value>
+  </data>
+  <data name="Library.Uninstall" xml:space="preserve">
+    <value>Disinstalla</value>
+  </data>
+  <data name="Library.Play" xml:space="preserve">
+    <value>Gioca</value>
+  </data>
+  <data name="Library.Update" xml:space="preserve">
+    <value>Aggiorna</value>
+  </data>
+  <data name="Status.Offline" xml:space="preserve">
+    <value>Offline — puoi comunque avviare i giochi installati</value>
+  </data>
+  <data name="Status.Connecting" xml:space="preserve">
+    <value>Connessione in corso…</value>
+  </data>
+  <data name="Shell.Welcome" xml:space="preserve">
+    <value>Benvenuto su {0}</value>
+  </data>
+  <data name="Shell.Tagline" xml:space="preserve">
+    <value>I tuoi giochi, le tue build, il tuo server.</value>
+  </data>
+  <data name="Error.Generic" xml:space="preserve">
+    <value>Qualcosa è andato storto. Riprova.</value>
+  </data>
+  <data name="Error.Network" xml:space="preserve">
+    <value>Impossibile raggiungere il server.</value>
+  </data>
+</root>
