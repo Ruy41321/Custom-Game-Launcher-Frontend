@@ -1,0 +1,8 @@
+# The client is built on Windows, Linux and macOS. Normalising to LF in the repository
+# keeps diffs clean and keeps `dotnet format` agreeing with itself across platforms.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.icns binary
