@@ -208,6 +208,13 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 - ✅ Serilog file logging and global crash handlers
 - ✅ xUnit test projects, GitHub Actions CI matrix on `dev`
 
+### Verified on 2026-08-02
+- 56/56 tests green (33 Core, 23 Infrastructure)
+- `dotnet format --verify-no-changes` clean
+- The shell window opens and stays up on Windows
+- ⚠️ The GitHub Actions workflow has **not** run yet; the Linux and macOS legs in particular
+  are unverified
+
 ### Next up
 - ⬜ **M6** Login view + auth flow, library view, game detail with patch-note cards
 - ⬜ **M7** Download engine: `Range` resume, staging + atomic apply, disk-space check,
