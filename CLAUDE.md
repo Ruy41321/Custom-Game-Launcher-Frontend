@@ -79,6 +79,7 @@ belongs in Infrastructure behind an interface declared in Core.
 | D10 | **Avalonia 12.1.1, targeting `net9.0`** | Latest stable major at project start; 11.x will age out during this project's life. Avalonia 12 ships `net8.0` and `net10.0` asset groups, and `net9.0` resolves the `net8.0` one, so the installed .NET 9 SDK is enough. | Avalonia 11.3.x (would need a major upgrade within a year) |
 | D11 | **xUnit v3 built-in `Assert`, no fluent-assertion library** | FluentAssertions 8 moved to a licence that is not free for all uses, which is a poor fit for an MIT project. Built-in assertions cost one dependency less and no licence review. | FluentAssertions (licence); Shouldly / AwesomeAssertions (extra dependency for marginal gain) |
 | D12 | **LF line endings, enforced by `.gitattributes`** | The solution is built on three operating systems and `dotnet format` checks line endings; mixed endings would fail CI on some legs and not others. | Platform-default endings |
+| D13 | **SDK pinned in `global.json`, CI installs it via `global-json-file`** | `dotnet-version: '9.0.x'` let the runner pick whatever SDK it had. A newer SDK ships new CA analyzer rules, and with `TreatWarningsAsErrors` (D9) that turns any SDK release into a red build for a violation that does not exist locally and cannot be reproduced before pushing — which is exactly how CA1873 broke all seven build jobs. `rollForward: latestPatch` still takes patches; moving up a feature band is now a deliberate commit. | `9.0.x` (unreproducible CI); relaxing `TreatWarningsAsErrors` (loses the guarantee D9 exists for) |
 
 ---
 
@@ -156,7 +157,8 @@ dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 | .NET SDK 9.0.310 is installed | Local build and test work out of the box |
 | No macOS machine available | The macOS target is verified **only** in CI; never claim it is tested locally |
 | Backend needs Docker Desktop, whose daemon is often stopped | Start it before running the client against a local API |
-| `gh` is not installed | Do GitHub work through git over SSH |
+| `gh` 2.97 is installed at `C:\Program Files\GitHub CLI` and authenticated as `Ruy41321` | Read CI failures with `gh run view <id> --log-failed` instead of guessing. The installer does not add it to an already-open shell's `PATH`; prepend the directory if `gh` is not found |
+| **The local SDK carries fewer analyzers than the newest 9.0.x** | A clean local build proves nothing about CI unless the SDK matches. `global.json` pins it (D13); do not "modernise" the workflow back to `dotnet-version: '9.0.x'` |
 | **`Avalonia.Diagnostics` has no 12.x release** | Do not add it back; the dev tools moved into the core package in Avalonia 12 |
 | **`Serilog.Sinks.File` 8.0.0 is prerelease only** — 7.0.0 is the newest stable | Verify a version really exists before pinning it; the flat-container feed lists prereleases too |
 | **`.editorconfig` naming rules are first-match-wins** | The `const` and `static readonly` PascalCase rules must stay *above* the private-field `_camelCase` rule, or every constant is reported as a violation |
@@ -212,8 +214,14 @@ Legend: ✅ done · 🚧 in progress · ⬜ not started
 - 56/56 tests green (33 Core, 23 Infrastructure)
 - `dotnet format --verify-no-changes` clean
 - The shell window opens and stays up on Windows
-- ⚠️ The GitHub Actions workflow has **not** run yet; the Linux and macOS legs in particular
-  are unverified
+### GitHub Actions, first real run (2026-08-03)
+The workflow ran. `Format` passed; all seven build jobs — three platforms plus four publish
+RIDs — failed identically on `CA1873` in `LauncherConfigurationProvider`, a rule the runner's
+SDK has and 9.0.310 does not. Fixed by guarding the log call and by pinning the SDK (D13).
+
+⚠️ The Linux and macOS legs got as far as `dotnet restore` and then stopped at the shared
+compile error, so **they still have not run a test or a publish**. They stay unverified until
+the next run is green.
 
 ### Next up
 - ⬜ **M6** Login view + auth flow, library view, game detail with patch-note cards
