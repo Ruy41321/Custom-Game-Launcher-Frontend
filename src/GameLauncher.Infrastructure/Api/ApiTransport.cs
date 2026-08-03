@@ -18,6 +18,18 @@ internal sealed class ApiTransport(HttpClient httpClient)
         => await SendAsync<T>(new HttpRequestMessage(HttpMethod.Get, path), cancellationToken)
             .ConfigureAwait(false);
 
+    /// <summary>
+    /// The raw response body, for the one endpoint whose bytes are the contract rather than
+    /// the document they encode: the manifest is hashed as it arrived.
+    /// </summary>
+    public async Task<byte[]> GetBytesAsync(string path, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendCoreAsync(
+            new HttpRequestMessage(HttpMethod.Get, path), cancellationToken).ConfigureAwait(false);
+
+        return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<T> PostAsync<T>(string path, object body, CancellationToken cancellationToken)
         => await SendAsync<T>(Request(HttpMethod.Post, path, body), cancellationToken)
             .ConfigureAwait(false);

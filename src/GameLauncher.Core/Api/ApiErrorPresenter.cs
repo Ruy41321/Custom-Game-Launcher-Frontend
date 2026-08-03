@@ -39,6 +39,7 @@ public sealed class ApiErrorPresenter(ILocalizationService localization) : IApiE
         exception.Code switch
         {
             ApiErrorCode.Network => "Error.Network",
+            ApiErrorCode.Integrity => "Error.Integrity",
             ApiErrorCode.InvalidInput => "Error.InvalidInput",
             ApiErrorCode.Unauthenticated => unauthenticatedKey ?? "Error.Unauthenticated",
             ApiErrorCode.Forbidden => "Error.Forbidden",

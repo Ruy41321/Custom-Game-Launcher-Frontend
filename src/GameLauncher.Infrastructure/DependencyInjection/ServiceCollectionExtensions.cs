@@ -53,6 +53,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<ILibraryApi, LibraryApiClient>(ConfigureClient)
             .AddHttpMessageHandler<BearerTokenHandler>();
 
+        services.AddHttpClient<IDownloadApi, DownloadApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<BearerTokenHandler>();
+
         return services;
     }
 

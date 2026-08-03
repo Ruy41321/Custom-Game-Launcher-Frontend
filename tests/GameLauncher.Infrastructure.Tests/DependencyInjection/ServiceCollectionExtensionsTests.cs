@@ -33,6 +33,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IAuthApi))]
     [InlineData(typeof(ICatalogApi))]
     [InlineData(typeof(ILibraryApi))]
+    [InlineData(typeof(IDownloadApi))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();

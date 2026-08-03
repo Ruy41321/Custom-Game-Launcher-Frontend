@@ -113,6 +113,9 @@
   <data name="Error.Network" xml:space="preserve">
     <value>Le serveur est injoignable.</value>
   </data>
+  <data name="Error.Integrity" xml:space="preserve">
+    <value>Les données reçues ne correspondent pas à celles attendues. Réessayez.</value>
+  </data>
   <data name="Error.InvalidInput" xml:space="preserve">
     <value>Une partie de ce que vous avez saisi n'a pas été acceptée.</value>
   </data>

@@ -13,6 +13,13 @@ public enum ApiErrorCode
     /// <summary>A response arrived that this client cannot make sense of.</summary>
     Unknown,
 
+    /// <summary>
+    /// A response arrived intact as far as HTTP is concerned, but its bytes are not the ones
+    /// their content address names. Client-side like <see cref="Network"/>: no server says
+    /// this, because a server that knew would not have sent it.
+    /// </summary>
+    Integrity,
+
     InvalidInput,
     Unauthenticated,
     Forbidden,
@@ -65,6 +72,7 @@ public sealed class ApiException : Exception
     /// anything. A validation failure never will; a timeout might.
     /// </summary>
     public bool IsTransient => Code is ApiErrorCode.Network
+        or ApiErrorCode.Integrity
         or ApiErrorCode.RateLimited
         or ApiErrorCode.DependencyFailure
         or ApiErrorCode.Internal;
