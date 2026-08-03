@@ -113,4 +113,133 @@
   <data name="Error.Network" xml:space="preserve">
     <value>Le serveur est injoignable.</value>
   </data>
+  <data name="Error.InvalidInput" xml:space="preserve">
+    <value>Une partie de ce que vous avez saisi n'a pas été acceptée.</value>
+  </data>
+  <data name="Error.Unauthenticated" xml:space="preserve">
+    <value>Votre session a expiré. Veuillez vous reconnecter.</value>
+  </data>
+  <data name="Error.Forbidden" xml:space="preserve">
+    <value>Votre compte n'a pas le droit de faire cela.</value>
+  </data>
+  <data name="Error.NotFound" xml:space="preserve">
+    <value>Ce contenu n'est pas disponible.</value>
+  </data>
+  <data name="Error.Conflict" xml:space="preserve">
+    <value>Cela entre en conflit avec un élément existant.</value>
+  </data>
+  <data name="Error.QuotaExceeded" xml:space="preserve">
+    <value>Cela dépasserait votre quota d'envoi.</value>
+  </data>
+  <data name="Error.RateLimited" xml:space="preserve">
+    <value>Trop de tentatives. Patientez un instant et réessayez.</value>
+  </data>
+  <data name="Error.DependencyFailure" xml:space="preserve">
+    <value>Le serveur est temporairement indisponible. Réessayez sous peu.</value>
+  </data>
+  <data name="Error.WithReference" xml:space="preserve">
+    <value>{0} (référence {1})</value>
+  </data>
+  <data name="Common.Previous" xml:space="preserve">
+    <value>Précédent</value>
+  </data>
+  <data name="Common.Next" xml:space="preserve">
+    <value>Suivant</value>
+  </data>
+  <data name="Common.Refresh" xml:space="preserve">
+    <value>Actualiser</value>
+  </data>
+  <data name="Auth.SignIn" xml:space="preserve">
+    <value>Se connecter</value>
+  </data>
+  <data name="Auth.Register" xml:space="preserve">
+    <value>Créer un compte</value>
+  </data>
+  <data name="Auth.SignOut" xml:space="preserve">
+    <value>Se déconnecter</value>
+  </data>
+  <data name="Auth.Email" xml:space="preserve">
+    <value>Adresse e-mail</value>
+  </data>
+  <data name="Auth.Password" xml:space="preserve">
+    <value>Mot de passe</value>
+  </data>
+  <data name="Auth.DisplayName" xml:space="preserve">
+    <value>Nom affiché</value>
+  </data>
+  <data name="Auth.NoAccount" xml:space="preserve">
+    <value>Pas encore de compte ? Créez-en un</value>
+  </data>
+  <data name="Auth.HaveAccount" xml:space="preserve">
+    <value>Vous avez déjà un compte ? Connectez-vous</value>
+  </data>
+  <data name="Auth.InvalidCredentials" xml:space="preserve">
+    <value>Cette adresse et ce mot de passe ne correspondent à aucun compte.</value>
+  </data>
+  <data name="Auth.VerifyEmailNotice" xml:space="preserve">
+    <value>Compte créé. Cherchez le lien de vérification sur {0}, puis connectez-vous.</value>
+  </data>
+  <data name="Explore.SearchPlaceholder" xml:space="preserve">
+    <value>Rechercher par titre</value>
+  </data>
+  <data name="Explore.Empty" xml:space="preserve">
+    <value>Aucun résultat pour cette recherche.</value>
+  </data>
+  <data name="Explore.Details" xml:space="preserve">
+    <value>Détails</value>
+  </data>
+  <data name="Explore.AddToLibrary" xml:space="preserve">
+    <value>Ajouter à la bibliothèque</value>
+  </data>
+  <data name="Explore.PageOf" xml:space="preserve">
+    <value>Page {0} sur {1}</value>
+  </data>
+  <data name="Explore.Sort.ReleaseDate" xml:space="preserve">
+    <value>Date de sortie</value>
+  </data>
+  <data name="Explore.Sort.Title" xml:space="preserve">
+    <value>Titre</value>
+  </data>
+  <data name="Explore.Sort.Recent" xml:space="preserve">
+    <value>Ajoutés récemment</value>
+  </data>
+  <data name="Library.Remove" xml:space="preserve">
+    <value>Retirer</value>
+  </data>
+  <data name="Detail.Back" xml:space="preserve">
+    <value>Retour</value>
+  </data>
+  <data name="Detail.Publisher" xml:space="preserve">
+    <value>Publié par</value>
+  </data>
+  <data name="Detail.ReleaseDate" xml:space="preserve">
+    <value>Sortie</value>
+  </data>
+  <data name="Detail.DownloadSize" xml:space="preserve">
+    <value>Taille du téléchargement</value>
+  </data>
+  <data name="Detail.Versions" xml:space="preserve">
+    <value>Versions</value>
+  </data>
+  <data name="Detail.NoBuildForPlatform" xml:space="preserve">
+    <value>Aucune version n'est encore disponible pour cette machine.</value>
+  </data>
+  <data name="Detail.Unreleased" xml:space="preserve">
+    <value>Non annoncée</value>
+  </data>
+  <data name="Detail.Unpublished" xml:space="preserve">
+    <value>Non publiée</value>
+  </data>
+  <data name="Stage.Demo" xml:space="preserve">
+    <value>Démo</value>
+  </data>
+  <data name="Stage.Alpha" xml:space="preserve">
+    <value>Alpha</value>
+  </data>
+  <data name="Stage.Beta" xml:space="preserve">
+    <value>Bêta</value>
+  </data>
+  <data name="Stage.Release" xml:space="preserve">
+    <value>Finale</value>
+  </data>
 </root>

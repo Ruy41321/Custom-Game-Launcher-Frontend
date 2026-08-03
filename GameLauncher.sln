@@ -17,6 +17,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameLauncher.Core.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameLauncher.Infrastructure.Tests", "tests\GameLauncher.Infrastructure.Tests\GameLauncher.Infrastructure.Tests.csproj", "{EC9280FC-3574-4C99-B20A-3A6D9B218EF4}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameLauncher.App.Tests", "tests\GameLauncher.App.Tests\GameLauncher.App.Tests.csproj", "{0614FB10-99DC-4928-8F02-5E9C18845E5D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -99,6 +101,18 @@ Global
 		{EC9280FC-3574-4C99-B20A-3A6D9B218EF4}.Release|x64.Build.0 = Release|Any CPU
 		{EC9280FC-3574-4C99-B20A-3A6D9B218EF4}.Release|x86.ActiveCfg = Release|Any CPU
 		{EC9280FC-3574-4C99-B20A-3A6D9B218EF4}.Release|x86.Build.0 = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|x64.Build.0 = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Debug|x86.Build.0 = Debug|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|x64.ActiveCfg = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|x64.Build.0 = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|x86.ActiveCfg = Release|Any CPU
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -110,5 +124,6 @@ Global
 		{D60F15C6-947C-457D-A373-846D7B1E32E4} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{87623271-3333-4BB1-BA44-0C53DFCACA2C} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{EC9280FC-3574-4C99-B20A-3A6D9B218EF4} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{0614FB10-99DC-4928-8F02-5E9C18845E5D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

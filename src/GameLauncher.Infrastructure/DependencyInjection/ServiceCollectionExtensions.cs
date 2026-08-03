@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddLauncherInfrastructure(this IServiceCollection services)
     {
         services.AddSingleton<IPathProvider>(_ => new PathProvider());
+        services.AddSingleton<IRuntimePlatform>(_ => new RuntimePlatform());
         services.AddSingleton<ILauncherConfigurationProvider, LauncherConfigurationProvider>();
 
         // Read once and cached for the process. The HTTP clients need the API endpoint before
@@ -34,6 +35,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IUserSettingsStore, JsonUserSettingsStore>();
         services.AddSingleton<ILocalizationService>(_ => new ResourceManagerLocalizationService());
+        services.AddSingleton<IApiErrorPresenter, ApiErrorPresenter>();
         services.AddSingleton(TimeProvider.System);
 
         services.AddSingleton<ITokenStore, FileTokenStore>();

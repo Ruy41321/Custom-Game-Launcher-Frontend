@@ -15,18 +15,24 @@
 
   <Grid RowDefinitions="Auto,*,Auto">
 
-    <!-- Top bar: navigation and the language picker. -->
+    <!-- Top bar: navigation, the account and the language picker. -->
     <Border Grid.Row="0" Padding="20,14" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
       <Grid ColumnDefinitions="Auto,*,Auto">
 
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="24" VerticalAlignment="Center">
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
           <TextBlock Text="{Binding AppName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
-          <TextBlock Text="{loc:Tr Nav.Library}" Opacity="0.8" VerticalAlignment="Center" />
-          <TextBlock Text="{loc:Tr Nav.Explore}" Opacity="0.5" VerticalAlignment="Center" />
-          <TextBlock Text="{loc:Tr Nav.Settings}" Opacity="0.5" VerticalAlignment="Center" />
+          <Button Content="{loc:Tr Nav.Library}" Command="{Binding ShowLibraryCommand}"
+                  Classes="link" IsVisible="{Binding IsSignedIn}" />
+          <Button Content="{loc:Tr Nav.Explore}" Command="{Binding ShowExploreCommand}"
+                  Classes="link" IsVisible="{Binding IsSignedIn}" />
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+          <TextBlock Text="{Binding AccountName}" VerticalAlignment="Center" Opacity="0.8"
+                     IsVisible="{Binding IsSignedIn}" />
+          <Button Content="{loc:Tr Auth.SignOut}" Command="{Binding SignOutCommand}"
+                  Classes="link" IsVisible="{Binding IsSignedIn}" />
+
           <TextBlock Text="{loc:Tr Common.Language}" VerticalAlignment="Center" Opacity="0.7" />
           <ComboBox ItemsSource="{Binding Languages}"
                     SelectedItem="{Binding SelectedLanguage}"
@@ -42,20 +48,11 @@
       </Grid>
     </Border>
 
-    <!-- Placeholder body. Library, Explore and the dev dashboard land in milestones 6-8. -->
-    <StackPanel Grid.Row="1" Spacing="10"
-                HorizontalAlignment="Center" VerticalAlignment="Center">
-      <TextBlock Text="{Binding WelcomeMessage}"
-                 FontSize="28" FontWeight="Light" HorizontalAlignment="Center" />
-      <TextBlock Text="{loc:Tr Shell.Tagline}"
-                 FontSize="14" Opacity="0.6" HorizontalAlignment="Center" />
-      <TextBlock Text="{loc:Tr Library.Empty}"
-                 FontSize="13" Opacity="0.45" Margin="0,24,0,0"
-                 MaxWidth="420" TextWrapping="Wrap" TextAlignment="Center" />
-    </StackPanel>
+    <!-- The ViewLocator turns whichever view model is current into its view. -->
+    <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" />
 
     <Border Grid.Row="2" Padding="20,10" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
-      <TextBlock Text="{loc:Tr Status.Connecting}" FontSize="12" Opacity="0.6" />
+      <TextBlock Text="{Binding WelcomeMessage}" FontSize="12" Opacity="0.6" />
     </Border>
 
   </Grid>

@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using GameLauncher.App.Localization;
 using GameLauncher.App.ViewModels;
 using GameLauncher.App.Views;
@@ -27,9 +28,7 @@ public partial class App : Application
 
         // Configuration and settings are read once here, synchronously: the shell cannot be
         // rendered before we know the app's name, theme and language.
-        LauncherConfiguration configuration = _services
-            .GetRequiredService<ILauncherConfigurationProvider>()
-            .LoadAsync().GetAwaiter().GetResult();
+        LauncherConfiguration configuration = _services.GetRequiredService<LauncherConfiguration>();
 
         UserSettings settings = _services
             .GetRequiredService<IUserSettingsStore>()
@@ -40,13 +39,24 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow
+            MainWindowViewModel shell = _services.GetRequiredService<MainWindowViewModel>();
+
+            desktop.MainWindow = new MainWindow { DataContext = shell };
+
+            // Restoring the session is a round trip, so it happens after the window is up
+            // rather than in front of it: a launcher that shows nothing until the server
+            // answers looks broken on a slow connection.
+            _ = Dispatcher.UIThread.InvokeAsync(async () =>
             {
-                DataContext = new MainWindowViewModel(
-                    _services.GetRequiredService<ILocalizationService>(),
-                    _services.GetRequiredService<IUserSettingsStore>(),
-                    configuration),
-            };
+                try
+                {
+                    await shell.InitializeAsync().ConfigureAwait(true);
+                }
+                catch (Exception exception)
+                {
+                    Log.Error(exception, "Restoring the stored session failed.");
+                }
+            });
 
             desktop.ShutdownRequested += (_, _) =>
             {
@@ -64,6 +74,15 @@ public partial class App : Application
 
         services.AddLogging(builder => builder.AddProvider(new SerilogLoggerProvider(Log.Logger)));
         services.AddLauncherInfrastructure();
+
+        // View models are singletons: the shell holds all of them for the life of the window,
+        // and a page that keeps its scroll position and search term when you come back to it
+        // is what a user expects.
+        services.AddSingleton<LoginViewModel>();
+        services.AddSingleton<ExploreViewModel>();
+        services.AddSingleton<LibraryViewModel>();
+        services.AddSingleton<GameDetailViewModel>();
+        services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();
     }

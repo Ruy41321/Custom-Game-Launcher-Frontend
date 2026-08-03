@@ -10,6 +10,31 @@
 
   <Application.Styles>
     <FluentTheme />
+
+    <!-- A button that reads as a piece of text: used for navigation and for the inline
+         actions on a card, where a full button would dominate what it sits next to. -->
+    <Style Selector="Button.link">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="4,2" />
+      <Setter Property="Opacity" Value="0.75" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.link:pointerover">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- Cards: one game in Explore or the library, one version on the detail page. -->
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundAltHighBrush}" />
+      <Setter Property="CornerRadius" Value="6" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style Selector="TextBlock.error">
+      <Setter Property="Foreground" Value="#FF6B6B" />
+      <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
   </Application.Styles>
 
 </Application>

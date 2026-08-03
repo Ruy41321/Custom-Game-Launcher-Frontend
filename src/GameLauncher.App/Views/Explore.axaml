@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             xmlns:models="clr-namespace:GameLauncher.Core.Models;assembly=GameLauncher.Core"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Explore"
+             x:DataType="vm:ExploreViewModel">
+
+  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,0,0,16">
+      <TextBox Grid.Column="0" Text="{Binding SearchText}"
+               PlaceholderText="{loc:Tr Explore.SearchPlaceholder}">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+
+      <ComboBox Grid.Column="1" MinWidth="170"
+                ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:SortOption">
+            <TextBlock Text="{Binding Name}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <Button Grid.Column="2" Content="{loc:Tr Common.Search}" Command="{Binding SearchCommand}" />
+    </Grid>
+
+    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
+                 IsVisible="{Binding IsBusy}" />
+
+    <TextBlock Grid.Row="1" Classes="error" Text="{Binding ErrorMessage}"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+    <TextBlock Grid.Row="1" Text="{loc:Tr Explore.Empty}" Opacity="0.5"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsVisible="{Binding IsEmpty}" />
+
+    <ScrollViewer Grid.Row="1">
+      <ItemsControl ItemsSource="{Binding Games}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="models:Game">
+            <Border Classes="card" Width="300" Height="170" Margin="0,0,14,14">
+              <Grid RowDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Row="1" Text="{Binding Summary}" Opacity="0.7" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,6" />
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                  <Button Content="{loc:Tr Explore.Details}" Classes="link"
+                          Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).OpenGameCommand}"
+                          CommandParameter="{Binding}" />
+                  <Button Content="{loc:Tr Explore.AddToLibrary}" Classes="link"
+                          Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).AddToLibraryCommand}"
+                          CommandParameter="{Binding}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </ScrollViewer>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center"
+                Margin="0,14,0,0">
+      <Button Content="{loc:Tr Common.Previous}" Command="{Binding PreviousPageCommand}"
+              IsEnabled="{Binding HasPreviousPage}" Classes="link" />
+      <TextBlock Text="{Binding PageLabel}" VerticalAlignment="Center" Opacity="0.6" />
+      <Button Content="{loc:Tr Common.Next}" Command="{Binding NextPageCommand}"
+              IsEnabled="{Binding HasNextPage}" Classes="link" />
+    </StackPanel>
+
+  </Grid>
+
+</UserControl>

@@ -10,6 +10,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- View models are tested as plain objects; a couple of their helpers are internal. -->
+    <InternalsVisibleTo Include="GameLauncher.App.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\GameLauncher.Core\GameLauncher.Core.csproj" />
     <ProjectReference Include="..\GameLauncher.Infrastructure\GameLauncher.Infrastructure.csproj" />
   </ItemGroup>

@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Login"
+             x:DataType="vm:LoginViewModel">
+
+  <Border Classes="card" Width="380" VerticalAlignment="Center" HorizontalAlignment="Center">
+    <StackPanel Spacing="14">
+
+      <TextBlock Text="{loc:Tr Auth.SignIn}" FontSize="22" FontWeight="Light"
+                 IsVisible="{Binding !IsRegistering}" />
+      <TextBlock Text="{loc:Tr Auth.Register}" FontSize="22" FontWeight="Light"
+                 IsVisible="{Binding IsRegistering}" />
+
+      <StackPanel Spacing="4" IsVisible="{Binding IsRegistering}">
+        <TextBlock Text="{loc:Tr Auth.DisplayName}" Opacity="0.7" FontSize="12" />
+        <TextBox Text="{Binding DisplayName}" />
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{loc:Tr Auth.Email}" Opacity="0.7" FontSize="12" />
+        <TextBox Text="{Binding Email}" />
+      </StackPanel>
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{loc:Tr Auth.Password}" Opacity="0.7" FontSize="12" />
+        <TextBox Text="{Binding Password}" PasswordChar="•" />
+      </StackPanel>
+
+      <TextBlock Classes="error" Text="{Binding ErrorMessage}"
+                 IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <TextBlock Text="{Binding InfoMessage}" TextWrapping="Wrap" Opacity="0.8"
+                 IsVisible="{Binding InfoMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <Button Command="{Binding SubmitCommand}" HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center" Classes="accent">
+        <Panel>
+          <TextBlock Text="{loc:Tr Auth.SignIn}" IsVisible="{Binding !IsRegistering}" />
+          <TextBlock Text="{loc:Tr Auth.Register}" IsVisible="{Binding IsRegistering}" />
+        </Panel>
+      </Button>
+
+      <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
+
+      <Button Command="{Binding ToggleModeCommand}" Classes="link" HorizontalAlignment="Center">
+        <Panel>
+          <TextBlock Text="{loc:Tr Auth.NoAccount}" IsVisible="{Binding !IsRegistering}" />
+          <TextBlock Text="{loc:Tr Auth.HaveAccount}" IsVisible="{Binding IsRegistering}" />
+        </Panel>
+      </Button>
+
+    </StackPanel>
+  </Border>
+
+</UserControl>
