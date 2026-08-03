@@ -45,8 +45,14 @@ public sealed class LauncherConfigurationProvider : ILauncherConfigurationProvid
     {
         if (!File.Exists(_filePath))
         {
-            _logger.LogInformation(
-                "No {FileName} at {Path}; using built-in defaults.", FileName, _filePath);
+            // The guard is what CA1873 asks for: the analyzer cannot tell that these
+            // arguments are cheap, only that they are boxed into a params array.
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "No {FileName} at {Path}; using built-in defaults.", FileName, _filePath);
+            }
+
             return new LauncherConfiguration();
         }
 
