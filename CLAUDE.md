@@ -44,6 +44,7 @@ src/GameLauncher.Updater         Small standalone executable that replaces launc
 
 tests/GameLauncher.Core.Tests
 tests/GameLauncher.Infrastructure.Tests
+tests/GameLauncher.App.Tests            View models, exercised as plain objects.
 ```
 
 Dependency direction is strictly `App → {Core, Infrastructure} → Core`. **Core never
@@ -80,6 +81,11 @@ belongs in Infrastructure behind an interface declared in Core.
 | D11 | **xUnit v3 built-in `Assert`, no fluent-assertion library** | FluentAssertions 8 moved to a licence that is not free for all uses, which is a poor fit for an MIT project. Built-in assertions cost one dependency less and no licence review. | FluentAssertions (licence); Shouldly / AwesomeAssertions (extra dependency for marginal gain) |
 | D12 | **LF line endings, enforced by `.gitattributes`** | The solution is built on three operating systems and `dotnet format` checks line endings; mixed endings would fail CI on some legs and not others. | Platform-default endings |
 | D13 | **SDK pinned in `global.json`, CI installs it via `global-json-file`** | `dotnet-version: '9.0.x'` let the runner pick whatever SDK it had. A newer SDK ships new CA analyzer rules, and with `TreatWarningsAsErrors` (D9) that turns any SDK release into a red build for a violation that does not exist locally and cannot be reproduced before pushing — which is exactly how CA1873 broke all seven build jobs. `rollForward: latestPatch` still takes patches; moving up a feature band is now a deliberate commit. | `9.0.x` (unreproducible CI); relaxing `TreatWarningsAsErrors` (loses the guarantee D9 exists for) |
+| D14 | **Two HTTP clients: one that attaches the bearer token, one that never does** | Refreshing a session has to work *precisely* when the access token has expired. A single client whose handler obtains a token before every request would call `POST /auth/refresh` through that handler, which would try to obtain a token, which is the same call. Splitting the registration makes the cycle impossible to write rather than something a reviewer has to notice. | One client whose handler skips `/auth/*` (the same rule then lives in a path comparison and in the DI graph, and only one of them is checked); refreshing by hand at each call site (every new endpoint is a chance to forget) |
+| D15 | **`BearerTokenHandler` does not retry a 401** | The token is fetched at send time and `GetAccessTokenAsync` rotates it a minute before expiry, so a 401 that still arrives means the session was revoked server-side — most likely its whole family, because somebody replayed a refresh token. Replaying the request with the same credentials would only be told no twice. | Retry-once-after-refresh (hides a revoked session as a slow request, and doubles every genuinely rejected call) |
+| D16 | **The session is stored in clear, in a per-user directory, mode 0600 on Unix** | DPAPI is Windows-only and a keyring means a libsecret dependency that is absent on a headless or minimal Linux install; either choice leaves a fork to solve the other two platforms itself. The file gets the strongest protection available on all three instead, and the exposure is bounded by design: signing out revokes the token, and replaying one the real client has already rotated revokes the family. | DPAPI (Windows-only); libsecret/Keychain (a platform-specific dependency each, for a credential that is already revocable) |
+| D17 | **Navigation runs one way: the shell knows its children, the children raise events** | A child holding a navigator that holds the child cannot be constructed in a test without building the whole graph, which is exactly what makes view-model tests get skipped. Events keep the graph acyclic and let a page be exercised on its own. | An `INavigator` injected into each child (cycle); the shell resolving pages from `IServiceProvider` (a locator by another name — see §2) |
+| D18 | **One `IApiErrorPresenter` maps every failure to a localized sentence** | The mapping from a failure to what the user is told is a product decision, and having it in one place is what stops each view model inventing its own wording. It takes an override for the single case where one code means two things: on the sign-in form a 401 means the password was wrong, not that a session aged out. | Per-view-model message building (untranslatable in practice, and inconsistent); mapping on HTTP status (the status-to-meaning mapping is the server's to define) |
 
 ---
 
@@ -163,6 +169,11 @@ dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 | **`Serilog.Sinks.File` 8.0.0 is prerelease only** — 7.0.0 is the newest stable | Verify a version really exists before pinning it; the flat-container feed lists prereleases too |
 | **`.editorconfig` naming rules are first-match-wins** | The `const` and `static readonly` PascalCase rules must stay *above* the private-field `_camelCase` rule, or every constant is reported as a violation |
 | `dotnet format` checks line endings | `.gitattributes` normalises everything to LF; a file written with CRLF fails the format gate |
+| **`Set-Content -Encoding utf8` in Windows PowerShell 5.1 writes a BOM** | `dotnet format` then fails the file with `error CHARSET`, which reads like a corrupt file rather than a byte order mark. Rewrite a source file with `[System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding $false))`, which also leaves the line endings alone |
+| **The `ViewLocator` strips the literal text `ViewModel`, not the suffix** | `ViewModels.LoginViewModel` resolves to `Views.Login`. The view class is therefore `Login`, **not** `LoginView`; naming it `LoginView` compiles and silently renders "View not found" at runtime |
+| **A C# record compares a collection member by reference** | `AuthSession`, `GameDetail` and `PagedResult<T>` all carry lists, so `==` on two of them is not a content comparison. Assert field by field instead; a round-trip test that used record equality passed for the wrong reason until it did not |
+| **`Assert.SkipWhen` does not satisfy the platform analyzer** | CA1416 only understands `OperatingSystem.IsWindows()`. A Unix-only assertion needs the skip *and* a real `if`, or `TreatWarningsAsErrors` turns it into a failed build on every platform |
+| **`SHA256.HashData` does not exist in Windows PowerShell 5.1** | It runs on .NET Framework, so the static helpers added in .NET 5 are absent. Use `[System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)` when hand-driving the upload protocol against a local server |
 
 ---
 
@@ -175,7 +186,10 @@ dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
    substituted with NSubstitute.
 4. `GameLauncher.Infrastructure.Tests` covers the API client (against a stub
    `HttpMessageHandler`), the download planner, the SQLite store, and config loading.
-5. ViewModels are tested as plain objects; there are no UI-automation tests.
+5. ViewModels are tested as plain objects in `GameLauncher.App.Tests`, with the real
+   `ResourceManagerLocalizationService` rather than a stub — an assertion on a user-facing
+   message then also proves the resource key exists in every language. There are no
+   UI-automation tests.
 6. Stack: **xUnit v3 + NSubstitute**, using xUnit's built-in `Assert` (see D11). Async tests
    take `TestContext.Current.CancellationToken`.
 7. Two convention tests exist and must keep passing: one fails when a language is missing a
@@ -240,11 +254,36 @@ The next run was green end to end: all 8 jobs, 56 tests on Windows, Linux **and 
 all four self-contained publishes. The macOS leg is therefore verified for the first time —
 §7 still holds that it can only ever be verified here, never locally.
 
+### Milestone 6 — The client talks to the server ✅
+- ✅ Core contracts mirroring the server's catalog, auth and RFC 7807 shapes; two converters
+  translate the server's empty-string-for-absent dates once instead of at every call site
+- ✅ `ApiTransport` + typed clients for `/auth`, the catalog and the library; every failure
+  leaves as an `ApiException`, including a refused connection and a client-side timeout
+- ✅ `AuthenticationService`: restore on startup, single-flighted rotation, sign-out that
+  succeeds offline; `FileTokenStore` persists the session (D16)
+- ✅ `BearerTokenHandler` on the authenticated client only (D14, D15)
+- ✅ Login and registration, Explore with search/sort/paging, library, game detail with
+  patch-note cards and the build this machine could install
+- ✅ `IApiErrorPresenter` (D18); 51 new resource keys in English, Italian and French
+- ✅ `GameLauncher.App.Tests` for the view models
+
+### Verified on 2026-08-03
+- 243/243 tests green (101 Core, 78 Infrastructure, 64 App)
+- `dotnet format --verify-no-changes` clean
+- The window opens against no server at all and lands on the sign-in screen, with nothing in
+  the log but "Launcher starting"
+- **End to end against the real stack** (`docker compose up -d --build`, a seeded publisher
+  account, one game with a ready Windows build): the client's own DI graph signed in, listed
+  Explore sorted by title, searched, opened the game detail with its beta version and release
+  notes, picked the Windows/x64 build and correctly found none for macOS/arm64, added the game
+  to the library twice without error, removed it, and got `NotFound` — with a request id — for
+  a game that does not exist. A draft created by the same publisher never appeared in Explore.
+  Signing out left `ICatalogApi` answering `Unauthenticated` without a round trip.
+
 ### Next up
-- ⬜ **M6** Login view + auth flow, library view, game detail with patch-note cards
 - ⬜ **M7** Download engine: `Range` resume, staging + atomic apply, disk-space check,
   uninstall, progress reporting
-- ⬜ **M8** Explore section, dev dashboard, launch parameters, offline mode, self-update
+- ⬜ **M8** Dev dashboard, launch parameters, offline mode, self-update
 - ⬜ **M10** `Documentation/` per module, crash-report upload
 
 ---
