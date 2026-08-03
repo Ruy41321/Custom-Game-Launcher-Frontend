@@ -219,9 +219,9 @@ The workflow ran. `Format` passed; all seven build jobs — three platforms plus
 RIDs — failed identically on `CA1873` in `LauncherConfigurationProvider`, a rule the runner's
 SDK has and 9.0.310 does not. Fixed by guarding the log call and by pinning the SDK (D13).
 
-⚠️ The Linux and macOS legs got as far as `dotnet restore` and then stopped at the shared
-compile error, so **they still have not run a test or a publish**. They stay unverified until
-the next run is green.
+The next run was green end to end: all 8 jobs, 56 tests on Windows, Linux **and macOS**, and
+all four self-contained publishes. The macOS leg is therefore verified for the first time —
+§7 still holds that it can only ever be verified here, never locally.
 
 ### Next up
 - ⬜ **M6** Login view + auth flow, library view, game detail with patch-note cards
