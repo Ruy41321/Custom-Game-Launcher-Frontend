@@ -16,4 +16,11 @@ internal static class LauncherJsonSerializer
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
     };
+
+    /// <summary>
+    /// The same conventions without the indentation. A config file on disk is read by people
+    /// and is worth the whitespace; a request body is not.
+    /// </summary>
+    public static readonly JsonSerializerOptions Compact =
+        new(Options) { WriteIndented = false };
 }
