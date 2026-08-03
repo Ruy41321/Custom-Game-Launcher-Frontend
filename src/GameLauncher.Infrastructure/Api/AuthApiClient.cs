@@ -10,9 +10,6 @@ namespace GameLauncher.Infrastructure.Api;
 /// </summary>
 public sealed class AuthApiClient(HttpClient httpClient, TimeProvider timeProvider) : IAuthApi
 {
-    /// <summary>Named registration for the token-free client, so DI can tell the two apart.</summary>
-    public const string HttpClientName = "launcher-auth";
-
     private readonly ApiTransport _transport = new(httpClient);
 
     public async Task<RegistrationResult> RegisterAsync(

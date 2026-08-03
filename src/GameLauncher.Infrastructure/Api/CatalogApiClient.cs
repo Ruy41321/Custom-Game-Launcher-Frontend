@@ -10,9 +10,6 @@ namespace GameLauncher.Infrastructure.Api;
 /// </summary>
 public sealed class CatalogApiClient(HttpClient httpClient) : ICatalogApi
 {
-    /// <summary>Named registration for the client that attaches the bearer token.</summary>
-    public const string HttpClientName = "launcher-api";
-
     private readonly ApiTransport _transport = new(httpClient);
 
     public Task<PagedResult<Game>> ExploreAsync(
