@@ -23,9 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # global.json pins the SDK, so CI compiles with the same analyzer set as the
+      # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
+      # does not exist locally, which is impossible to reproduce before pushing.
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: global.json
 
       - run: dotnet restore GameLauncher.sln
 
@@ -45,9 +48,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # global.json pins the SDK, so CI compiles with the same analyzer set as the
+      # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
+      # does not exist locally, which is impossible to reproduce before pushing.
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: global.json
 
       - name: Cache NuGet packages
         uses: actions/cache@v4
@@ -73,9 +79,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # global.json pins the SDK, so CI compiles with the same analyzer set as the
+      # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
+      # does not exist locally, which is impossible to reproduce before pushing.
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          global-json-file: global.json
 
       # Catches runtime-identifier problems (trimming, native assets) that a plain build
       # would not surface until release day.
