@@ -86,6 +86,14 @@ belongs in Infrastructure behind an interface declared in Core.
 | D16 | **The session is stored in clear, in a per-user directory, mode 0600 on Unix** | DPAPI is Windows-only and a keyring means a libsecret dependency that is absent on a headless or minimal Linux install; either choice leaves a fork to solve the other two platforms itself. The file gets the strongest protection available on all three instead, and the exposure is bounded by design: signing out revokes the token, and replaying one the real client has already rotated revokes the family. | DPAPI (Windows-only); libsecret/Keychain (a platform-specific dependency each, for a credential that is already revocable) |
 | D17 | **Navigation runs one way: the shell knows its children, the children raise events** | A child holding a navigator that holds the child cannot be constructed in a test without building the whole graph, which is exactly what makes view-model tests get skipped. Events keep the graph acyclic and let a page be exercised on its own. | An `INavigator` injected into each child (cycle); the shell resolving pages from `IServiceProvider` (a locator by another name — see §2) |
 | D18 | **One `IApiErrorPresenter` maps every failure to a localized sentence** | The mapping from a failure to what the user is told is a product decision, and having it in one place is what stops each view model inventing its own wording. It takes an override for the single case where one code means two things: on the sign-in form a 401 means the password was wrong, not that a session aged out. | Per-view-model message building (untranslatable in practice, and inconsistent); mapping on HTTP status (the status-to-meaning mapping is the server's to define) |
+| D19 | **The manifest is verified against its published hash before it is parsed, and a mismatch has an error code of its own** | The server serves the exact bytes `manifestSha256` covers, so verification is hashing the response. Rebuilding a canonical form here would put a second definition of a wire contract in a second language, and the two would drift. Refusing *before* parsing is the part that matters: a document that is not the one that was published must never become the one that gets installed. `ApiErrorCode.Integrity` sits beside `Network` as a failure no server ever sends, because a server that knew would not have sent the response. | Re-canonicalising client-side (two definitions of one contract); parsing first and checking later (the wrong build is already described by then); folding it into `Unknown` (the user is told "something went wrong" for the one failure that retrying actually fixes) |
+| D20 | **A third `HttpClient`, for the file server, with no bearer token and no timeout** | A signed URL carries its own authorization, so attaching the launcher's token would hand it to whatever host the API named — and the API names that host. Splitting the registration makes that impossible rather than something a reviewer has to notice, exactly as D14 did for `/auth`. The timeout is infinite because `HttpClient.Timeout` covers the response body as well as the headers and a build is arbitrarily large; a stalled transfer is bounded by the caller's cancellation, not by a clock that started at the first byte. | Reusing the authenticated client (leaks the token off-origin); a 30-minute timeout (an arbitrary cap on how big a game may be) |
+| D21 | **One install row per game, keyed by the game id, in SQLite with WAL** | A game occupies one directory on this machine, so two rows would be two answers to where it lives. The file is a database and not JSON because the row being written during an update is precisely the one that says the directory is half of one build and half of another — the moment a rewrite-in-place corrupts a JSON file is the moment that fact matters most. The schema is versioned in `PRAGMA user_version` and migrated by appending to an array, and enums and instants are stored as text so the file can be read with any SQLite tool at the moment the launcher is the thing that is broken. | JSON (corrupt on a mid-write crash); a row per install directory (invites two installs of one game and answers nothing the launcher asks) |
+| D22 | **The row flips to `Installed` last, and staging survives until it does** | An install directory cannot be updated atomically without twice the disk, so the guarantee on offer is different: a game is never *presented* as installed until every file is verified in place. `InstallState.Applying` is what a crash leaves behind, and it is what stops the next run computing a delta against a build that is only half there. Keeping staging until the row changes means that crash is recovered by redoing the apply, not the download. | Deleting staging as each file is applied (a crash during apply costs the whole download again); writing the row first (a directory that claims to be a build it is not) |
+| D23 | **No full re-hash after an install; the copy out of staging is hashed in the same pass instead** | Every blob is already verified before it is allowed to take its content address, so the only step a download check cannot cover is the copy into the install directory — and those bytes are being read anyway, so hashing them costs nothing. A full pass over a 50 GB install would only catch a disk that changed its mind between two reads, and paying minutes for that on every install would teach people to skip it. `VerifyAsync` offers it on demand, which is where that check belongs. | Re-hashing the tree after every install (minutes of I/O for a case on-demand verification already covers); trusting the copy (the one unverified step) |
+| D24 | **Manifest paths are resolved against the install root and refused if they escape it** | The server validates them on ingestion and the database enforces it again, and this is still worth a string comparison: a client that writes wherever it is told is one compromised server away from writing into the user's startup folder. The client's own check is the one that protects *this* machine. | Trusting the server's validation (the client is the last line, and it is free to be) |
+| D25 | **410 from the file server is its own error code, apart from 403** | nginx distinguishes an expired signature from a bad one deliberately, and the client acts on the difference: an expiry is fixed by asking for a fresh plan, and nothing about the account or the build has changed, whereas a bad signature is a bug or a clock. Collapsing them would make the recoverable case look like the unrecoverable one. | One "download refused" code (the client cannot tell whether retrying is worth anything) |
+| D26 | **Progress is bytes and a phase; the speed and the estimate come from a sliding window** | A single percentage cannot say that a step is running but transferring nothing, so the phases that move no bytes get an indeterminate bar rather than one that fills up while nothing happens. The rate is measured over the last few seconds because what a person wants to know is how fast it is going *now* — an average since the start takes minutes to notice the line has come back. Both the speed and the estimate are omitted until there is something to base them on: a countdown that says four hours and then twelve seconds is worse than no countdown. | A single percentage (cannot express a phase that transfers nothing); an average since the start (wrong for minutes after any stall) |
 
 ---
 
@@ -95,21 +103,33 @@ The server stores build files in content-addressed storage: each file is a blob 
 SHA-256, and a build's manifest lists `(relative path → blob hash, size, executable bit)`.
 The client mirrors that model:
 
-1. **Plan** — fetch the manifest of the target version; diff it against the installed
-   manifest. The result is a set of blobs to fetch and paths to delete. For a fresh install
-   the "installed manifest" is empty. The server may advise a full download when the delta
-   exceeds a size ratio threshold.
-2. **Space check** — compare the required bytes against free space on the install volume
-   *before* touching anything.
-3. **Fetch** — download blobs into a staging directory with HTTP `Range`, so an interrupted
-   download resumes where it stopped. Each blob is written to `.part` and hash-verified before
-   being accepted; a mismatch discards it and retries.
-4. **Apply** — only once every blob is present and verified, move files into place and delete
-   removed paths. **An interrupted download must never leave a broken installation.**
-5. **Verify** — re-hash the installed tree against the manifest and record the result.
+1. **Plan** — `POST /builds/{id}/download` names the build currently installed, and the server
+   computes the difference between the two manifests. The client never diffs anything: the
+   plan says what to fetch, what is already correct, what to delete and what it will cost,
+   and the server falls back to a full download when a delta stops being worth it. Only a
+   *finished* install is ever named as the source (D22).
+2. **Space check** — before anything is written, which is the only moment it is worth
+   anything. Staging and the install directory are checked separately and summed only when
+   they share a volume.
+3. **Fetch** — blobs, not files: two paths with identical content are one transfer. Four at a
+   time, into a content-addressed staging tree, with HTTP `Range` so an interruption resumes
+   where it stopped. Each blob is written to `.part` and hash-verified, and only then renamed
+   to its content address — **nothing takes that name until its bytes hash to it**.
+4. **Apply** — files are copied out of staging, hashed in the same pass (D23), then the plan's
+   `remove` paths go and the directories they emptied with them. `copyFrom` entries come off
+   the local disk instead, and the server only ever offers a path the update keeps unchanged,
+   so the order the plan is applied in cannot matter.
+5. **Record** — the row flips to `Installed` last, and staging is swept only after it does
+   (D22). **An interrupted update leaves an installation the launcher knows is unfinished,
+   never one it will run.**
 
-Uninstalling deletes the install directory and its rows in the local database, and reports
-freed space.
+Verification is a separate, on-demand step: `POST /builds/{id}/verify` compares what is on
+disk against the manifest, and an install the server calls broken is recorded as such — which
+is what turns the next install into a repair rather than a delta from a build that is not
+really there. Files the manifest never mentioned are reported but do not make an install
+broken; an install directory legitimately accumulates saves and logs.
+
+Uninstalling deletes the install directory and its row, and reports freed space.
 
 ---
 
@@ -154,6 +174,25 @@ Self-contained publish (per RID: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`)
 dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 ```
 
+### Exercising the whole client against a real server, without the UI
+
+`AddLauncherInfrastructure()` builds the entire graph on its own, so a console project that
+references `GameLauncher.Core` and `GameLauncher.Infrastructure` and resolves
+`IAuthenticationService`, `ICatalogApi` and `IInstallationService` drives every layer against
+the running stack. This is how M6 and M7 were verified, and it reaches the one thing no test
+can: nginx serving a signed URL.
+
+Two things make it safe and repeatable:
+
+- Register an `IPathProvider` **after** `AddLauncherInfrastructure()` — last registration wins —
+  pointing `userDataDirectory` at a temporary directory, or the run writes into the
+  maintainer's real `%LOCALAPPDATA%\CustomGameLauncher`.
+- Copy `launcher.config.json` next to the executable; the configuration provider reads it from
+  `IPathProvider.ApplicationDirectory`.
+
+Seeding the server needs a publisher account, a public game and a `ready` build — the sequence
+is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
+
 ---
 
 ## 7. Environment gotchas (verified on the maintainer's machine)
@@ -174,6 +213,12 @@ dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 | **A C# record compares a collection member by reference** | `AuthSession`, `GameDetail` and `PagedResult<T>` all carry lists, so `==` on two of them is not a content comparison. Assert field by field instead; a round-trip test that used record equality passed for the wrong reason until it did not |
 | **`Assert.SkipWhen` does not satisfy the platform analyzer** | CA1416 only understands `OperatingSystem.IsWindows()`. A Unix-only assertion needs the skip *and* a real `if`, or `TreatWarningsAsErrors` turns it into a failed build on every platform |
 | **`SHA256.HashData` does not exist in Windows PowerShell 5.1** | It runs on .NET Framework, so the static helpers added in .NET 5 are absent. Use `[System.Security.Cryptography.SHA256]::Create().ComputeHash($bytes)` when hand-driving the upload protocol against a local server |
+| **Windows PowerShell 5.1 mangles double quotes when it passes an argument to a native executable** | A commit message containing `"like this"` is split into several arguments, and `git commit` reports them as pathspecs that do not match — which reads like a staging problem rather than a quoting one. Write the message to a file and use `git commit -F <file>`; a single-quoted here-string is **not** enough |
+| **`ActivatorUtilities` refuses to choose between two public constructors** | A typed `HttpClient` registration fails at resolution with "multiple constructors accepting all given argument types", not at startup — so a DI test catches it and the app finds out when the page opens. `BlobFetcher` keeps a second constructor for its retry policy and marks the real one `[ActivatorUtilitiesConstructor]` |
+| **`Microsoft.Data.Sqlite` 10.x needs .NET 10** | The 9.0.x line is the one that matches the pinned SDK, and 9.0.18 lines up with the `Microsoft.Extensions.*` versions already in `Directory.Packages.props` |
+| **`Microsoft.Data.Sqlite` pools connections, so the file stays open after the store is disposed** | A temporary directory holding a test database can refuse to delete. Harmless for the suite, which ignores the failure, but do not write a test that asserts the file is gone without `SqliteConnection.ClearAllPools()` |
+| **`Order()` on strings is culture-aware** | `"data/pak"` sorts *before* `"Game.exe"` under a culture comparison and after it under an ordinal one. An assertion on a sorted list of paths must say `Order(StringComparer.Ordinal)`, or it passes or fails depending on the machine's locale |
+| **`Progress<T>` posts its callback to a captured context** | With no `SynchronizationContext` — which is every test — that means the thread pool, so a test that asserts on what a progress callback recorded is asserting on whether the pool has caught up. Both test projects have a synchronous `IProgress<T>` for this; the view model funnels every report through one property so the same path is exercised either way |
 
 ---
 
@@ -280,10 +325,39 @@ all four self-contained publishes. The macOS leg is therefore verified for the f
   a game that does not exist. A draft created by the same publisher never appeared in Explore.
   Signing out left `ICatalogApi` answering `Unauthenticated` without a round trip.
 
+### Milestone 7 — The download engine ✅
+- ✅ `IDownloadApi`: the plan, the manifest verified against its published hash (D19), and the
+  integrity check; `DownloadPlan` / `PlannedFile` / `IntegrityReport` mirroring `DownloadJson`
+- ✅ `SqliteInstallStore`: what is installed on this machine, one row per game, versioned
+  schema, WAL (D21) — the local state D4 named at project start and nothing had needed yet
+- ✅ `BlobFetcher`: `Range` resume, hash verification before a blob takes its content address,
+  a server that ignores `Range` handled, 410 apart from 403 (D25), on a third `HttpClient`
+  that carries no token (D20)
+- ✅ `InstallationService`: plan → space check → parallel fetch → verified copy → apply →
+  record, with `copyFrom` taken off local disk, `remove` and its emptied directories swept,
+  and the row flipped last (D22, D23)
+- ✅ Manifest paths re-validated against the install root (D24)
+- ✅ Uninstall with freed bytes; on-demand verify that records a broken install as broken
+- ✅ The game page installs, updates, repairs, verifies and removes, with a phase, a bar, a
+  speed and an estimate (D26); `ByteSize` shared so a size reads the same everywhere
+- ✅ 27 new resource keys in English, Italian and French
+
+### Verified on 2026-08-03
+- 321/321 tests green (120 Core, 128 Infrastructure, 73 App)
+- `dotnet format --verify-no-changes` clean
+- **End to end against the real stack**, driven by a ten-line console project over the client's
+  own DI graph (see §6): a seeded publisher, one game, two builds. The first install was a full
+  download **through nginx over signed URLs**, landed all three files, recorded the manifest
+  hash the catalog advertised and swept staging. Verification called it intact. The update to
+  0.2.0 was a delta that moved **47 bytes — only the changed executable** — copied the moved
+  asset off local disk without fetching it, left the copy's source in place, deleted the
+  dropped library and pruned the directory it emptied. A tampered install was reported with the
+  corrupt file, the missing file and the save file as *unexpected*, was recorded as broken, and
+  reinstalling repaired it as a full download while leaving the save file alone. Installing an
+  up-to-date build moved nothing, and uninstalling removed the directory and the row
+
 ### Next up
-- ⬜ **M7** Download engine: `Range` resume, staging + atomic apply, disk-space check,
-  uninstall, progress reporting
-- ⬜ **M8** Dev dashboard, launch parameters, offline mode, self-update
+- ⬜ **M8** Launching a game, dev dashboard, launch parameters, offline mode, self-update
 - ⬜ **M10** `Documentation/` per module, crash-report upload
 
 ---

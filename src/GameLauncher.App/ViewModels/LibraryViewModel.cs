@@ -7,8 +7,8 @@ using GameLauncher.Core.Models;
 namespace GameLauncher.App.ViewModels;
 
 /// <summary>
-/// The account's games. This is membership, not installation: what is installed on this
-/// machine is the client's own business and arrives with the download engine in milestone 7.
+/// The account's games. This is membership, not installation: what is on this machine lives in
+/// the local install store, and the game page is where it is shown and acted on.
 /// </summary>
 public sealed partial class LibraryViewModel(ILibraryApi library, IApiErrorPresenter errors)
     : ViewModelBase
