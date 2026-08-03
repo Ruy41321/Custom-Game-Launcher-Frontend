@@ -44,6 +44,9 @@ public sealed record ApiProblem
         403 => ApiErrorCode.Forbidden,
         404 => ApiErrorCode.NotFound,
         409 => ApiErrorCode.Conflict,
+        // Only the file server answers this, for a URL whose signature verifies but whose
+        // expiry has passed. A tampered expiry breaks the signature and is a 403 instead.
+        410 => ApiErrorCode.LinkExpired,
         413 => ApiErrorCode.QuotaExceeded,
         422 => ApiErrorCode.InvalidInput,
         429 => ApiErrorCode.RateLimited,

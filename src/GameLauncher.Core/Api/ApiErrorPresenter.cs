@@ -40,6 +40,7 @@ public sealed class ApiErrorPresenter(ILocalizationService localization) : IApiE
         {
             ApiErrorCode.Network => "Error.Network",
             ApiErrorCode.Integrity => "Error.Integrity",
+            ApiErrorCode.LinkExpired => "Error.LinkExpired",
             ApiErrorCode.InvalidInput => "Error.InvalidInput",
             ApiErrorCode.Unauthenticated => unauthenticatedKey ?? "Error.Unauthenticated",
             ApiErrorCode.Forbidden => "Error.Forbidden",

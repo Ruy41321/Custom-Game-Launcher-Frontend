@@ -20,6 +20,13 @@ public enum ApiErrorCode
     /// </summary>
     Integrity,
 
+    /// <summary>
+    /// A signed download URL outlived its expiry. The file server reports it apart from a bad
+    /// signature on purpose, and the client acts on the difference: this one is fixed by
+    /// asking for a fresh plan, and nothing about the account or the build has changed.
+    /// </summary>
+    LinkExpired,
+
     InvalidInput,
     Unauthenticated,
     Forbidden,
@@ -73,6 +80,7 @@ public sealed class ApiException : Exception
     /// </summary>
     public bool IsTransient => Code is ApiErrorCode.Network
         or ApiErrorCode.Integrity
+        or ApiErrorCode.LinkExpired
         or ApiErrorCode.RateLimited
         or ApiErrorCode.DependencyFailure
         or ApiErrorCode.Internal;

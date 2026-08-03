@@ -116,6 +116,9 @@
   <data name="Error.Integrity" xml:space="preserve">
     <value>I dati ricevuti non corrispondono a quelli attesi. Riprova.</value>
   </data>
+  <data name="Error.LinkExpired" xml:space="preserve">
+    <value>Il link di download è scaduto. Riavvia il download.</value>
+  </data>
   <data name="Error.InvalidInput" xml:space="preserve">
     <value>Alcuni dei dati inseriti non sono stati accettati.</value>
   </data>

@@ -2,12 +2,14 @@ using System.Net.Http.Headers;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.Api;
 using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
+using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Platform;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,7 +61,22 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IDownloadApi, DownloadApiClient>(ConfigureClient)
             .AddHttpMessageHandler<BearerTokenHandler>();
 
+        // A third client, and deliberately not one of the two above. It talks to the file
+        // server rather than the API, on absolute URLs that carry their own authorization, so
+        // it has no base address and — above all — no bearer token to hand to whatever host
+        // the API named. The timeout is infinite because a build is arbitrarily large and this
+        // one covers the body as well as the headers: a stalled transfer is bounded by the
+        // caller's cancellation, not by a clock that started at the first byte.
+        services.AddHttpClient<IBlobFetcher, BlobFetcher>(ConfigureFileServerClient);
+
         return services;
+    }
+
+    private static void ConfigureFileServerClient(HttpClient client)
+    {
+        client.Timeout = Timeout.InfiniteTimeSpan;
+        client.DefaultRequestHeaders.UserAgent.Add(
+            new ProductInfoHeaderValue("CustomGameLauncher", ThisAssemblyVersion()));
     }
 
     private static void ConfigureClient(IServiceProvider provider, HttpClient client)
