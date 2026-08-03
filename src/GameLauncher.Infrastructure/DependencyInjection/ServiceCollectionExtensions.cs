@@ -29,6 +29,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<IPathProvider>(_ => new PathProvider());
         services.AddSingleton<IRuntimePlatform>(_ => new RuntimePlatform());
+        services.AddSingleton<IDiskSpaceProbe, DiskSpaceProbe>();
         services.AddSingleton<ILauncherConfigurationProvider, LauncherConfigurationProvider>();
 
         // Read once and cached for the process. The HTTP clients need the API endpoint before
@@ -68,6 +69,8 @@ public static class ServiceCollectionExtensions
         // one covers the body as well as the headers: a stalled transfer is bounded by the
         // caller's cancellation, not by a clock that started at the first byte.
         services.AddHttpClient<IBlobFetcher, BlobFetcher>(ConfigureFileServerClient);
+
+        services.AddSingleton<IInstallationService, InstallationService>();
 
         return services;
     }

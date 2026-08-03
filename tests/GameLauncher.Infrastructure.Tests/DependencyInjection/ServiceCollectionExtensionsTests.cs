@@ -38,6 +38,8 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IDownloadApi))]
     [InlineData(typeof(IInstallStore))]
     [InlineData(typeof(IBlobFetcher))]
+    [InlineData(typeof(IDiskSpaceProbe))]
+    [InlineData(typeof(IInstallationService))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();
