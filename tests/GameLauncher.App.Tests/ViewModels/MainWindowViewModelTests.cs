@@ -2,6 +2,8 @@ using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Downloads;
+using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
@@ -45,7 +47,15 @@ public sealed class MainWindowViewModelTests
             new ExploreViewModel(_catalog, _library, errors, _localization),
             new LibraryViewModel(_library, errors),
             new GameDetailViewModel(
-                _catalog, _library, errors, _localization, runtime, _authentication));
+                _catalog,
+                _library,
+                errors,
+                _localization,
+                runtime,
+                _authentication,
+                Substitute.For<IInstallationService>(),
+                Substitute.For<IInstallStore>(),
+                TimeProvider.System));
     }
 
     [Fact]

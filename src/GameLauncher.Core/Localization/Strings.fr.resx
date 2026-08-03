@@ -248,4 +248,61 @@
   <data name="Stage.Release" xml:space="preserve">
     <value>Finale</value>
   </data>
+  <data name="Error.NotEnoughSpace" xml:space="preserve">
+    <value>Espace insuffisant : il faut {0} et il reste {1} sur {2}.</value>
+  </data>
+  <data name="Error.Cancelled" xml:space="preserve">
+    <value>Opération annulée.</value>
+  </data>
+  <data name="Detail.Verify" xml:space="preserve">
+    <value>Vérifier les fichiers</value>
+  </data>
+  <data name="Detail.CancelDownload" xml:space="preserve">
+    <value>Annuler</value>
+  </data>
+  <data name="Detail.InstalledVersion" xml:space="preserve">
+    <value>Installé : {0}</value>
+  </data>
+  <data name="Detail.UpdateAvailable" xml:space="preserve">
+    <value>La mise à jour vers {0} est disponible.</value>
+  </data>
+  <data name="Detail.Broken" xml:space="preserve">
+    <value>Cette installation est endommagée. Réinstallez-la pour la réparer.</value>
+  </data>
+  <data name="Detail.InstallComplete" xml:space="preserve">
+    <value>Prêt à jouer.</value>
+  </data>
+  <data name="Detail.Uninstalled" xml:space="preserve">
+    <value>Désinstallé, {0} libérés.</value>
+  </data>
+  <data name="Detail.VerifyIntact" xml:space="preserve">
+    <value>Tout est à sa place.</value>
+  </data>
+  <data name="Detail.VerifyBroken" xml:space="preserve">
+    <value>{0} manquants et {1} endommagés. Réinstallez le jeu pour réparer.</value>
+  </data>
+  <data name="Download.Planning" xml:space="preserve">
+    <value>Calcul de ce qu'il faut télécharger…</value>
+  </data>
+  <data name="Download.CheckingSpace" xml:space="preserve">
+    <value>Vérification de l'espace libre…</value>
+  </data>
+  <data name="Download.Downloading" xml:space="preserve">
+    <value>Téléchargement</value>
+  </data>
+  <data name="Download.Applying" xml:space="preserve">
+    <value>Installation des fichiers…</value>
+  </data>
+  <data name="Download.Verifying" xml:space="preserve">
+    <value>Vérification…</value>
+  </data>
+  <data name="Download.Done" xml:space="preserve">
+    <value>Terminé</value>
+  </data>
+  <data name="Download.Progress" xml:space="preserve">
+    <value>{0} sur {1}</value>
+  </data>
+  <data name="Download.Remaining" xml:space="preserve">
+    <value>{0} restantes</value>
+  </data>
 </root>

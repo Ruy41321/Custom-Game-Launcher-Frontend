@@ -47,11 +47,34 @@
                   Command="{Binding AddToLibraryCommand}" IsVisible="{Binding !InLibrary}" />
           <Button Content="{loc:Tr Library.Remove}"
                   Command="{Binding RemoveFromLibraryCommand}" IsVisible="{Binding InLibrary}" />
-          <!-- Installing arrives with the download engine in milestone 7; until then the
-               page only says whether this machine has something to install. -->
-          <Button Content="{loc:Tr Library.Install}" IsEnabled="False"
-                  IsVisible="{Binding CanDownload}" />
+          <Button Content="{loc:Tr Library.Install}" Classes="accent"
+                  Command="{Binding InstallCommand}" IsVisible="{Binding CanInstall}" />
+          <Button Content="{loc:Tr Library.Update}" Classes="accent"
+                  Command="{Binding InstallCommand}" IsVisible="{Binding CanUpdate}" />
+          <Button Content="{loc:Tr Detail.Verify}"
+                  Command="{Binding VerifyCommand}" IsVisible="{Binding CanVerify}" />
+          <Button Content="{loc:Tr Library.Uninstall}"
+                  Command="{Binding UninstallCommand}" IsVisible="{Binding CanUninstall}" />
+          <Button Content="{loc:Tr Detail.CancelDownload}"
+                  Command="{Binding CancelInstallCommand}" IsVisible="{Binding IsWorking}" />
         </StackPanel>
+
+        <StackPanel Spacing="6" IsVisible="{Binding IsWorking}">
+          <TextBlock Text="{Binding PhaseText}" FontSize="12" />
+          <ProgressBar Minimum="0" Maximum="1" Value="{Binding ProgressFraction}"
+                       IsIndeterminate="{Binding IsProgressIndeterminate}" Height="4" />
+          <TextBlock Text="{Binding ProgressDetail}" Opacity="0.6" FontSize="12"
+                     IsVisible="{Binding ProgressDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding InstalledVersion}" Opacity="0.7" FontSize="12"
+                   IsVisible="{Binding IsInstalled}" />
+
+        <TextBlock Text="{loc:Tr Detail.Broken}" Classes="error" TextWrapping="Wrap"
+                   IsVisible="{Binding IsBroken}" />
+
+        <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <TextBlock Text="{loc:Tr Detail.NoBuildForPlatform}" Opacity="0.6" TextWrapping="Wrap"
                    IsVisible="{Binding !HasInstallableBuild}" />

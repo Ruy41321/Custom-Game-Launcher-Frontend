@@ -1,4 +1,7 @@
+using System.Globalization;
+using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Models;
 
 namespace GameLauncher.Core.Api;
 
@@ -21,6 +24,22 @@ public sealed class ApiErrorPresenter(ILocalizationService localization) : IApiE
 {
     public string Describe(Exception exception, string? unauthenticatedKey = null)
     {
+        // Two failures that never involve the server at all, and that a user can act on —
+        // which is exactly why they are not allowed to fall through to "something went wrong".
+        if (exception is InsufficientDiskSpaceException space)
+        {
+            return localization.Translate(
+                "Error.NotEnoughSpace",
+                ByteSize.Format(space.RequiredBytes, CultureInfo.CurrentCulture),
+                ByteSize.Format(space.AvailableBytes, CultureInfo.CurrentCulture),
+                space.Path);
+        }
+
+        if (exception is OperationCanceledException)
+        {
+            return localization.Translate("Error.Cancelled");
+        }
+
         if (exception is not ApiException apiException)
         {
             return localization.Translate("Error.Generic");

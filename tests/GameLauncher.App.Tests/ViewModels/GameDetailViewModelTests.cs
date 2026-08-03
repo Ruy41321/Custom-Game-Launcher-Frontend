@@ -1,6 +1,8 @@
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
+using GameLauncher.Core.Downloads;
+using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
@@ -18,6 +20,13 @@ public sealed class GameDetailViewModelTests
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
+    private static readonly DateTimeOffset Now = new(2026, 8, 3, 12, 0, 0, TimeSpan.Zero);
+
+    private readonly IInstallationService _installations =
+        Substitute.For<IInstallationService>();
+
+    private readonly IInstallStore _installs = Substitute.For<IInstallStore>();
+
     private GameDetailViewModel CreateViewModel(
         GamePlatform platform = GamePlatform.Windows,
         BuildArchitecture architecture = BuildArchitecture.X64)
@@ -32,7 +41,10 @@ public sealed class GameDetailViewModelTests
             new ApiErrorPresenter(_localization),
             _localization,
             runtime,
-            _authentication);
+            _authentication,
+            _installations,
+            _installs,
+            new FakeTimeProvider(Now));
     }
 
     private static GameDetail DetailWith(bool inLibrary = false, params GameBuild[] builds) => new()
@@ -65,6 +77,41 @@ public sealed class GameDetailViewModelTests
 
     private void Returns(GameDetail detail) =>
         _catalog.GetGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(detail);
+
+    private static GameBuild WindowsBuild(string id = "win") => new()
+    {
+        Id = id,
+        VersionId = "v1",
+        Platform = GamePlatform.Windows,
+        Architecture = BuildArchitecture.X64,
+        Status = BuildStatus.Ready,
+        Entrypoint = "Game.exe",
+        TotalSizeBytes = 5_368_709_120,
+    };
+
+    private static InstalledGame InstalledAt(
+        string buildId, InstallState state = InstallState.Installed) => new()
+        {
+            GameId = "g1",
+            GameSlug = "orbital-drift",
+            GameTitle = "Orbital Drift",
+            BuildId = buildId,
+            VersionId = "v1",
+            VersionSemver = "0.2.0",
+            Platform = GamePlatform.Windows,
+            Architecture = BuildArchitecture.X64,
+            InstallDirectory = "/games/orbital-drift",
+            Entrypoint = "Game.exe",
+            State = state,
+            InstalledAt = Now,
+            UpdatedAt = Now,
+        };
+
+    private void AlreadyInstalled(InstalledGame install) =>
+        _installs.FindAsync("g1", Arg.Any<CancellationToken>()).Returns(install);
+
+    private void CanDownload() =>
+        _authentication.HasPermission(Permissions.GameDownload).Returns(true);
 
     [Fact]
     public async Task LoadingFillsThePage()
@@ -233,21 +280,254 @@ public sealed class GameDetailViewModelTests
         Assert.True(asked);
     }
 
-    // Powers of 1024, because a user comparing against free disk space compares against what
-    // their file manager shows.
-    [Theory]
-    [InlineData(0, "0 B")]
-    [InlineData(999, "999 B")]
-    [InlineData(1024, "1 KB")]
-    [InlineData(1536, "1.5 KB")]
-    [InlineData(1_048_576, "1 MB")]
-    [InlineData(5_368_709_120, "5 GB")]
-    public void SizesAreFormattedTheWayAFileManagerWould(long bytes, string expected)
+    [Fact]
+    public async Task InstallingAsksForTheBuildThisMachineCanRun()
     {
-        // Pinned to the invariant culture: the separator deliberately follows the user's,
-        // and this test is about the unit and the rounding, not about where the comma goes.
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        InstallRequest? asked = null;
+        _installations
+            .InstallAsync(
+                Arg.Do<InstallRequest>(request => asked = request),
+                Arg.Any<IProgress<DownloadProgress>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new InstallResult { Install = InstalledAt("win") });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanInstall);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        Assert.Equal("win", asked?.Build.Id);
+        Assert.Equal("g1", asked?.Game.Id);
+        Assert.Equal("v1", asked?.Version.Id);
+
+        Assert.True(model.IsInstalled);
+        Assert.False(model.CanInstall);
+        Assert.Equal("Ready to play.", model.StatusMessage);
+        Assert.Null(model.Progress);
+    }
+
+    // An older build on disk is an update, not a second install, and it is the same request.
+    [Fact]
+    public async Task AnOlderBuildOnDiskOffersAnUpdateInsteadOfAnInstall()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild("win-2")));
+        AlreadyInstalled(InstalledAt("win-1"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsInstalled);
+        Assert.True(model.HasUpdate);
+        Assert.True(model.CanUpdate);
+        Assert.False(model.CanInstall);
+        Assert.True(model.CanUninstall);
+        Assert.True(model.CanVerify);
+        Assert.Equal("Installed: 0.2.0", model.InstalledVersion);
+    }
+
+    [Fact]
+    public async Task ADamagedInstallOffersToRepairItselfAndCannotBeVerifiedAgain()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win", InstallState.Broken));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsBroken);
+        Assert.True(model.CanUpdate);
+        Assert.False(model.CanInstall);
+        Assert.False(model.CanVerify);
+    }
+
+    [Fact]
+    public async Task RunningOutOfSpaceSaysHowMuchIsMissingRatherThanThatSomethingWentWrong()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        _installations
+            .InstallAsync(
+                Arg.Any<InstallRequest>(),
+                Arg.Any<IProgress<DownloadProgress>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(new InsufficientDiskSpaceException("/games", 5_368_709_120, 1_073_741_824));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        Assert.NotNull(model.ErrorMessage);
+        Assert.Contains("5 GB", model.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("1 GB", model.ErrorMessage, StringComparison.Ordinal);
+        Assert.Contains("/games", model.ErrorMessage, StringComparison.Ordinal);
+        Assert.Null(model.Progress);
+    }
+
+    [Fact]
+    public async Task CancellingStopsTheInstallAndSaysSoRatherThanReportingAFailure()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        _installations
+            .InstallAsync(
+                Arg.Any<InstallRequest>(),
+                Arg.Any<IProgress<DownloadProgress>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(async call =>
+            {
+                await Task.Delay(Timeout.Infinite, call.Arg<CancellationToken>());
+                return new InstallResult { Install = InstalledAt("win") };
+            });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Task installing = model.InstallCommand.ExecuteAsync(null);
+        model.CancelInstallCommand.Execute(null);
+        await installing;
+
+        Assert.Equal("Cancelled.", model.ErrorMessage);
+        Assert.Null(model.Progress);
+        Assert.False(model.IsWorking);
+    }
+
+    [Fact]
+    public async Task UninstallingSaysWhatItGaveBack()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _installations.UninstallAsync("g1", Arg.Any<CancellationToken>())
+            .Returns(new UninstallResult("g1", 5_368_709_120));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.UninstallCommand.ExecuteAsync(null);
+
+        Assert.Equal("Uninstalled, freeing 5 GB.", model.StatusMessage);
+        Assert.Null(model.Installed);
+        Assert.False(model.IsInstalled);
+        Assert.True(model.CanInstall);
+    }
+
+    [Fact]
+    public async Task VerifyingAnIntactInstallSaysSo()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _installations.VerifyAsync("g1", Arg.Any<CancellationToken>())
+            .Returns(new IntegrityReport { BuildId = "win", Intact = true });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.VerifyCommand.ExecuteAsync(null);
+
+        Assert.Equal("Everything is where it should be.", model.StatusMessage);
+    }
+
+    [Fact]
+    public async Task VerifyingADamagedInstallCountsWhatIsWrongWithIt()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _installations.VerifyAsync("g1", Arg.Any<CancellationToken>())
+            .Returns(new IntegrityReport
+            {
+                BuildId = "win",
+                Intact = false,
+                Missing = ["data/pak"],
+                Corrupt = ["Game.exe", "lib/core.dll"],
+            });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.VerifyCommand.ExecuteAsync(null);
+
         Assert.Equal(
-            expected,
-            GameDetailViewModel.FormatBytes(bytes, System.Globalization.CultureInfo.InvariantCulture));
+            "1 missing and 2 damaged. Install it again to repair it.", model.StatusMessage);
+    }
+
+    // The phases with no byte count of their own must not fill a bar: a bar moving during a
+    // step that is transferring nothing is a bar that is lying.
+    [Theory]
+    [InlineData(InstallPhase.Planning, true)]
+    [InlineData(InstallPhase.CheckingSpace, true)]
+    [InlineData(InstallPhase.Verifying, true)]
+    [InlineData(InstallPhase.Downloading, false)]
+    [InlineData(InstallPhase.Applying, false)]
+    public void OnlyTheStepsThatMoveBytesFillTheBar(InstallPhase phase, bool indeterminate)
+    {
+        GameDetailViewModel model = CreateViewModel();
+
+        model.Progress = new DownloadProgress { Phase = phase, TotalBytes = 100 };
+
+        Assert.Equal(indeterminate, model.IsProgressIndeterminate);
+        Assert.True(model.IsWorking);
+    }
+
+    [Fact]
+    public void ADownloadInFlightSaysHowFarAlongItIs()
+    {
+        GameDetailViewModel model = CreateViewModel();
+
+        model.Progress = new DownloadProgress
+        {
+            Phase = InstallPhase.Downloading,
+            TransferredBytes = 1_073_741_824,
+            TotalBytes = 5_368_709_120,
+        };
+
+        Assert.Equal("Downloading", model.PhaseText);
+        Assert.Equal(0.2, model.ProgressFraction, 3);
+
+        // No speed yet, and therefore no estimate: one sample is not a rate.
+        Assert.Equal("1 GB of 5 GB", model.ProgressDetail);
+    }
+
+    [Fact]
+    public void AnEstimateOnlyAppearsOnceThereIsSomethingToBaseItOn()
+    {
+        var clock = new FakeTimeProvider(Now);
+        var runtime = Substitute.For<IRuntimePlatform>();
+        runtime.Platform.Returns(GamePlatform.Windows);
+        runtime.Architecture.Returns(BuildArchitecture.X64);
+
+        GameDetailViewModel model = new(
+            _catalog,
+            _library,
+            new ApiErrorPresenter(_localization),
+            _localization,
+            runtime,
+            _authentication,
+            _installations,
+            _installs,
+            clock);
+
+        model.Progress = new DownloadProgress
+        {
+            Phase = InstallPhase.Downloading,
+            TransferredBytes = 0,
+            TotalBytes = 20_971_520,
+        };
+        Assert.DoesNotContain("left", model.ProgressDetail, StringComparison.Ordinal);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        model.Progress = new DownloadProgress
+        {
+            Phase = InstallPhase.Downloading,
+            TransferredBytes = 10_485_760,
+            TotalBytes = 20_971_520,
+        };
+
+        // 10 MB in one second, 10 MB to go.
+        Assert.Contains("10 MB/s", model.ProgressDetail, StringComparison.Ordinal);
+        Assert.Contains("1s left", model.ProgressDetail, StringComparison.Ordinal);
     }
 }

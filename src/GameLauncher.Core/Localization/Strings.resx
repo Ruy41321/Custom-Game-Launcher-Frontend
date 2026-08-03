@@ -248,4 +248,61 @@
   <data name="Stage.Release" xml:space="preserve">
     <value>Release</value>
   </data>
+  <data name="Error.NotEnoughSpace" xml:space="preserve">
+    <value>Not enough space: {0} is needed and {1} is free on {2}.</value>
+  </data>
+  <data name="Error.Cancelled" xml:space="preserve">
+    <value>Cancelled.</value>
+  </data>
+  <data name="Detail.Verify" xml:space="preserve">
+    <value>Verify files</value>
+  </data>
+  <data name="Detail.CancelDownload" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Detail.InstalledVersion" xml:space="preserve">
+    <value>Installed: {0}</value>
+  </data>
+  <data name="Detail.UpdateAvailable" xml:space="preserve">
+    <value>An update to {0} is available.</value>
+  </data>
+  <data name="Detail.Broken" xml:space="preserve">
+    <value>This installation is damaged. Install it again to repair it.</value>
+  </data>
+  <data name="Detail.InstallComplete" xml:space="preserve">
+    <value>Ready to play.</value>
+  </data>
+  <data name="Detail.Uninstalled" xml:space="preserve">
+    <value>Uninstalled, freeing {0}.</value>
+  </data>
+  <data name="Detail.VerifyIntact" xml:space="preserve">
+    <value>Everything is where it should be.</value>
+  </data>
+  <data name="Detail.VerifyBroken" xml:space="preserve">
+    <value>{0} missing and {1} damaged. Install it again to repair it.</value>
+  </data>
+  <data name="Download.Planning" xml:space="preserve">
+    <value>Working out what to download…</value>
+  </data>
+  <data name="Download.CheckingSpace" xml:space="preserve">
+    <value>Checking free space…</value>
+  </data>
+  <data name="Download.Downloading" xml:space="preserve">
+    <value>Downloading</value>
+  </data>
+  <data name="Download.Applying" xml:space="preserve">
+    <value>Installing files…</value>
+  </data>
+  <data name="Download.Verifying" xml:space="preserve">
+    <value>Verifying…</value>
+  </data>
+  <data name="Download.Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Download.Progress" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="Download.Remaining" xml:space="preserve">
+    <value>{0} left</value>
+  </data>
 </root>
