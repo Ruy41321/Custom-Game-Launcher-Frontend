@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace GameLauncher.Core.Models;
 
 /// <summary>
@@ -17,6 +19,9 @@ public enum GamePlatform
 {
     Windows,
     Linux,
+
+    // The camelCase naming policy would spell this "macOs"; the server says "macos".
+    [JsonStringEnumMemberName("macos")]
     MacOs,
 }
 
