@@ -1,6 +1,7 @@
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.DependencyInjection;
@@ -34,6 +35,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(ICatalogApi))]
     [InlineData(typeof(ILibraryApi))]
     [InlineData(typeof(IDownloadApi))]
+    [InlineData(typeof(IInstallStore))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();

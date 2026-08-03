@@ -2,11 +2,13 @@ using System.Net.Http.Headers;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.Api;
 using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
+using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -39,6 +41,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
 
         services.AddSingleton<ITokenStore, FileTokenStore>();
+        services.AddSingleton<IInstallStore, SqliteInstallStore>();
         services.AddSingleton<IAuthenticationService, AuthenticationService>();
         services.AddTransient<BearerTokenHandler>();
 

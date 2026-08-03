@@ -20,6 +20,11 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.18" />
   </ItemGroup>
 
+  <ItemGroup Label="Local state">
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="9.0.18" />
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+  </ItemGroup>
+
   <ItemGroup Label="Logging">
     <PackageVersion Include="Serilog" Version="4.4.0" />
     <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />

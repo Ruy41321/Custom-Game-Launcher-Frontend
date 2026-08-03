@@ -11,13 +11,17 @@ public sealed class PathProvider : IPathProvider
 {
     private const string ApplicationFolderName = "CustomGameLauncher";
 
-    public PathProvider(string? applicationDirectory = null)
+    private const string DatabaseFileName = "launcher.db";
+
+    public PathProvider(string? applicationDirectory = null, string? userDataDirectory = null)
     {
         ApplicationDirectory = applicationDirectory ?? AppContext.BaseDirectory;
-        UserDataDirectory = Path.Combine(ResolveUserDataRoot(), ApplicationFolderName);
+        UserDataDirectory = userDataDirectory
+            ?? Path.Combine(ResolveUserDataRoot(), ApplicationFolderName);
         LogDirectory = Path.Combine(UserDataDirectory, "logs");
         DownloadStagingDirectory = Path.Combine(UserDataDirectory, "staging");
         DefaultInstallDirectory = Path.Combine(ResolveInstallRoot(), ApplicationFolderName, "Games");
+        LocalDatabasePath = Path.Combine(UserDataDirectory, DatabaseFileName);
     }
 
     public string ApplicationDirectory { get; }
@@ -29,6 +33,8 @@ public sealed class PathProvider : IPathProvider
     public string DownloadStagingDirectory { get; }
 
     public string DefaultInstallDirectory { get; }
+
+    public string LocalDatabasePath { get; }
 
     public void EnsureDirectoriesExist()
     {

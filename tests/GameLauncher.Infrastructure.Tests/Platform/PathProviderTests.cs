@@ -14,6 +14,28 @@ public sealed class PathProviderTests
         Assert.True(Path.IsPathRooted(paths.LogDirectory));
         Assert.True(Path.IsPathRooted(paths.DownloadStagingDirectory));
         Assert.True(Path.IsPathRooted(paths.DefaultInstallDirectory));
+        Assert.True(Path.IsPathRooted(paths.LocalDatabasePath));
+    }
+
+    // The database holds what is installed, which has to outlive a cleared staging directory
+    // and must not be mistaken for a log.
+    [Fact]
+    public void TheDatabaseSitsDirectlyInTheUserDataDirectory()
+    {
+        var paths = new PathProvider();
+
+        Assert.Equal(paths.UserDataDirectory, Path.GetDirectoryName(paths.LocalDatabasePath));
+    }
+
+    [Fact]
+    public void TheUserDataDirectoryCanBeOverriddenForTesting()
+    {
+        using var directory = new TemporaryDirectory();
+
+        var paths = new PathProvider(userDataDirectory: directory.Path);
+
+        Assert.Equal(directory.Path, paths.UserDataDirectory);
+        Assert.StartsWith(directory.Path, paths.LocalDatabasePath, StringComparison.Ordinal);
     }
 
     // Staging must not sit inside the log directory or vice versa; cleaning one would

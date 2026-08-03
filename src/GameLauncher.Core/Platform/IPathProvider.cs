@@ -22,6 +22,9 @@ public interface IPathProvider
     /// <summary>Default root under which games are installed.</summary>
     string DefaultInstallDirectory { get; }
 
+    /// <summary>The SQLite file holding what is installed on this machine.</summary>
+    string LocalDatabasePath { get; }
+
     /// <summary>Ensures every writable directory above exists.</summary>
     void EnsureDirectoriesExist();
 }
