@@ -1,5 +1,6 @@
 using System.Globalization;
 using GameLauncher.Core.Downloads;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 
@@ -33,6 +34,11 @@ public sealed class ApiErrorPresenter(ILocalizationService localization) : IApiE
                 ByteSize.Format(space.RequiredBytes, CultureInfo.CurrentCulture),
                 ByteSize.Format(space.AvailableBytes, CultureInfo.CurrentCulture),
                 space.Path);
+        }
+
+        if (exception is GameLaunchException launch)
+        {
+            return localization.Translate("Launch." + launch.Reason);
         }
 
         if (exception is OperationCanceledException)

@@ -305,4 +305,22 @@
   <data name="Download.Remaining" xml:space="preserve">
     <value>{0} restantes</value>
   </data>
+  <data name="Launch.NotInstalled" xml:space="preserve">
+    <value>Ce jeu n'est pas installé sur cette machine.</value>
+  </data>
+  <data name="Launch.NotPlayable" xml:space="preserve">
+    <value>Cette installation est incomplète. Réinstallez-la avant de jouer.</value>
+  </data>
+  <data name="Launch.EntrypointMissing" xml:space="preserve">
+    <value>L'exécutable du jeu est introuvable. Réinstallez-le pour réparer.</value>
+  </data>
+  <data name="Launch.AlreadyRunning" xml:space="preserve">
+    <value>Ce jeu est déjà en cours d'exécution.</value>
+  </data>
+  <data name="Launch.StartFailed" xml:space="preserve">
+    <value>Le jeu n'a pas pu être lancé.</value>
+  </data>
+  <data name="Detail.Running" xml:space="preserve">
+    <value>En cours d'exécution…</value>
+  </data>
 </root>

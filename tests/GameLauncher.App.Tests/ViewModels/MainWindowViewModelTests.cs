@@ -4,6 +4,7 @@ using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
@@ -55,6 +56,7 @@ public sealed class MainWindowViewModelTests
                 _authentication,
                 Substitute.For<IInstallationService>(),
                 Substitute.For<IInstallStore>(),
+                Substitute.For<IGameLauncher>(),
                 TimeProvider.System));
     }
 

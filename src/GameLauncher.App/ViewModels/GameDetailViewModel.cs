@@ -6,6 +6,7 @@ using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
@@ -50,6 +51,7 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     private readonly IAuthenticationService _authentication;
     private readonly IInstallationService _installations;
     private readonly IInstallStore _installs;
+    private readonly IGameLauncher _games;
     private readonly TransferRateEstimator _rate;
 
     private CancellationTokenSource? _installCancellation;
@@ -86,6 +88,7 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         IAuthenticationService authentication,
         IInstallationService installations,
         IInstallStore installs,
+        IGameLauncher games,
         TimeProvider time)
     {
         _catalog = catalog;
@@ -96,7 +99,18 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         _authentication = authentication;
         _installations = installations;
         _installs = installs;
+        _games = games;
         _rate = new TransferRateEstimator(time);
+
+        // The process exits on a thread that is not the UI's, and the page only has to know
+        // that its own game stopped.
+        _games.GameExited += (_, args) => OnUiThread(() =>
+        {
+            if (args.GameId == Detail?.Game.Id)
+            {
+                RaiseDerived();
+            }
+        });
     }
 
     public event EventHandler? BackRequested;
@@ -147,9 +161,14 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     public bool CanUpdate => CanDownload && !IsWorking && (HasUpdate || IsBroken);
 
-    public bool CanUninstall => Installed is not null && !IsWorking;
+    public bool CanUninstall => Installed is not null && !IsWorking && !IsRunning;
 
-    public bool CanVerify => IsInstalled && !IsWorking;
+    public bool CanVerify => IsInstalled && !IsWorking && !IsRunning;
+
+    /// <summary>Started by this launcher and not yet seen to exit.</summary>
+    public bool IsRunning => Installed is not null && _games.IsRunning(Installed.GameId);
+
+    public bool CanPlay => IsInstalled && !IsWorking && !IsRunning;
 
     public string InstalledVersion => Installed is { } install
         ? _localization.Translate("Detail.InstalledVersion", install.VersionSemver)
@@ -344,6 +363,35 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     private void CancelInstall() => _installCancellation?.Cancel();
 
     [RelayCommand]
+    private async Task PlayAsync(CancellationToken cancellationToken)
+    {
+        if (Installed is null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        try
+        {
+            await _games.LaunchAsync(Installed.GameId, cancellationToken).ConfigureAwait(true);
+
+            // Re-read rather than patch the field: starting a game writes LastPlayedAt, and
+            // the row on disk is the authority on what the launcher believes.
+            Installed = await ReloadInstalledAsync().ConfigureAwait(true);
+        }
+        catch (GameLaunchException exception)
+        {
+            ErrorMessage = _errors.Describe(exception);
+        }
+        finally
+        {
+            RaiseDerived();
+        }
+    }
+
+    [RelayCommand]
     private async Task UninstallAsync(CancellationToken cancellationToken)
     {
         if (Installed is null)
@@ -468,6 +516,8 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanUpdate));
         OnPropertyChanged(nameof(CanUninstall));
         OnPropertyChanged(nameof(CanVerify));
+        OnPropertyChanged(nameof(IsRunning));
+        OnPropertyChanged(nameof(CanPlay));
         OnPropertyChanged(nameof(InstalledVersion));
         OnPropertyChanged(nameof(ProgressFraction));
         OnPropertyChanged(nameof(IsProgressIndeterminate));

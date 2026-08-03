@@ -51,7 +51,15 @@ public sealed record InstalledGame
     /// <summary>Executable, relative to <see cref="InstallDirectory"/>, with <c>/</c> separators.</summary>
     public string Entrypoint { get; init; } = string.Empty;
 
+    /// <summary>What the build asks to be started with. The publisher's, not the player's.</summary>
     public string LaunchArgs { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Extra arguments the player set for this game. Kept apart from
+    /// <see cref="LaunchArgs"/> so an update, which rewrites everything the manifest says,
+    /// cannot quietly discard a preference the player set.
+    /// </summary>
+    public string LaunchOptions { get; init; } = string.Empty;
 
     /// <summary>The manifest this install was applied from — what an update comes *from*.</summary>
     public string ManifestSha256 { get; init; } = string.Empty;

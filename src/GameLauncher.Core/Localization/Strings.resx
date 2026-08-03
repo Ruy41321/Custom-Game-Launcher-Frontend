@@ -305,4 +305,22 @@
   <data name="Download.Remaining" xml:space="preserve">
     <value>{0} left</value>
   </data>
+  <data name="Launch.NotInstalled" xml:space="preserve">
+    <value>That game is not installed on this machine.</value>
+  </data>
+  <data name="Launch.NotPlayable" xml:space="preserve">
+    <value>This installation is not finished. Install it again before playing.</value>
+  </data>
+  <data name="Launch.EntrypointMissing" xml:space="preserve">
+    <value>The game's executable is missing. Install it again to repair it.</value>
+  </data>
+  <data name="Launch.AlreadyRunning" xml:space="preserve">
+    <value>That game is already running.</value>
+  </data>
+  <data name="Launch.StartFailed" xml:space="preserve">
+    <value>The game could not be started.</value>
+  </data>
+  <data name="Detail.Running" xml:space="preserve">
+    <value>Running…</value>
+  </data>
 </root>

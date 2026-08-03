@@ -3,6 +3,7 @@ using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.DependencyInjection;
@@ -40,6 +41,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IBlobFetcher))]
     [InlineData(typeof(IDiskSpaceProbe))]
     [InlineData(typeof(IInstallationService))]
+    [InlineData(typeof(IGameLauncher))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();

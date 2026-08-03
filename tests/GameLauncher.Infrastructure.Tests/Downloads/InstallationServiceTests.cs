@@ -244,6 +244,24 @@ public sealed class InstallationServiceTests : IDisposable
         await _downloadApi.Received(1).GetPlanAsync("b1", null, Arg.Any<CancellationToken>());
     }
 
+    // The manifest owns LaunchArgs and an update rewrites it; the player owns LaunchOptions
+    // and an update that discarded them would be a preference that silently resets.
+    [Fact]
+    public async Task AnUpdateKeepsTheArgumentsThePlayerSet()
+    {
+        await _store.SaveAsync(
+            Installed("b0") with { LaunchOptions = "-windowed" },
+            TestContext.Current.CancellationToken);
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)), from: "b0");
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(InstallDirectory),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("-windowed", result.Install.LaunchOptions);
+        Assert.Equal("--fullscreen", result.Install.LaunchArgs);
+    }
+
     [Fact]
     public async Task AGameAlreadyAtTheBuildIsLeftAlone()
     {

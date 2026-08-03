@@ -4,6 +4,7 @@ using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.Api;
@@ -11,6 +12,7 @@ using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
 using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
+using GameLauncher.Infrastructure.Launching;
 using GameLauncher.Infrastructure.Platform;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -71,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IBlobFetcher, BlobFetcher>(ConfigureFileServerClient);
 
         services.AddSingleton<IInstallationService, InstallationService>();
+        services.AddSingleton<IGameLauncher, ProcessGameLauncher>();
 
         return services;
     }

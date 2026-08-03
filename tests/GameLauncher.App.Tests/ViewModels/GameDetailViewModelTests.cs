@@ -3,6 +3,7 @@ using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
+using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
@@ -27,6 +28,8 @@ public sealed class GameDetailViewModelTests
 
     private readonly IInstallStore _installs = Substitute.For<IInstallStore>();
 
+    private readonly IGameLauncher _games = Substitute.For<IGameLauncher>();
+
     private GameDetailViewModel CreateViewModel(
         GamePlatform platform = GamePlatform.Windows,
         BuildArchitecture architecture = BuildArchitecture.X64)
@@ -44,6 +47,7 @@ public sealed class GameDetailViewModelTests
             _authentication,
             _installations,
             _installs,
+            _games,
             new FakeTimeProvider(Now));
     }
 
@@ -508,6 +512,7 @@ public sealed class GameDetailViewModelTests
             _authentication,
             _installations,
             _installs,
+            _games,
             clock);
 
         model.Progress = new DownloadProgress
@@ -529,5 +534,91 @@ public sealed class GameDetailViewModelTests
         // 10 MB in one second, 10 MB to go.
         Assert.Contains("10 MB/s", model.ProgressDetail, StringComparison.Ordinal);
         Assert.Contains("1s left", model.ProgressDetail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AnInstalledGameCanBePlayed()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _games.LaunchAsync("g1", Arg.Any<CancellationToken>())
+            .Returns(new RunningGame("g1", 4242, Now));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanPlay);
+        await model.PlayCommand.ExecuteAsync(null);
+
+        await _games.Received(1).LaunchAsync("g1", Arg.Any<CancellationToken>());
+        Assert.Null(model.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task AGameThatIsNotInstalledIsNotOfferedAPlayButton()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.False(model.CanPlay);
+        Assert.True(model.CanInstall);
+    }
+
+    // Uninstalling or verifying a game that is running would pull the files out from under it.
+    [Fact]
+    public async Task WhileAGameRunsItIsNotOfferedAgainAndCannotBeRemoved()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _games.IsRunning("g1").Returns(true);
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsRunning);
+        Assert.False(model.CanPlay);
+        Assert.False(model.CanUninstall);
+        Assert.False(model.CanVerify);
+    }
+
+    [Fact]
+    public async Task ARefusedLaunchSaysWhyRatherThanDoingNothing()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _games.LaunchAsync("g1", Arg.Any<CancellationToken>())
+            .ThrowsAsync(new GameLaunchException(
+                LaunchFailure.EntrypointMissing, "Game.exe is missing from the installation."));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.PlayCommand.ExecuteAsync(null);
+
+        Assert.Equal(
+            "The game's executable is missing. Install it again to repair it.",
+            model.ErrorMessage);
+    }
+
+    // The process exits on a thread that is not the UI's, and the page has to come back to
+    // offering Play without being reloaded.
+    [Fact]
+    public async Task WhenTheGameExitsThePageOffersToPlayItAgain()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _games.IsRunning("g1").Returns(true);
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        Assert.False(model.CanPlay);
+
+        _games.IsRunning("g1").Returns(false);
+        _games.GameExited += Raise.EventWith(new GameExitedEventArgs("g1", 0, TimeSpan.FromHours(1)));
+
+        Assert.True(model.CanPlay);
+        Assert.False(model.IsRunning);
     }
 }

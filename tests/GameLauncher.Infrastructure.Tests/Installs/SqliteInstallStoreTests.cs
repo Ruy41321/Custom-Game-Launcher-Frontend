@@ -121,6 +121,42 @@ public sealed class SqliteInstallStoreTests
         Assert.Equal(Installed.AddHours(3), read?.LastPlayedAt);
     }
 
+    // The player's arguments live in their own column so an update, which rewrites everything
+    // the manifest says, cannot take them with it.
+    [Fact]
+    public async Task ThePlayersLaunchOptionsRoundTripApartFromTheBuilds()
+    {
+        using var directory = new TemporaryDirectory();
+        using SqliteInstallStore store = StoreIn(directory);
+
+        await store.SaveAsync(
+            Sample with { LaunchArgs = "--fullscreen", LaunchOptions = "-windowed --dev" },
+            TestContext.Current.CancellationToken);
+
+        InstalledGame? read = await store.FindAsync("g1", TestContext.Current.CancellationToken);
+
+        Assert.Equal("--fullscreen", read?.LaunchArgs);
+        Assert.Equal("-windowed --dev", read?.LaunchOptions);
+    }
+
+    // The schema is migrated by appending, so a database written before the column existed has
+    // to keep opening. Migration 0 then 1 is exactly what an upgraded launcher runs.
+    [Fact]
+    public async Task ADatabaseFromAnEarlierSchemaIsMigratedRatherThanRejected()
+    {
+        using var directory = new TemporaryDirectory();
+
+        using (SqliteInstallStore first = StoreIn(directory))
+        {
+            await first.SaveAsync(Sample, TestContext.Current.CancellationToken);
+        }
+
+        using SqliteInstallStore second = StoreIn(directory);
+        InstalledGame? read = await second.FindAsync("g1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(string.Empty, read?.LaunchOptions);
+    }
+
     [Fact]
     public async Task InstallsAreListedByTitle()
     {

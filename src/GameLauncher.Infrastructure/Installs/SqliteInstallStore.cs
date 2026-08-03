@@ -44,6 +44,10 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             last_played_at    TEXT        NULL
         );
         """,
+
+        // Arguments the player added, kept apart from the ones the manifest carries so an
+        // update cannot discard them.
+        "ALTER TABLE installs ADD COLUMN launch_options TEXT NOT NULL DEFAULT '';",
     ];
 
     private const string SelectColumns = """
@@ -58,6 +62,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
                install_directory AS InstallDirectory,
                entrypoint        AS Entrypoint,
                launch_args       AS LaunchArgs,
+               launch_options    AS LaunchOptions,
                manifest_sha256   AS ManifestSha256,
                size_bytes        AS SizeBytes,
                file_count        AS FileCount,
@@ -126,12 +131,12 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             INSERT INTO installs (
                 game_id, game_slug, game_title, build_id, version_id, version_semver,
                 platform, architecture, install_directory, entrypoint, launch_args,
-                manifest_sha256, size_bytes, file_count, state,
+                launch_options, manifest_sha256, size_bytes, file_count, state,
                 installed_at, updated_at, last_verified_at, last_played_at)
             VALUES (
                 @GameId, @GameSlug, @GameTitle, @BuildId, @VersionId, @VersionSemver,
                 @Platform, @Architecture, @InstallDirectory, @Entrypoint, @LaunchArgs,
-                @ManifestSha256, @SizeBytes, @FileCount, @State,
+                @LaunchOptions, @ManifestSha256, @SizeBytes, @FileCount, @State,
                 @InstalledAt, @UpdatedAt, @LastVerifiedAt, @LastPlayedAt)
             ON CONFLICT (game_id) DO UPDATE SET
                 game_slug         = excluded.game_slug,
@@ -144,6 +149,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
                 install_directory = excluded.install_directory,
                 entrypoint        = excluded.entrypoint,
                 launch_args       = excluded.launch_args,
+                launch_options    = excluded.launch_options,
                 manifest_sha256   = excluded.manifest_sha256,
                 size_bytes        = excluded.size_bytes,
                 file_count        = excluded.file_count,
@@ -264,6 +270,8 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
 
         public string LaunchArgs { get; init; } = string.Empty;
 
+        public string LaunchOptions { get; init; } = string.Empty;
+
         public string ManifestSha256 { get; init; } = string.Empty;
 
         public long SizeBytes { get; init; }
@@ -293,6 +301,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             InstallDirectory = install.InstallDirectory,
             Entrypoint = install.Entrypoint,
             LaunchArgs = install.LaunchArgs,
+            LaunchOptions = install.LaunchOptions,
             ManifestSha256 = install.ManifestSha256,
             SizeBytes = install.SizeBytes,
             FileCount = install.FileCount,
@@ -316,6 +325,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             InstallDirectory = InstallDirectory,
             Entrypoint = Entrypoint,
             LaunchArgs = LaunchArgs,
+            LaunchOptions = LaunchOptions,
             ManifestSha256 = ManifestSha256,
             SizeBytes = SizeBytes,
             FileCount = FileCount,

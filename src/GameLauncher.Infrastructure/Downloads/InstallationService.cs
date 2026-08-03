@@ -472,6 +472,10 @@ public sealed class InstallationService(
             InstallDirectory = installDirectory,
             Entrypoint = plan.Entrypoint,
             LaunchArgs = plan.LaunchArgs,
+
+            // The manifest owns LaunchArgs and an update rewrites it; the player owns this one
+            // and an update must not quietly discard it.
+            LaunchOptions = existing?.LaunchOptions ?? string.Empty,
             ManifestSha256 = plan.ManifestSha256,
             SizeBytes = plan.TotalBytes,
             FileCount = plan.Files.Count + plan.Unchanged.Count,
