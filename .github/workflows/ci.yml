@@ -21,12 +21,12 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # global.json pins the SDK, so CI compiles with the same analyzer set as the
       # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
       # does not exist locally, which is impossible to reproduce before pushing.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
@@ -46,17 +46,17 @@ jobs:
         os: [windows-latest, ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # global.json pins the SDK, so CI compiles with the same analyzer set as the
       # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
       # does not exist locally, which is impossible to reproduce before pushing.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Cache NuGet packages
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
@@ -77,12 +77,12 @@ jobs:
         rid: [win-x64, linux-x64, osx-x64, osx-arm64]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # global.json pins the SDK, so CI compiles with the same analyzer set as the
       # maintainer's machine. `9.0.x` silently drifted ahead and failed on a rule that
       # does not exist locally, which is impossible to reproduce before pushing.
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
