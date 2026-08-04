@@ -323,4 +323,10 @@
   <data name="Detail.Running" xml:space="preserve">
     <value>Running…</value>
   </data>
+  <data name="Library.Damaged" xml:space="preserve">
+    <value>Damaged</value>
+  </data>
+  <data name="Library.Unfinished" xml:space="preserve">
+    <value>Install unfinished</value>
+  </data>
 </root>

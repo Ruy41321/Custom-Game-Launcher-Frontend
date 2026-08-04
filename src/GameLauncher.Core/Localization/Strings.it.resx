@@ -323,4 +323,10 @@
   <data name="Detail.Running" xml:space="preserve">
     <value>In esecuzione…</value>
   </data>
+  <data name="Library.Damaged" xml:space="preserve">
+    <value>Danneggiato</value>
+  </data>
+  <data name="Library.Unfinished" xml:space="preserve">
+    <value>Installazione incompleta</value>
+  </data>
 </root>

@@ -46,7 +46,12 @@ public sealed class MainWindowViewModelTests
             _authentication,
             new LoginViewModel(_authentication, errors, _localization),
             new ExploreViewModel(_catalog, _library, errors, _localization),
-            new LibraryViewModel(_library, errors),
+            new LibraryViewModel(
+                _library,
+                Substitute.For<IInstallStore>(),
+                Substitute.For<IGameLauncher>(),
+                errors,
+                _localization),
             new GameDetailViewModel(
                 _catalog,
                 _library,
@@ -190,8 +195,13 @@ public sealed class MainWindowViewModelTests
         _catalog.GetGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new GameDetail());
         MainWindowViewModel shell = CreateShell();
+
+        // After CreateShell, which stubs an empty library of its own: the last stub wins.
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>())
+            .Returns([new Game { Id = "g1", Slug = "orbital-drift", Title = "Orbital Drift" }]);
+
         await shell.ShowLibraryCommand.ExecuteAsync(null);
-        shell.Library.OpenGameCommand.Execute(new Game { Id = "g1", Slug = "orbital-drift" });
+        shell.Library.OpenGameCommand.Execute(shell.Library.Games[0]);
 
         shell.GameDetail.BackCommand.Execute(null);
 
