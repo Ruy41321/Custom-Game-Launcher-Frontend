@@ -28,6 +28,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSignedIn))]
+    [NotifyPropertyChangedFor(nameof(CanPublish))]
     private ViewModelBase _currentPage;
 
     [ObservableProperty]
@@ -41,7 +42,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LoginViewModel login,
         ExploreViewModel explore,
         LibraryViewModel library,
-        GameDetailViewModel gameDetail)
+        GameDetailViewModel gameDetail,
+        DeveloperViewModel developer)
     {
         _localization = localization;
         _settingsStore = settingsStore;
@@ -51,6 +53,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Explore = explore;
         Library = library;
         GameDetail = gameDetail;
+        Developer = developer;
         _currentPage = login;
 
         AppName = configuration.AppName;
@@ -83,7 +86,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public GameDetailViewModel GameDetail { get; }
 
+    public DeveloperViewModel Developer { get; }
+
     public bool IsSignedIn => _authentication.IsAuthenticated;
+
+    /// <summary>
+    /// Advisory, like every client-side permission check: the publish routes refuse the same
+    /// account again. Hiding the tab keeps a player from finding a page that only says no.
+    /// </summary>
+    public bool CanPublish =>
+        IsSignedIn && _authentication.HasPermission(Permissions.GamePublish);
 
     /// <summary>Where "back" returns to, so opening a game from Explore does not land in Library.</summary>
     private ViewModelBase? _lastListPage;
@@ -131,6 +143,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task ShowDeveloperAsync(CancellationToken cancellationToken)
+    {
+        CurrentPage = Developer;
+        _lastListPage = Developer;
+        await Developer.LoadAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
     private async Task SignOutAsync(CancellationToken cancellationToken)
     {
         await _authentication.SignOutAsync(cancellationToken).ConfigureAwait(true);
@@ -167,6 +187,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         AccountName = session?.User.DisplayName ?? string.Empty;
         OnPropertyChanged(nameof(IsSignedIn));
+        OnPropertyChanged(nameof(CanPublish));
 
         if (session is null)
         {

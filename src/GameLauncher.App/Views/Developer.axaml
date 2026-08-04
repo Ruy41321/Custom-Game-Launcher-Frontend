@@ -1,0 +1,163 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             xmlns:models="clr-namespace:GameLauncher.Core.Models;assembly=GameLauncher.Core"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Developer"
+             x:DataType="vm:DeveloperViewModel">
+
+  <Grid ColumnDefinitions="280,*" Margin="24,20">
+
+    <!-- The publisher's own games, drafts included: the server decides that, not this page. -->
+    <Grid Grid.Column="0" RowDefinitions="Auto,*,Auto" Margin="0,0,20,0">
+      <TextBlock Grid.Row="0" Text="{loc:Tr Publish.MyGames}" FontSize="16" FontWeight="Light"
+                 Margin="0,0,0,10" />
+
+      <ListBox Grid.Row="1" ItemsSource="{Binding Games}" SelectedItem="{Binding SelectedGame}">
+        <ListBox.ItemTemplate>
+          <DataTemplate x:DataType="models:Game">
+            <StackPanel Spacing="2" Margin="0,4">
+              <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Visibility}" FontSize="11" Opacity="0.5" />
+            </StackPanel>
+          </DataTemplate>
+        </ListBox.ItemTemplate>
+      </ListBox>
+
+      <TextBlock Grid.Row="1" Text="{loc:Tr Publish.NoGames}" Opacity="0.5" FontSize="12"
+                 TextWrapping="Wrap" VerticalAlignment="Top" Margin="0,8"
+                 IsVisible="{Binding !Games.Count}" />
+
+      <Border Grid.Row="2" Classes="card" Margin="0,12,0,0">
+        <StackPanel Spacing="8">
+          <TextBlock Text="{loc:Tr Publish.NewGame}" FontWeight="SemiBold" FontSize="13" />
+          <TextBox Watermark="{loc:Tr Publish.GameTitle}" Text="{Binding NewGameTitle}" />
+          <TextBox Watermark="{loc:Tr Publish.GameSummary}" Text="{Binding NewGameSummary}" />
+          <ComboBox ItemsSource="{Binding Visibilities}" SelectedItem="{Binding NewGameVisibility}"
+                    HorizontalAlignment="Stretch" />
+          <Button Content="{loc:Tr Publish.Create}" Classes="accent"
+                  Command="{Binding CreateGameCommand}" IsEnabled="{Binding CanCreateGame}" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <ScrollViewer Grid.Column="1">
+      <StackPanel Spacing="16">
+
+        <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
+
+        <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <TextBlock Text="{loc:Tr Publish.SelectGame}" Opacity="0.5"
+                   IsVisible="{Binding !!!Selected}" />
+
+        <StackPanel Spacing="16" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+
+          <TextBlock Text="{loc:Tr Publish.Versions}" FontSize="16" FontWeight="Light" />
+
+          <ListBox ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}"
+                   MaxHeight="160">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="models:GameVersion">
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <TextBlock Text="{Binding Semver}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Stage}" Opacity="0.6" FontSize="12"
+                             VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding Published}" Opacity="0.4" FontSize="12"
+                             VerticalAlignment="Center" />
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <TextBlock Text="{loc:Tr Publish.NewVersion}" FontWeight="SemiBold" FontSize="13" />
+              <Grid ColumnDefinitions="*,*">
+                <TextBox Grid.Column="0" Margin="0,0,8,0"
+                         Watermark="{loc:Tr Publish.Semver}" Text="{Binding NewVersionSemver}" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Stages}"
+                          SelectedItem="{Binding NewVersionStage}" HorizontalAlignment="Stretch" />
+              </Grid>
+              <TextBox Watermark="{loc:Tr Publish.ReleaseNotes}" Text="{Binding NewVersionNotes}"
+                       AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
+              <CheckBox Content="{loc:Tr Publish.PublishNow}"
+                        IsChecked="{Binding PublishVersionImmediately}" />
+              <Button Content="{loc:Tr Publish.Create}" Command="{Binding CreateVersionCommand}"
+                      IsEnabled="{Binding CanCreateVersion}" />
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="{loc:Tr Publish.NewBuild}" FontSize="16" FontWeight="Light"
+                     Margin="0,8,0,0" />
+
+          <TextBlock Text="{loc:Tr Publish.SelectVersion}" Opacity="0.5" FontSize="12"
+                     IsVisible="{Binding !!!SelectedVersion}" />
+
+          <Border Classes="card">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" Margin="0,0,8,0"
+                         Watermark="{loc:Tr Publish.Directory}" Text="{Binding BuildDirectory}" />
+                <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}"
+                        Command="{Binding ChooseDirectoryCommand}" />
+              </Grid>
+              <TextBox Watermark="{loc:Tr Publish.Entrypoint}" Text="{Binding Entrypoint}" />
+              <TextBox Watermark="{loc:Tr Publish.LaunchArgs}" Text="{Binding LaunchArgs}" />
+              <Grid ColumnDefinitions="*,*">
+                <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Platforms}"
+                          SelectedItem="{Binding BuildPlatform}" HorizontalAlignment="Stretch" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding Architectures}"
+                          SelectedItem="{Binding Architecture}" HorizontalAlignment="Stretch" />
+              </Grid>
+
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <Button Content="{loc:Tr Publish.Start}" Classes="accent"
+                        Command="{Binding PublishCommand}" IsEnabled="{Binding CanPublish}"
+                        IsVisible="{Binding !IsPublishing}" />
+                <Button Content="{loc:Tr Detail.CancelDownload}"
+                        Command="{Binding CancelPublishCommand}"
+                        IsVisible="{Binding IsPublishing}" />
+              </StackPanel>
+
+              <StackPanel Spacing="4" IsVisible="{Binding IsPublishing}">
+                <TextBlock Text="{Binding PublishPhaseText}" FontSize="12" />
+                <ProgressBar Minimum="0" Maximum="1" Value="{Binding PublishFraction}"
+                             IsIndeterminate="{Binding IsPublishProgressIndeterminate}" Height="4" />
+                <TextBlock Text="{Binding PublishDetail}" Opacity="0.6" FontSize="12" />
+              </StackPanel>
+            </StackPanel>
+          </Border>
+
+          <TextBlock Text="{loc:Tr Publish.Builds}" FontSize="16" FontWeight="Light"
+                     Margin="0,8,0,0" />
+
+          <ItemsControl ItemsSource="{Binding Builds}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="models:GameBuild">
+                <Border Classes="card" Margin="0,0,0,8">
+                  <StackPanel Orientation="Horizontal" Spacing="14">
+                    <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Architecture}" Opacity="0.7" />
+                    <TextBlock Text="{Binding Status}" Opacity="0.7" />
+                    <TextBlock Text="{Binding FileCount}" Opacity="0.5" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+  </Grid>
+
+</UserControl>

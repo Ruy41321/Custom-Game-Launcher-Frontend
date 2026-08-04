@@ -4,6 +4,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using GameLauncher.App.Localization;
+using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.App.Views;
 using GameLauncher.Core.Configuration;
@@ -68,12 +69,16 @@ public partial class App : Application
         base.OnFrameworkInitializationCompleted();
     }
 
-    private static ServiceProvider BuildServiceProvider()
+    private ServiceProvider BuildServiceProvider()
     {
         ServiceCollection services = new();
 
         services.AddLogging(builder => builder.AddProvider(new SerilogLoggerProvider(Log.Logger)));
         services.AddLauncherInfrastructure();
+
+        // The picker resolves the window at call time rather than holding it: the shell is
+        // built before the window exists.
+        services.AddSingleton<IFolderPicker>(_ => new StorageProviderFolderPicker(this));
 
         // View models are singletons: the shell holds all of them for the life of the window,
         // and a page that keeps its scroll position and search term when you come back to it
@@ -82,6 +87,7 @@ public partial class App : Application
         services.AddSingleton<ExploreViewModel>();
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<GameDetailViewModel>();
+        services.AddSingleton<DeveloperViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();

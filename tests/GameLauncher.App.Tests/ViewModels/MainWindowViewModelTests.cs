@@ -1,3 +1,4 @@
+using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
@@ -8,6 +9,7 @@ using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
+using GameLauncher.Core.Publishing;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -62,7 +64,15 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IInstallationService>(),
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IGameLauncher>(),
-                TimeProvider.System));
+                TimeProvider.System),
+            new DeveloperViewModel(
+                _catalog,
+                Substitute.For<IPublishingApi>(),
+                Substitute.For<IBuildPublisher>(),
+                errors,
+                _localization,
+                runtime,
+                Substitute.For<IFolderPicker>()));
     }
 
     [Fact]
@@ -148,6 +158,37 @@ public sealed class MainWindowViewModelTests
         _authentication.SessionChanged += Raise.EventWith(new SessionChangedEventArgs(null));
 
         Assert.Same(shell.Login, shell.CurrentPage);
+    }
+
+    // Advisory, like every client-side permission check. Hiding the tab keeps a player from
+    // finding a page that only says no.
+    [Fact]
+    public void ThePublishTabIsOfferedOnlyToAnAccountThatMay()
+    {
+        MainWindowViewModel shell = CreateShell();
+
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.HasPermission(Permissions.GamePublish).Returns(false);
+        _authentication.SessionChanged += Raise.EventWith(new SessionChangedEventArgs(new AuthSession()));
+        Assert.False(shell.CanPublish);
+
+        _authentication.HasPermission(Permissions.GamePublish).Returns(true);
+        _authentication.SessionChanged += Raise.EventWith(new SessionChangedEventArgs(new AuthSession()));
+        Assert.True(shell.CanPublish);
+    }
+
+    [Fact]
+    public async Task ThePublishTabOpensTheDeveloperPage()
+    {
+        _catalog.GetMyGamesAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<Game>());
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.ShowDeveloperCommand.ExecuteAsync(null);
+
+        Assert.Same(shell.Developer, shell.CurrentPage);
+        await _catalog.Received(1).GetMyGamesAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

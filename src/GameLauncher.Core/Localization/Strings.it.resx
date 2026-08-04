@@ -344,4 +344,124 @@
   <data name="Common.Save" xml:space="preserve">
     <value>Salva</value>
   </data>
+  <data name="Nav.Developer" xml:space="preserve">
+    <value>Pubblica</value>
+  </data>
+  <data name="Publish.MyGames" xml:space="preserve">
+    <value>I miei giochi</value>
+  </data>
+  <data name="Publish.NewGame" xml:space="preserve">
+    <value>Nuovo gioco</value>
+  </data>
+  <data name="Publish.GameTitle" xml:space="preserve">
+    <value>Titolo</value>
+  </data>
+  <data name="Publish.GameSummary" xml:space="preserve">
+    <value>Descrizione breve</value>
+  </data>
+  <data name="Publish.Visibility" xml:space="preserve">
+    <value>Visibilità</value>
+  </data>
+  <data name="Publish.Create" xml:space="preserve">
+    <value>Crea</value>
+  </data>
+  <data name="Publish.GameCreated" xml:space="preserve">
+    <value>Creato {0}.</value>
+  </data>
+  <data name="Publish.Versions" xml:space="preserve">
+    <value>Versioni</value>
+  </data>
+  <data name="Publish.NewVersion" xml:space="preserve">
+    <value>Nuova versione</value>
+  </data>
+  <data name="Publish.Semver" xml:space="preserve">
+    <value>Numero di versione</value>
+  </data>
+  <data name="Publish.Stage" xml:space="preserve">
+    <value>Fase</value>
+  </data>
+  <data name="Publish.ReleaseNotes" xml:space="preserve">
+    <value>Note di rilascio</value>
+  </data>
+  <data name="Publish.PublishNow" xml:space="preserve">
+    <value>Pubblicala subito</value>
+  </data>
+  <data name="Publish.VersionCreated" xml:space="preserve">
+    <value>Creata la versione {0}.</value>
+  </data>
+  <data name="Publish.Builds" xml:space="preserve">
+    <value>Build</value>
+  </data>
+  <data name="Publish.NewBuild" xml:space="preserve">
+    <value>Pubblica una build</value>
+  </data>
+  <data name="Publish.Directory" xml:space="preserve">
+    <value>Cartella della build</value>
+  </data>
+  <data name="Publish.ChooseDirectory" xml:space="preserve">
+    <value>Scegli la cartella da pubblicare</value>
+  </data>
+  <data name="Publish.Browse" xml:space="preserve">
+    <value>Sfoglia…</value>
+  </data>
+  <data name="Publish.Entrypoint" xml:space="preserve">
+    <value>Eseguibile</value>
+  </data>
+  <data name="Publish.LaunchArgs" xml:space="preserve">
+    <value>Parametri di avvio</value>
+  </data>
+  <data name="Publish.Platform" xml:space="preserve">
+    <value>Piattaforma</value>
+  </data>
+  <data name="Publish.Architecture" xml:space="preserve">
+    <value>Architettura</value>
+  </data>
+  <data name="Publish.Start" xml:space="preserve">
+    <value>Pubblica</value>
+  </data>
+  <data name="Publish.BuildReady" xml:space="preserve">
+    <value>Build pubblicata: {0} caricati, {1} file che il server aveva già.</value>
+  </data>
+  <data name="Publish.NoGames" xml:space="preserve">
+    <value>Non hai ancora creato un gioco.</value>
+  </data>
+  <data name="Publish.SelectGame" xml:space="preserve">
+    <value>Seleziona un gioco per vederne le versioni.</value>
+  </data>
+  <data name="Publish.SelectVersion" xml:space="preserve">
+    <value>Una build appartiene a una versione: scegline una prima.</value>
+  </data>
+  <data name="Publish.Packaging" xml:space="preserve">
+    <value>Lettura e hash della build…</value>
+  </data>
+  <data name="Publish.Negotiating" xml:space="preserve">
+    <value>Chiedo al server cosa ha già…</value>
+  </data>
+  <data name="Publish.Uploading" xml:space="preserve">
+    <value>Caricamento</value>
+  </data>
+  <data name="Publish.Finalizing" xml:space="preserve">
+    <value>Completamento della build…</value>
+  </data>
+  <data name="Publish.Done" xml:space="preserve">
+    <value>Completato</value>
+  </data>
+  <data name="Publish.NothingToPublish" xml:space="preserve">
+    <value>Lì non c'è niente da pubblicare.</value>
+  </data>
+  <data name="Publish.TooManyFiles" xml:space="preserve">
+    <value>Quella build ha più file di quanti un manifest ne possa contenere.</value>
+  </data>
+  <data name="Publish.InvalidPath" xml:space="preserve">
+    <value>Uno dei nomi di file non può essere pubblicato.</value>
+  </data>
+  <data name="Publish.EntrypointMissing" xml:space="preserve">
+    <value>L'eseguibile non è tra i file che stai pubblicando.</value>
+  </data>
+  <data name="Publish.FileTooLarge" xml:space="preserve">
+    <value>Uno dei file supera la dimensione massima di un singolo upload.</value>
+  </data>
+  <data name="Publish.Unreadable" xml:space="preserve">
+    <value>Uno dei file non può essere letto.</value>
+  </data>
 </root>
