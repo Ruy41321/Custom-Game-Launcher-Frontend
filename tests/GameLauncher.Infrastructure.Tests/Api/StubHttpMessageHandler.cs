@@ -56,16 +56,34 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
             ? null
             : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        Requests.Add(new RecordedRequest(request.Method, request.RequestUri!, body,
-            request.Headers.Authorization?.ToString()));
+        Dictionary<string, string> headers = request.Headers.ToDictionary(
+            header => header.Key,
+            header => string.Join(", ", header.Value),
+            StringComparer.OrdinalIgnoreCase);
+
+        Requests.Add(new RecordedRequest(
+            request.Method,
+            request.RequestUri!,
+            body,
+            request.Headers.Authorization?.ToString(),
+            headers,
+            request.Content?.Headers.ContentType?.MediaType));
 
         return _respond(request);
     }
 }
 
 internal sealed record RecordedRequest(
-    HttpMethod Method, Uri Uri, string? Body, string? Authorization)
+    HttpMethod Method,
+    Uri Uri,
+    string? Body,
+    string? Authorization,
+    IReadOnlyDictionary<string, string> Headers,
+    string? ContentType)
 {
     /// <summary>Path and query, which is what a route assertion is actually about.</summary>
     public string PathAndQuery => Uri.PathAndQuery;
+
+    public string? Header(string name) =>
+        Headers.TryGetValue(name, out string? value) ? value : null;
 }

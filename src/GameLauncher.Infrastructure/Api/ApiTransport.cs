@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using GameLauncher.Core.Api;
@@ -36,6 +37,35 @@ internal sealed class ApiTransport(HttpClient httpClient)
 
     public Task PostAsync(string path, object body, CancellationToken cancellationToken)
         => SendAsync(Request(HttpMethod.Post, path, body), cancellationToken);
+
+    public async Task<T> PatchAsync<T>(string path, object body, CancellationToken cancellationToken)
+        => await SendAsync<T>(Request(HttpMethod.Patch, path, body), cancellationToken)
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// A chunk of an upload. Not JSON and not a document: the body is the bytes, and the
+    /// offset they belong at travels in a header the server requires.
+    /// </summary>
+    public async Task<T> PatchBytesAsync<T>(
+        string path,
+        ReadOnlyMemory<byte> body,
+        string contentType,
+        (string Name, string Value)[] headers,
+        CancellationToken cancellationToken)
+    {
+        HttpRequestMessage request = new(HttpMethod.Patch, path)
+        {
+            Content = new ReadOnlyMemoryContent(body),
+        };
+
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        foreach ((string name, string value) in headers)
+        {
+            request.Headers.TryAddWithoutValidation(name, value);
+        }
+
+        return await SendAsync<T>(request, cancellationToken).ConfigureAwait(false);
+    }
 
     public Task PutAsync(string path, CancellationToken cancellationToken)
         => SendAsync(new HttpRequestMessage(HttpMethod.Put, path), cancellationToken);

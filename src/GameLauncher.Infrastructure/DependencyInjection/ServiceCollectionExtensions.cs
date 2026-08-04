@@ -64,6 +64,9 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IDownloadApi, DownloadApiClient>(ConfigureClient)
             .AddHttpMessageHandler<BearerTokenHandler>();
 
+        services.AddHttpClient<IPublishingApi, PublishingApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<BearerTokenHandler>();
+
         // A third client, and deliberately not one of the two above. It talks to the file
         // server rather than the API, on absolute URLs that carry their own authorization, so
         // it has no base address and — above all — no bearer token to hand to whatever host
