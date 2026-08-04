@@ -34,6 +34,13 @@ public sealed class InstallationService(
 
     private const int CopyBufferBytes = 128 * 1024;
 
+    /// <summary>
+    /// How long staging survives without being touched. Long enough that a download
+    /// interrupted over a weekend still resumes for nothing, short enough that an abandoned
+    /// one does not sit on a disk forever.
+    /// </summary>
+    private static readonly TimeSpan AbandonedStagingAge = TimeSpan.FromDays(7);
+
     public async Task<InstallResult> InstallAsync(
         InstallRequest request,
         IProgress<DownloadProgress>? progress = null,
@@ -176,6 +183,101 @@ public sealed class InstallationService(
 
         logger.LogInformation("Uninstalled {Game}, freeing {Bytes} bytes", gameId, freed);
         return new UninstallResult(gameId, freed);
+    }
+
+    public async Task<RecoveryReport> RecoverAsync(CancellationToken cancellationToken = default)
+    {
+        DateTimeOffset now = time.GetUtcNow();
+        int unfinished = 0;
+
+        IReadOnlyList<InstalledGame> installs = await installStore
+            .GetAllAsync(cancellationToken).ConfigureAwait(false);
+
+        foreach (InstalledGame install in installs)
+        {
+            if (install.State != InstallState.Applying)
+            {
+                continue;
+            }
+
+            // Nothing is applying at startup, so a row that says so is a crash. Broken is what
+            // it actually is, and it is the state the game page already explains and offers to
+            // repair.
+            await installStore.SaveAsync(
+                install with { State = InstallState.Broken, UpdatedAt = now },
+                cancellationToken).ConfigureAwait(false);
+
+            unfinished++;
+            logger.LogWarning(
+                "{Game} was left mid-install and is recorded as damaged", install.GameSlug);
+        }
+
+        long reclaimed = SweepAbandonedStaging(now);
+
+        if (unfinished > 0 || reclaimed > 0)
+        {
+            logger.LogInformation(
+                "Startup recovery: {Unfinished} unfinished install(s), {Bytes} bytes of staging",
+                unfinished, reclaimed);
+        }
+
+        return new RecoveryReport(unfinished, reclaimed);
+    }
+
+    /// <summary>
+    /// Staging for a download nobody came back for. Swept by age rather than emptied, because
+    /// a partly fetched build is what makes resuming cheap — throwing it away at every start
+    /// would turn an interrupted download into a full one.
+    /// </summary>
+    private long SweepAbandonedStaging(DateTimeOffset now)
+    {
+        string root = paths.DownloadStagingDirectory;
+        if (!Directory.Exists(root))
+        {
+            return 0;
+        }
+
+        long reclaimed = 0;
+
+        foreach (string directory in Directory.EnumerateDirectories(root))
+        {
+            try
+            {
+                if (now - NewestWriteUtc(directory) < AbandonedStagingAge)
+                {
+                    continue;
+                }
+
+                long size = DirectorySize(directory);
+                Directory.Delete(directory, recursive: true);
+                reclaimed += size;
+            }
+            catch (Exception exception) when (
+                exception is IOException or UnauthorizedAccessException)
+            {
+                // Scratch space that will not go is not worth failing a startup over.
+                logger.LogWarning(exception, "Could not sweep staging at {Directory}", directory);
+            }
+        }
+
+        return reclaimed;
+    }
+
+    private static DateTimeOffset NewestWriteUtc(string directory)
+    {
+        DateTimeOffset newest = Directory.GetLastWriteTimeUtc(directory);
+
+        foreach (string path in Directory.EnumerateFiles(
+            directory, "*", SearchOption.AllDirectories))
+        {
+            DateTimeOffset written = File.GetLastWriteTimeUtc(path);
+            if (written > newest)
+            {
+                newest = written;
+            }
+        }
+
+        return newest;
     }
 
     /// <summary>

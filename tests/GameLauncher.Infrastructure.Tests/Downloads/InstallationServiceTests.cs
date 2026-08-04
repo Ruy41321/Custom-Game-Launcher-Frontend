@@ -504,6 +504,81 @@ public sealed class InstallationServiceTests : IDisposable
         Assert.Equal(InstallState.Broken, stored?.State);
     }
 
+    // Nothing is applying at startup, so a row that says so is the mark of a crash. Broken is
+    // what the directory actually is, and it is the state the game page explains and repairs.
+    [Fact]
+    public async Task AnInstallLeftMidApplyIsRecordedAsDamaged()
+    {
+        await _store.SaveAsync(
+            Installed("b0") with { State = InstallState.Applying },
+            TestContext.Current.CancellationToken);
+
+        RecoveryReport report = await _service.RecoverAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, report.UnfinishedInstalls);
+        Assert.True(report.FoundAnything);
+
+        InstalledGame? stored = await _store.FindAsync(
+            "g1", TestContext.Current.CancellationToken);
+        Assert.Equal(InstallState.Broken, stored?.State);
+    }
+
+    [Fact]
+    public async Task AFinishedInstallIsLeftAloneByRecovery()
+    {
+        await _store.SaveAsync(Installed("b0"), TestContext.Current.CancellationToken);
+
+        RecoveryReport report = await _service.RecoverAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, report.UnfinishedInstalls);
+        Assert.False(report.FoundAnything);
+
+        InstalledGame? stored = await _store.FindAsync(
+            "g1", TestContext.Current.CancellationToken);
+        Assert.Equal(InstallState.Installed, stored?.State);
+    }
+
+    // A partly fetched build is what makes resuming cheap, so recent staging survives.
+    [Fact]
+    public async Task StagingFromYesterdayIsKeptSoADownloadStillResumes()
+    {
+        string staged = StageBlob("recent", DateTime.UtcNow.AddDays(-1));
+
+        RecoveryReport report = await _service.RecoverAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, report.StagingBytesReclaimed);
+        Assert.True(Directory.Exists(staged));
+    }
+
+    [Fact]
+    public async Task StagingNobodyCameBackForIsReclaimed()
+    {
+        string staged = StageBlob("ancient", DateTime.UtcNow.AddDays(-30));
+
+        RecoveryReport report = await _service.RecoverAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("abandoned".Length, report.StagingBytesReclaimed);
+        Assert.False(Directory.Exists(staged));
+    }
+
+    /// <summary>A staging directory for some build, written at the given time.</summary>
+    private string StageBlob(string build, DateTime writtenUtc)
+    {
+        string directory = Path.Combine(UserData, "staging", build);
+        Directory.CreateDirectory(directory);
+
+        string file = Path.Combine(directory, "ab12.part");
+        File.WriteAllText(file, "abandoned");
+        File.SetLastWriteTimeUtc(file, writtenUtc);
+        Directory.SetLastWriteTimeUtc(directory, writtenUtc);
+
+        return directory;
+    }
+
     [Fact]
     public async Task VerifyingAGameThatIsNotInstalledIsANotFound()
     {

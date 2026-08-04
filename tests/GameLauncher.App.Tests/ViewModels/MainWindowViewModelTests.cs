@@ -26,6 +26,8 @@ public sealed class MainWindowViewModelTests
     private readonly ICatalogApi _catalog = Substitute.For<ICatalogApi>();
     private readonly ILibraryApi _library = Substitute.For<ILibraryApi>();
     private readonly IUserSettingsStore _settings = Substitute.For<IUserSettingsStore>();
+    private readonly IInstallationService _installations =
+        Substitute.For<IInstallationService>();
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
@@ -46,6 +48,7 @@ public sealed class MainWindowViewModelTests
             _settings,
             new LauncherConfiguration { AppName = "Test Launcher" },
             _authentication,
+            _installations,
             new LoginViewModel(_authentication, errors, _localization),
             new ExploreViewModel(_catalog, _library, errors, _localization),
             new LibraryViewModel(
@@ -102,6 +105,33 @@ public sealed class MainWindowViewModelTests
 
         Assert.Same(shell.Library, shell.CurrentPage);
         await _library.Received(1).GetLibraryAsync(Arg.Any<CancellationToken>());
+    }
+
+    // What a previous run left half done is recorded before anything is shown, so the pages
+    // describe what is really on disk rather than what the launcher was last told.
+    [Fact]
+    public async Task StartupRecordsWhatAPreviousRunLeftUnfinished()
+    {
+        _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(false);
+        MainWindowViewModel shell = CreateShell();
+
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        await _installations.Received(1).RecoverAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AFailedRecoveryIsNotWorthABlankWindow()
+    {
+        _installations.RecoverAsync(Arg.Any<CancellationToken>())
+            .ThrowsAsync(new IOException("the disk went away"));
+        _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(false);
+
+        MainWindowViewModel shell = CreateShell();
+
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Same(shell.Login, shell.CurrentPage);
     }
 
     [Fact]

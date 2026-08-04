@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Localization;
 
 namespace GameLauncher.App.ViewModels;
@@ -19,6 +20,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ILocalizationService _localization;
     private readonly IUserSettingsStore _settingsStore;
     private readonly IAuthenticationService _authentication;
+    private readonly IInstallationService _installations;
 
     [ObservableProperty]
     private string _welcomeMessage = string.Empty;
@@ -39,6 +41,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IUserSettingsStore settingsStore,
         LauncherConfiguration configuration,
         IAuthenticationService authentication,
+        IInstallationService installations,
         LoginViewModel login,
         ExploreViewModel explore,
         LibraryViewModel library,
@@ -49,6 +52,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _localization = localization;
         _settingsStore = settingsStore;
         _authentication = authentication;
+        _installations = installations;
 
         Login = login;
         Explore = explore;
@@ -110,6 +114,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        // Before anything else, and never a reason to fail startup: what a previous run left
+        // half done is recorded now, so the library and the game page describe what is really
+        // on disk rather than what the launcher was told last time it was alive.
+        try
+        {
+            await _installations.RecoverAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // Nothing here is worth a blank window.
+        }
+
         bool restored;
         try
         {

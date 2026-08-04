@@ -32,6 +32,12 @@ public sealed record InstallResult
 
 public sealed record UninstallResult(string GameId, long FreedBytes);
 
+/// <summary>What a startup pass found left over from a launcher that did not exit cleanly.</summary>
+public sealed record RecoveryReport(int UnfinishedInstalls, long StagingBytesReclaimed)
+{
+    public bool FoundAnything => UnfinishedInstalls > 0 || StagingBytesReclaimed > 0;
+}
+
 /// <summary>
 /// Installing, updating, repairing and removing a game. Everything that writes to the install
 /// directory goes through here, so the rule that a game is never presented as installed until
@@ -63,6 +69,18 @@ public interface IInstallationService
     /// </summary>
     Task<UninstallResult> UninstallAsync(
         string gameId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Called once at startup. An install left <see cref="InstallState.Applying"/> is one a
+    /// crash caught mid-apply: the directory is a mixture of two builds, so it is recorded as
+    /// <see cref="InstallState.Broken"/> — the state the rest of the launcher already has a
+    /// story for. Staging nobody came back for is deleted, but only once it is old enough
+    /// that resuming it is no longer plausible.
+    ///
+    /// Nothing here starts a download. Fetching gigabytes because a launcher was opened is not
+    /// a decision to make on the user's behalf; the repair is offered, not performed.
+    /// </summary>
+    Task<RecoveryReport> RecoverAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>
