@@ -100,6 +100,8 @@ belongs in Infrastructure behind an interface declared in Core.
 | D30 | **Publishing is its own API interface, and the client re-checks the manifest path rules before uploading** | Every publishing route needs a permission a player's account does not have, and a separate `IPublishingApi` puts that in the type system rather than in a comment. The path rules are copied from the server's `validateRelativePath` and applied first, because a name the server will refuse is worth catching before gigabytes travel — as is an entrypoint that is not one of the files, which is the same mistake with a more expensive ending. That the copy can drift is stated in the type's own comment. | Adding the routes to `ICatalogApi` (a player's client carrying calls it can never make); trusting the server's validation alone (the refusal arrives after the upload) |
 | D31 | **Uploads are one blob at a time, in 4 MiB chunks, at whatever offset the server says** | The offset is assigned server-side by a conditional `UPDATE`, so a client that disagrees is the one that is wrong: a refused chunk is answered by *asking* where the session is, never by guessing, and two corrections in a row is the limit because more means a disagreement a retry will not fix. Sequential because the server bounds open sessions per user and its staging disk is that bound times the largest blob — four at once would be four times the scratch space on a machine chosen for being cheap. The chunk size is under the server's 8 MiB default with headroom; nothing advertises the real limit, so it is a guess and is recorded as a debt. | Parallel uploads (multiplies the server's staging disk); trusting the client's own offset (silently duplicates or skips a range, and the hash only catches it at the end) |
 | D32 | **The folder dialog sits behind `IFolderPicker`, and background events marshal through a captured `SynchronizationContext`** | The file dialog is the one step of publishing that cannot be driven from a test, so it is the one thing behind an interface; everything else in the flow is exercised end to end. `ViewModelBase.OnUiThread` posts to the context captured where the view model was built — the UI thread in the running app, and nothing at all in a test, which is what makes a callback run inline there instead of on the thread pool. A binding updated off the UI thread is a crash that only happens on a user's machine. | Calling `StorageProvider` from the view model (untestable); `Dispatcher.UIThread` directly (needs an initialised Avalonia in every test) |
+| D33 | **The install directory is a setting that is actually read, and it decides where the *next* game goes** | `UserSettings.InstallDirectory` existed from milestone 1 and nothing consulted it, which is the same as not having it — core feature 7 of the plan was declared and unimplemented. An install that already exists keeps its directory when the setting changes, because moving somebody's game because a preference changed is a different action from choosing where the next one lands, and the page says so rather than leaving it to be discovered. A configured directory that cannot be created falls back to the platform default: refusing to install would punish the user for a preference they can no longer act on, and there is always a place that works. | Moving existing installs (a preference change silently relocating gigabytes); refusing to install (the launcher has a default that always works); leaving the field unread (a setting that does nothing is worse than an absent one) |
+| D34 | **Startup records what a crash left behind, and starts nothing** | Nothing is applying while the launcher is closed, so a row still saying `Applying` is the mark of a process that died mid-apply. It becomes `Broken`, which is what the directory is and the state the rest of the launcher already explains and offers to repair. Staging is swept by *age* rather than emptied, because a partly fetched build is what makes resuming cheap and clearing it every start would turn every interrupted download into a full one. Recovery deliberately downloads nothing: fetching gigabytes because an application was opened is not a decision to make on the user's behalf. | Auto-resuming the download (spends someone's bandwidth uninvited); emptying staging at startup (throws away exactly what makes a resume free); leaving `Applying` rows alone (the launcher keeps claiming an install is in progress when none is) |
 
 ---
 
@@ -393,10 +395,26 @@ all four self-contained publishes. The macOS leg is therefore verified for the f
   build no longer had. Launching the published "executable" — a text file — was refused with
   `StartFailed` rather than swallowed, and the install row was readable with no server involved
 
+### Closing what milestone 8 left open — verified on 2026-08-04
+- ✅ A settings page, and `UserSettings.InstallDirectory` finally read (D33) — core feature 7
+  of the plan had been declared since milestone 1 and never implemented
+- ✅ Startup recovery: an install left mid-apply is recorded as damaged, abandoned staging is
+  swept by age (D34) — open debts 8 and 9, closed
+- ✅ 436/436 tests green (150 Core, 173 Infrastructure, 114 App), `dotnet format` clean
+
 ### Next up
-- ⬜ **M9** Self-update: needs a launcher-release surface on the server that does not exist
-  yet, so it is a milestone of its own rather than a client-side detail
-- ⬜ **M10** `Documentation/` per module, crash-report upload
+
+The numbering is shared with the backend repository, and this file briefly disagreed with it:
+`M9` there has always meant the localhost admin GUI. Self-update is not a numbered milestone —
+it was part of M8 in the original plan and came out of it because it cannot be built here
+alone.
+
+- ⬜ **M9** Localhost admin web GUI (backend): users, roles, quotas, and the download analytics
+  that currently land in a table nobody can read
+- ⬜ **M10** `Documentation/` per module — this repository still has only `architecture.md`
+  from day one — plus crash-report upload
+- ⬜ **Self-update**, once there is a launcher-release surface on the server to talk to. The
+  client half is a stub with its command line already designed; the swap is unwritten
 
 ---
 
