@@ -98,10 +98,10 @@ public sealed class MainWindowViewModelTests
         Assert.Same(shell.Login, shell.CurrentPage);
     }
 
-    // Offline at startup: the stored session is kept for later, but nothing can be loaded
-    // with it yet, so the sign-in screen is the honest place to be.
+    // Not the offline path — the real service keeps the session and reports success there.
+    // This is the guard for a failure nobody has a story for.
     [Fact]
-    public async Task AnUnreachableServerAtStartupDoesNotCrashTheShell()
+    public async Task AnUnexpectedFailureWhileRestoringLeavesTheSignInScreenUp()
     {
         _authentication.RestoreAsync(Arg.Any<CancellationToken>())
             .Throws(new ApiException(ApiErrorCode.Network, "offline"));

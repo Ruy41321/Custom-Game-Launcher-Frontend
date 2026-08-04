@@ -254,6 +254,60 @@ public sealed class LibraryViewModelTests
         Assert.Equal("That game is already running.", model.ErrorMessage);
     }
 
+    // Unreachable, not refused. What is installed is still installed and still playable, and a
+    // launcher showing an error where the games should be would be useless on a train.
+    [Fact]
+    public async Task WithNoServerTheLibraryShowsWhatIsOnThisDisk()
+    {
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.Network, "unreachable"));
+        Installed(InstalledGameNamed("Orbital Drift"), InstalledGameNamed("Deep Cut"));
+
+        LibraryViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsOffline);
+        Assert.Null(model.ErrorMessage);
+        Assert.Equal(2, model.Games.Count);
+        Assert.All(model.Games, card => Assert.True(card.CanPlay));
+        Assert.Equal("Orbital Drift", model.Games[0].Title);
+    }
+
+    [Fact]
+    public async Task ComingBackOnlineReplacesTheOfflineListAndClearsTheBanner()
+    {
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.Network, "unreachable"));
+        Installed(InstalledGameNamed("Orbital Drift"));
+
+        LibraryViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.IsOffline);
+
+        Returns("Orbital Drift", "Deep Cut");
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.IsOffline);
+        Assert.Equal(2, model.Games.Count);
+    }
+
+    // A refusal is not an outage: an expired session has to be said out loud, or the player
+    // sees a short library and no reason for it.
+    [Fact]
+    public async Task AServerThatAnswersAndRefusesIsStillAnError()
+    {
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.Unauthenticated, "expired"));
+        Installed(InstalledGameNamed("Orbital Drift"));
+
+        LibraryViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.IsOffline);
+        Assert.Equal(_localization.Translate("Error.Unauthenticated"), model.ErrorMessage);
+        Assert.Empty(model.Games);
+    }
+
     [Fact]
     public void OpeningAGameAsksForItByItsIdentifier()
     {

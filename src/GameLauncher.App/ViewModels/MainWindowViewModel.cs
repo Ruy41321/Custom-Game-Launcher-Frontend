@@ -101,8 +101,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
         catch (Core.Api.ApiException)
         {
-            // Offline at startup: the stored session is kept, but nothing can be loaded with
-            // it yet, so the sign-in screen is the honest place to be.
+            // A last resort rather than the offline path: an unreachable server keeps the
+            // stored session and reports success, and the library falls back to what is on
+            // disk. Anything that still throws here is a failure nobody has a story for, and
+            // the sign-in screen is the only honest thing left to show.
             restored = false;
         }
 

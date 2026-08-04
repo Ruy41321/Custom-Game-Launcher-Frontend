@@ -86,6 +86,13 @@ public sealed partial class LibraryViewModel : ViewModelBase
     [ObservableProperty]
     private string? _errorMessage;
 
+    /// <summary>
+    /// The list is what is on this disk rather than what the account owns, because the server
+    /// could not be asked.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isOffline;
+
     private bool _hasLoaded;
 
     public LibraryViewModel(
@@ -127,16 +134,16 @@ public sealed partial class LibraryViewModel : ViewModelBase
         ErrorMessage = null;
         OnPropertyChanged(nameof(IsEmpty));
 
+        // Read first and unconditionally: it is the half of the answer that does not need a
+        // server, and it is the half that is left when there is none.
+        IReadOnlyList<InstalledGame> installed = await _installs
+            .GetAllAsync(cancellationToken)
+            .ConfigureAwait(true);
+
         try
         {
             IReadOnlyList<Game> games = await _library
                 .GetLibraryAsync(cancellationToken)
-                .ConfigureAwait(true);
-
-            // One query rather than one per card: the library is small, and a lookup per game
-            // would make the list's cost depend on how many of them are installed.
-            IReadOnlyList<InstalledGame> installed = await _installs
-                .GetAllAsync(cancellationToken)
                 .ConfigureAwait(true);
 
             Dictionary<string, InstalledGame> byGameId = installed.ToDictionary(
@@ -149,7 +156,15 @@ public sealed partial class LibraryViewModel : ViewModelBase
                 Games.Add(new GameCardViewModel(game, install, _games, _localization));
             }
 
+            IsOffline = false;
             _hasLoaded = true;
+        }
+        catch (ApiException exception) when (exception.Code == ApiErrorCode.Network)
+        {
+            // Unreachable, not refused. What is installed is still installed and still
+            // playable, and a launcher that showed an error where the games should be would be
+            // useless on a train for no reason.
+            ShowInstalledOnly(installed);
         }
         catch (ApiException exception)
         {
@@ -161,6 +176,29 @@ public sealed partial class LibraryViewModel : ViewModelBase
             IsBusy = false;
             OnPropertyChanged(nameof(IsEmpty));
         }
+    }
+
+    /// <summary>
+    /// The offline list. The catalog fields the cards would show are not on this machine, so
+    /// the card is built from what the install row kept for exactly this moment.
+    /// </summary>
+    private void ShowInstalledOnly(IReadOnlyList<InstalledGame> installed)
+    {
+        Games.Clear();
+        foreach (InstalledGame install in installed)
+        {
+            Game game = new()
+            {
+                Id = install.GameId,
+                Slug = install.GameSlug,
+                Title = install.GameTitle,
+            };
+
+            Games.Add(new GameCardViewModel(game, install, _games, _localization));
+        }
+
+        IsOffline = true;
+        _hasLoaded = true;
     }
 
     [RelayCommand]

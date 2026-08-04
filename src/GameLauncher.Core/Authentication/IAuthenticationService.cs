@@ -25,6 +25,10 @@ public interface IAuthenticationService
     /// Reloads the persisted session on startup and rotates it if the access token has aged
     /// out. Returns false when there is nothing to restore or the refresh token is spent —
     /// both mean the same thing to the caller: show the login view.
+    ///
+    /// A server that cannot be reached is **not** one of those cases. The stored session is
+    /// kept and this returns true, because signing in is no more possible offline than
+    /// refreshing is, and the games on the player's disk do not need either.
     /// </summary>
     Task<bool> RestoreAsync(CancellationToken cancellationToken = default);
 

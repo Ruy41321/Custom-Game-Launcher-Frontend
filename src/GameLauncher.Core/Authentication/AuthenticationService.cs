@@ -63,7 +63,20 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
             await RotateAsync(stored.RefreshToken, cancellationToken).ConfigureAwait(false);
             return true;
         }
-        catch (ApiException exception) when (!exception.IsTransient)
+        catch (ApiException exception) when (exception.IsTransient)
+        {
+            // Offline at startup. Nothing has said this session is spent — the question could
+            // not even be asked — and a launcher that answered by demanding a password it is
+            // equally unable to check would lock a player out of games already on their disk.
+            // The session is kept as it stands; the first call that reaches a server rotates it.
+            _logger.LogInformation(
+                "The server could not be reached ({Code}); continuing with the stored session.",
+                exception.Code);
+
+            Publish(stored);
+            return true;
+        }
+        catch (ApiException exception)
         {
             // The refresh token was rejected: it expired, was revoked, or its family was
             // wiped because somebody replayed one. None of that is recoverable here.

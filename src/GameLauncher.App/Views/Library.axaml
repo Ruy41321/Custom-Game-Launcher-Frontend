@@ -9,7 +9,7 @@
              x:Class="GameLauncher.App.Views.Library"
              x:DataType="vm:LibraryViewModel">
 
-  <Grid RowDefinitions="Auto,*" Margin="24,20">
+  <Grid RowDefinitions="Auto,Auto,*" Margin="24,20">
 
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
       <TextBlock Grid.Column="0" Text="{loc:Tr Nav.Library}" FontSize="20" FontWeight="Light"
@@ -18,19 +18,24 @@
               Command="{Binding LoadCommand}" />
     </Grid>
 
-    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
+    <Border Grid.Row="1" Background="{DynamicResource SystemAccentColor}" CornerRadius="4"
+            Padding="10,6" Margin="0,0,0,14" IsVisible="{Binding IsOffline}">
+      <TextBlock Text="{loc:Tr Status.Offline}" FontSize="12" TextWrapping="Wrap" />
+    </Border>
+
+    <ProgressBar Grid.Row="2" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
                  IsVisible="{Binding IsBusy}" />
 
-    <TextBlock Grid.Row="1" Classes="error" Text="{Binding ErrorMessage}"
+    <TextBlock Grid.Row="2" Classes="error" Text="{Binding ErrorMessage}"
                HorizontalAlignment="Center" VerticalAlignment="Center"
                IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-    <TextBlock Grid.Row="1" Text="{loc:Tr Library.Empty}" Opacity="0.5" MaxWidth="420"
+    <TextBlock Grid.Row="2" Text="{loc:Tr Library.Empty}" Opacity="0.5" MaxWidth="420"
                TextWrapping="Wrap" TextAlignment="Center"
                HorizontalAlignment="Center" VerticalAlignment="Center"
                IsVisible="{Binding IsEmpty}" />
 
-    <ScrollViewer Grid.Row="1">
+    <ScrollViewer Grid.Row="2">
       <ItemsControl ItemsSource="{Binding Games}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>

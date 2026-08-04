@@ -85,9 +85,10 @@ public sealed class AuthenticationServiceTests
         await _store.Received(1).ClearAsync(Arg.Any<CancellationToken>());
     }
 
-    // Offline startup must not throw away a session that is probably still good.
+    // Offline startup must not throw away a session that is probably still good — and must not
+    // answer by demanding a password, which is no more checkable offline than the refresh was.
     [Fact]
-    public async Task AnUnreachableServerDoesNotDestroyTheStoredSession()
+    public async Task AnUnreachableServerKeepsTheStoredSessionAndStaysSignedIn()
     {
         _store.LoadAsync(Arg.Any<CancellationToken>()).Returns(SessionExpiring(Now.AddMinutes(-5)));
         _api.RefreshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
@@ -95,9 +96,27 @@ public sealed class AuthenticationServiceTests
 
         using AuthenticationService service = CreateService();
 
-        await Assert.ThrowsAsync<ApiException>(
-            () => service.RestoreAsync(TestContext.Current.CancellationToken));
+        Assert.True(await service.RestoreAsync(TestContext.Current.CancellationToken));
+        Assert.True(service.IsAuthenticated);
         await _store.DidNotReceive().ClearAsync(Arg.Any<CancellationToken>());
+    }
+
+    // The session that survives is the stored one, untouched: nothing rotated it, so the next
+    // call that reaches a server is the one that does.
+    [Fact]
+    public async Task TheSessionKeptOfflineIsTheStoredOne()
+    {
+        AuthSession stored = SessionExpiring(Now.AddMinutes(-5));
+        _store.LoadAsync(Arg.Any<CancellationToken>()).Returns(stored);
+        _api.RefreshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.DependencyFailure, "gateway down"));
+
+        using AuthenticationService service = CreateService();
+        await service.RestoreAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(stored.RefreshToken, service.CurrentSession?.RefreshToken);
+        await _store.DidNotReceive().SaveAsync(
+            Arg.Any<AuthSession>(), Arg.Any<CancellationToken>());
     }
 
     // --- signing in and out --------------------------------------------------------------
