@@ -92,16 +92,19 @@ public sealed class ProcessGameLauncherTests : IDisposable
         Assert.Empty(_launcher.Running);
     }
 
+    // The clock moves on every reading rather than being advanced by the test: the exit is
+    // reported by the runtime whenever the process actually ends, so advancing it from here
+    // between the two readings is a race that passes on a slow machine and fails on a fast one.
     [Fact]
     public async Task TheExitIsReportedWithHowLongItRanFor()
     {
         await InstalledShellAsync();
+        _clock.Step = TimeSpan.FromMinutes(90);
 
         TaskCompletionSource<GameExitedEventArgs> exited = new();
         _launcher.GameExited += (_, args) => exited.TrySetResult(args);
 
         await _launcher.LaunchAsync("g1", TestContext.Current.CancellationToken);
-        _clock.Advance(TimeSpan.FromMinutes(90));
 
         GameExitedEventArgs args = await exited.Task.WaitAsync(
             TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
