@@ -6,6 +6,7 @@ using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
+using GameLauncher.Core.Publishing;
 using GameLauncher.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -43,6 +44,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IInstallationService))]
     [InlineData(typeof(IGameLauncher))]
     [InlineData(typeof(IPublishingApi))]
+    [InlineData(typeof(IBuildPackager))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();

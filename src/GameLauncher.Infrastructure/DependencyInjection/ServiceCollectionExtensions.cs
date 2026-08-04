@@ -7,6 +7,7 @@ using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
+using GameLauncher.Core.Publishing;
 using GameLauncher.Infrastructure.Api;
 using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
@@ -14,6 +15,7 @@ using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Launching;
 using GameLauncher.Infrastructure.Platform;
+using GameLauncher.Infrastructure.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GameLauncher.Infrastructure.DependencyInjection;
@@ -77,6 +79,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IInstallationService, InstallationService>();
         services.AddSingleton<IGameLauncher, ProcessGameLauncher>();
+        services.AddSingleton<IBuildPackager, DirectoryBuildPackager>();
 
         return services;
     }

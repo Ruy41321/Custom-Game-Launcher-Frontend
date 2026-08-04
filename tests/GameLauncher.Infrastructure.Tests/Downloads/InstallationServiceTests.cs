@@ -8,6 +8,7 @@ using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Platform;
+using GameLauncher.Infrastructure.Tests.Progressing;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 
@@ -470,13 +471,4 @@ public sealed class InstallationServiceTests : IDisposable
         InstalledAt = Now.AddDays(-1),
         UpdatedAt = Now.AddDays(-1),
     };
-}
-
-/// <summary>
-/// Reports on the calling thread. <see cref="Progress{T}"/> posts to the thread pool, so a
-/// test that asserted on the list would be asserting on whether the pool had caught up.
-/// </summary>
-internal sealed class ImmediateProgress<T>(Action<T> report) : IProgress<T>
-{
-    public void Report(T value) => report(value);
 }
