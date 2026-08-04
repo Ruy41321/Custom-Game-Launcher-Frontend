@@ -78,6 +78,18 @@
         <TextBlock Text="{loc:Tr Detail.Broken}" Classes="error" TextWrapping="Wrap"
                    IsVisible="{Binding IsBroken}" />
 
+        <StackPanel Spacing="4" IsVisible="{Binding CanEditLaunchOptions}">
+          <TextBlock Text="{loc:Tr Detail.LaunchOptions}" Opacity="0.5" FontSize="11" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0" Text="{Binding LaunchOptions}" Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="{loc:Tr Common.Save}"
+                    Command="{Binding SaveLaunchOptionsCommand}"
+                    IsEnabled="{Binding LaunchOptionsChanged}" />
+          </Grid>
+          <TextBlock Text="{Binding LaunchOptionsHint}" Opacity="0.5" FontSize="11"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
         <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextWrapping="Wrap"
                    IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 

@@ -329,4 +329,19 @@
   <data name="Library.Unfinished" xml:space="preserve">
     <value>Installazione incompleta</value>
   </data>
+  <data name="Detail.LaunchOptions" xml:space="preserve">
+    <value>Parametri di avvio</value>
+  </data>
+  <data name="Detail.LaunchOptionsHint" xml:space="preserve">
+    <value>Aggiunti dopo i parametri della build: {0}</value>
+  </data>
+  <data name="Detail.LaunchOptionsNone" xml:space="preserve">
+    <value>la build non ne passa</value>
+  </data>
+  <data name="Detail.LaunchOptionsSaved" xml:space="preserve">
+    <value>Parametri di avvio salvati.</value>
+  </data>
+  <data name="Common.Save" xml:space="preserve">
+    <value>Salva</value>
+  </data>
 </root>

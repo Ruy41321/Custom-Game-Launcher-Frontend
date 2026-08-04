@@ -329,4 +329,19 @@
   <data name="Library.Unfinished" xml:space="preserve">
     <value>Install unfinished</value>
   </data>
+  <data name="Detail.LaunchOptions" xml:space="preserve">
+    <value>Launch options</value>
+  </data>
+  <data name="Detail.LaunchOptionsHint" xml:space="preserve">
+    <value>Added after the arguments the build carries: {0}</value>
+  </data>
+  <data name="Detail.LaunchOptionsNone" xml:space="preserve">
+    <value>the build passes none</value>
+  </data>
+  <data name="Detail.LaunchOptionsSaved" xml:space="preserve">
+    <value>Launch options saved.</value>
+  </data>
+  <data name="Common.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
 </root>

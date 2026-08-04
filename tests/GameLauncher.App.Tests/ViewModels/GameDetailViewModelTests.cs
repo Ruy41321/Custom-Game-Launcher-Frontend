@@ -537,6 +537,70 @@ public sealed class GameDetailViewModelTests
     }
 
     [Fact]
+    public async Task LaunchOptionsAreLoadedFromTheRowAndSavedBackToIt()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win") with { LaunchOptions = "-windowed" });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanEditLaunchOptions);
+        Assert.Equal("-windowed", model.LaunchOptions);
+        Assert.False(model.LaunchOptionsChanged);
+
+        model.LaunchOptions = "  -windowed --dev  ";
+        Assert.True(model.LaunchOptionsChanged);
+
+        await model.SaveLaunchOptionsCommand.ExecuteAsync(null);
+
+        Assert.Equal("-windowed --dev", model.Installed?.LaunchOptions);
+        await _installs.Received(1).SaveAsync(
+            Arg.Any<InstalledGame>(), Arg.Any<CancellationToken>());
+        Assert.False(model.LaunchOptionsChanged);
+        Assert.Equal("Launch options saved.", model.StatusMessage);
+    }
+
+    // Shown so a player can see what their own arguments are being added to.
+    [Fact]
+    public async Task TheHintNamesTheArgumentsTheBuildAlreadyPasses()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win") with { LaunchArgs = "--fullscreen" });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.Equal("--fullscreen", model.BuildLaunchArgs);
+        Assert.Contains("--fullscreen", model.LaunchOptionsHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ABuildWithNoArgumentsOfItsOwnSaysSoRatherThanShowingAnEmptyGap()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.Contains("passes none", model.LaunchOptionsHint, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AGameThatIsNotInstalledHasNoLaunchOptionsToEdit()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.False(model.CanEditLaunchOptions);
+        Assert.Empty(model.LaunchOptions);
+    }
+
+    [Fact]
     public async Task AnInstalledGameCanBePlayed()
     {
         Returns(DetailWith(builds: WindowsBuild()));

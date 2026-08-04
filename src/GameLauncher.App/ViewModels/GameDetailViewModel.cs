@@ -79,6 +79,14 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     [ObservableProperty]
     private string? _statusMessage;
 
+    /// <summary>
+    /// Edited in the box, saved on the button. Kept separate from
+    /// <see cref="InstalledGame.LaunchOptions"/> so a half-typed argument is never what the
+    /// game is started with.
+    /// </summary>
+    [ObservableProperty]
+    private string _launchOptions = string.Empty;
+
     public GameDetailViewModel(
         ICatalogApi catalog,
         ILibraryApi library,
@@ -169,6 +177,25 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     public bool IsRunning => Installed is not null && _games.IsRunning(Installed.GameId);
 
     public bool CanPlay => IsInstalled && !IsWorking && !IsRunning;
+
+    /// <summary>
+    /// The arguments the build itself carries, shown so a player can see what their own are
+    /// being added to. Read-only: they are the publisher's, and an update rewrites them.
+    /// </summary>
+    public string BuildLaunchArgs => Installed?.LaunchArgs ?? string.Empty;
+
+    public string LaunchOptionsHint => _localization.Translate(
+        "Detail.LaunchOptionsHint",
+        BuildLaunchArgs.Length > 0
+            ? BuildLaunchArgs
+            : _localization.Translate("Detail.LaunchOptionsNone"));
+
+    public bool CanEditLaunchOptions => Installed is not null && !IsWorking;
+
+    /// <summary>True while the box says something the stored row does not.</summary>
+    public bool LaunchOptionsChanged =>
+        Installed is not null
+        && !string.Equals(LaunchOptions.Trim(), Installed.LaunchOptions, StringComparison.Ordinal);
 
     public string InstalledVersion => Installed is { } install
         ? _localization.Translate("Detail.InstalledVersion", install.VersionSemver)
@@ -362,6 +389,27 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     [RelayCommand]
     private void CancelInstall() => _installCancellation?.Cancel();
 
+    /// <summary>
+    /// Saved on demand rather than on every keystroke: the row is what the next launch reads,
+    /// and half a typed argument is not something to start a game with.
+    /// </summary>
+    [RelayCommand]
+    private async Task SaveLaunchOptionsAsync(CancellationToken cancellationToken)
+    {
+        if (Installed is null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+
+        InstalledGame updated = Installed with { LaunchOptions = LaunchOptions.Trim() };
+        await _installs.SaveAsync(updated, cancellationToken).ConfigureAwait(true);
+
+        Installed = updated;
+        StatusMessage = _localization.Translate("Detail.LaunchOptionsSaved");
+    }
+
     [RelayCommand]
     private async Task PlayAsync(CancellationToken cancellationToken)
     {
@@ -481,7 +529,16 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     partial void OnDetailChanged(GameDetail? value) => RaiseDerived();
 
-    partial void OnInstalledChanged(InstalledGame? value) => RaiseDerived();
+    partial void OnInstalledChanged(InstalledGame? value)
+    {
+        // The box follows the row whenever the row changes underneath it — a fresh install, a
+        // reload, an update — because the row is what the next launch will actually read.
+        LaunchOptions = value?.LaunchOptions ?? string.Empty;
+        RaiseDerived();
+    }
+
+    partial void OnLaunchOptionsChanged(string value) =>
+        OnPropertyChanged(nameof(LaunchOptionsChanged));
 
     /// <summary>
     /// Every progress report funnels through the property, so the rate is fed from one place
@@ -518,6 +575,10 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanVerify));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanPlay));
+        OnPropertyChanged(nameof(BuildLaunchArgs));
+        OnPropertyChanged(nameof(LaunchOptionsHint));
+        OnPropertyChanged(nameof(CanEditLaunchOptions));
+        OnPropertyChanged(nameof(LaunchOptionsChanged));
         OnPropertyChanged(nameof(InstalledVersion));
         OnPropertyChanged(nameof(ProgressFraction));
         OnPropertyChanged(nameof(IsProgressIndeterminate));
