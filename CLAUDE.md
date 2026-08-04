@@ -165,6 +165,17 @@ Everything — identifiers, comments, docs, commit messages — is in **English*
 
 ## 6. Commands
 
+`./scripts/dev.ps1` runs the launcher against a local server and adds the two things the bare
+`dotnet run` leaves to be discovered the slow way: it says whether the API is actually
+answering *before* the window opens — the client works offline by design (D29), so a stopped
+backend produces a sign-in screen that refuses every password rather than an error — and
+`-Reset` clears the per-user state, which is the only way back to a first-run launcher.
+
+```powershell
+./scripts/dev.ps1           # check the server, then start
+./scripts/dev.ps1 -Reset    # start as if the launcher had never run on this machine
+```
+
 ```bash
 dotnet restore GameLauncher.sln
 dotnet build GameLauncher.sln -c Debug
