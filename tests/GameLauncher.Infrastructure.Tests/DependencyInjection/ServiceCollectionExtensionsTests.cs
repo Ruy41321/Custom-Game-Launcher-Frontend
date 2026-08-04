@@ -45,6 +45,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IGameLauncher))]
     [InlineData(typeof(IPublishingApi))]
     [InlineData(typeof(IBuildPackager))]
+    [InlineData(typeof(IBuildPublisher))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();

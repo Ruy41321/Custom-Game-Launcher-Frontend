@@ -80,6 +80,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IInstallationService, InstallationService>();
         services.AddSingleton<IGameLauncher, ProcessGameLauncher>();
         services.AddSingleton<IBuildPackager, DirectoryBuildPackager>();
+        services.AddSingleton<IBuildPublisher, BuildPublisher>();
 
         return services;
     }
