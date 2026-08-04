@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Settings"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Spacing="20" Margin="24,20" MaxWidth="640" HorizontalAlignment="Left">
+
+      <TextBlock Text="{loc:Tr Settings.Title}" FontSize="20" FontWeight="Light" />
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.InstallDirectory}" FontSize="13" FontWeight="SemiBold" />
+
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBox Grid.Column="0" Text="{Binding InstallDirectory}" Margin="0,0,8,0" />
+          <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}" Margin="0,0,8,0"
+                  Command="{Binding ChooseInstallDirectoryCommand}" />
+          <Button Grid.Column="2" Content="{loc:Tr Settings.Reset}"
+                  Command="{Binding ResetInstallDirectoryCommand}" />
+        </Grid>
+
+        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                   Text="{Binding DefaultInstallDirectory, StringFormat={loc:Tr Settings.InstallDirectoryDefault}}" />
+
+        <TextBlock Text="{Binding InstalledElsewhereNotice}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" IsVisible="{Binding HasInstalledElsewhere}" />
+      </StackPanel>
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.Theme}" FontSize="13" FontWeight="SemiBold" />
+        <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeVariant}"
+                  MinWidth="180" HorizontalAlignment="Left" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+    </StackPanel>
+  </ScrollViewer>
+
+</UserControl>

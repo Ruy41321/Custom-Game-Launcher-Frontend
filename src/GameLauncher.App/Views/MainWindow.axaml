@@ -27,6 +27,8 @@
                   Classes="link" IsVisible="{Binding IsSignedIn}" />
           <Button Content="{loc:Tr Nav.Developer}" Command="{Binding ShowDeveloperCommand}"
                   Classes="link" IsVisible="{Binding CanPublish}" />
+          <Button Content="{loc:Tr Nav.Settings}" Command="{Binding ShowSettingsCommand}"
+                  Classes="link" IsVisible="{Binding IsSignedIn}" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">

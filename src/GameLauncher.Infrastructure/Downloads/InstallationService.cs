@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using GameLauncher.Core.Api;
+using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Models;
@@ -21,6 +22,7 @@ public sealed class InstallationService(
     IInstallStore installStore,
     IPathProvider paths,
     IDiskSpaceProbe diskSpace,
+    IUserSettingsStore settings,
     TimeProvider time,
     ILogger<InstallationService> logger) : IInstallationService
 {
@@ -43,7 +45,9 @@ public sealed class InstallationService(
         string installDirectory = request.InstallDirectory
             ?? existing?.InstallDirectory
             ?? InstallPaths.DefaultInstallDirectory(
-                paths.DefaultInstallDirectory, request.Game.Slug, request.Game.Id);
+                await InstallRootAsync(cancellationToken).ConfigureAwait(false),
+                request.Game.Slug,
+                request.Game.Id);
 
         progress?.Report(new DownloadProgress { Phase = InstallPhase.Planning });
 
@@ -172,6 +176,43 @@ public sealed class InstallationService(
 
         logger.LogInformation("Uninstalled {Game}, freeing {Bytes} bytes", gameId, freed);
         return new UninstallResult(gameId, freed);
+    }
+
+    /// <summary>
+    /// Where new games go. The user's choice wins over the platform default, and an install
+    /// that already exists is never moved by changing it — the setting decides where the
+    /// *next* game lands, not where the ones already on disk live.
+    /// </summary>
+    private async Task<string> InstallRootAsync(CancellationToken cancellationToken)
+    {
+        UserSettings preferences = await settings
+            .LoadAsync(cancellationToken).ConfigureAwait(false);
+
+        string? chosen = preferences.InstallDirectory;
+        if (string.IsNullOrWhiteSpace(chosen))
+        {
+            return paths.DefaultInstallDirectory;
+        }
+
+        try
+        {
+            // A directory that cannot be created is a preference the user can no longer act
+            // on — an unplugged drive, a folder they deleted. Refusing to install would be a
+            // worse answer than quietly using the place that always works.
+            Directory.CreateDirectory(chosen);
+            return chosen;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            logger.LogWarning(
+                exception,
+                "The configured install directory {Directory} is unusable; falling back to {Default}",
+                chosen,
+                paths.DefaultInstallDirectory);
+
+            return paths.DefaultInstallDirectory;
+        }
     }
 
     /// <summary>

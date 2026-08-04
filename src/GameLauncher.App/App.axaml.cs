@@ -79,6 +79,7 @@ public partial class App : Application
         // The picker resolves the window at call time rather than holding it: the shell is
         // built before the window exists.
         services.AddSingleton<IFolderPicker>(_ => new StorageProviderFolderPicker(this));
+        services.AddSingleton<IThemeSwitcher>(_ => new ApplicationThemeSwitcher(this));
 
         // View models are singletons: the shell holds all of them for the life of the window,
         // and a page that keeps its scroll position and search term when you come back to it
@@ -88,6 +89,7 @@ public partial class App : Application
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<GameDetailViewModel>();
         services.AddSingleton<DeveloperViewModel>();
+        services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();

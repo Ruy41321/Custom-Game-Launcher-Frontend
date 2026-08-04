@@ -72,7 +72,14 @@ public sealed class MainWindowViewModelTests
                 errors,
                 _localization,
                 runtime,
-                Substitute.For<IFolderPicker>()));
+                Substitute.For<IFolderPicker>()),
+            new SettingsViewModel(
+                _settings,
+                Substitute.For<IPathProvider>(),
+                Substitute.For<IInstallStore>(),
+                Substitute.For<IFolderPicker>(),
+                Substitute.For<IThemeSwitcher>(),
+                _localization));
     }
 
     [Fact]

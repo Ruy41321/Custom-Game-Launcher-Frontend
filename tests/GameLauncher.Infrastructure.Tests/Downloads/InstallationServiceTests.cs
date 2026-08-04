@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using GameLauncher.Core.Api;
+using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Models;
@@ -25,6 +26,7 @@ public sealed class InstallationServiceTests : IDisposable
     private readonly IDownloadApi _downloadApi = Substitute.For<IDownloadApi>();
     private readonly FakeBlobFetcher _fetcher = new();
     private readonly IDiskSpaceProbe _diskSpace = Substitute.For<IDiskSpaceProbe>();
+    private readonly IUserSettingsStore _settings = Substitute.For<IUserSettingsStore>();
     private readonly SqliteInstallStore _store;
     private readonly InstallationService _service;
 
@@ -33,6 +35,7 @@ public sealed class InstallationServiceTests : IDisposable
         Directory.CreateDirectory(UserData);
         _store = new SqliteInstallStore(Path.Combine(UserData, "launcher.db"));
         _diskSpace.AvailableFreeBytes(Arg.Any<string>()).Returns(long.MaxValue);
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new UserSettings());
 
         _service = new InstallationService(
             _downloadApi,
@@ -40,6 +43,7 @@ public sealed class InstallationServiceTests : IDisposable
             _store,
             new PathProvider(userDataDirectory: UserData),
             _diskSpace,
+            _settings,
             new FakeTimeProvider(Now),
             NullLogger<InstallationService>.Instance);
 
@@ -261,6 +265,63 @@ public sealed class InstallationServiceTests : IDisposable
 
         Assert.Equal("-windowed", result.Install.LaunchOptions);
         Assert.Equal("--fullscreen", result.Install.LaunchArgs);
+    }
+
+    // Core feature 7 of the plan: the configured directory is where new games go. The field
+    // existed from the start and nothing read it, which is the same as not having it.
+    [Fact]
+    public async Task ANewGameGoesWhereTheUserAskedRatherThanThePlatformDefault()
+    {
+        string chosen = Path.Combine(_root.Path, "elsewhere");
+        _settings.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(new UserSettings { InstallDirectory = chosen });
+
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)));
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(null), cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.StartsWith(chosen, result.Install.InstallDirectory, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(result.Install.InstallDirectory, "Game.exe")));
+    }
+
+    // A preference the user can no longer act on — an unplugged drive, a deleted folder — is a
+    // worse reason to refuse an install than to quietly use the place that always works.
+    [Fact]
+    public async Task AnUnusableConfiguredDirectoryFallsBackInsteadOfFailing()
+    {
+        // A path under a file rather than a directory: creating it cannot succeed.
+        string blocked = Path.Combine(_root.Path, "a-file", "games");
+        await File.WriteAllTextAsync(
+            Path.Combine(_root.Path, "a-file"), "not a directory",
+            TestContext.Current.CancellationToken);
+
+        _settings.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(new UserSettings { InstallDirectory = blocked });
+
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)));
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(null), cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.DoesNotContain("a-file", result.Install.InstallDirectory, StringComparison.Ordinal);
+        Assert.Equal(InstallState.Installed, result.Install.State);
+    }
+
+    // The setting decides where the *next* game lands, not where the ones already on disk are.
+    [Fact]
+    public async Task AnUpdateStaysInTheDirectoryTheGameIsAlreadyIn()
+    {
+        await _store.SaveAsync(Installed("b0"), TestContext.Current.CancellationToken);
+        _settings.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(new UserSettings { InstallDirectory = Path.Combine(_root.Path, "elsewhere") });
+
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)), from: "b0");
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(null), cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(InstallDirectory, result.Install.InstallDirectory);
     }
 
     [Fact]

@@ -464,4 +464,28 @@
   <data name="Publish.Unreadable" xml:space="preserve">
     <value>Uno dei file non può essere letto.</value>
   </data>
+  <data name="Settings.Title" xml:space="preserve">
+    <value>Impostazioni</value>
+  </data>
+  <data name="Settings.InstallDirectory" xml:space="preserve">
+    <value>Dove vengono installati i nuovi giochi</value>
+  </data>
+  <data name="Settings.InstallDirectoryDefault" xml:space="preserve">
+    <value>Lascia vuoto per usare {0}</value>
+  </data>
+  <data name="Settings.ChooseInstallDirectory" xml:space="preserve">
+    <value>Scegli dove installare i nuovi giochi</value>
+  </data>
+  <data name="Settings.Reset" xml:space="preserve">
+    <value>Usa il percorso predefinito</value>
+  </data>
+  <data name="Settings.InstalledElsewhere" xml:space="preserve">
+    <value>I {0} gioco/giochi già installati restano dove sono.</value>
+  </data>
+  <data name="Settings.Theme" xml:space="preserve">
+    <value>Tema</value>
+  </data>
+  <data name="Settings.Saved" xml:space="preserve">
+    <value>Salvato.</value>
+  </data>
 </root>

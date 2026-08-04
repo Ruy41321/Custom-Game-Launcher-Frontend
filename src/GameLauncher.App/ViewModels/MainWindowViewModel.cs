@@ -43,7 +43,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ExploreViewModel explore,
         LibraryViewModel library,
         GameDetailViewModel gameDetail,
-        DeveloperViewModel developer)
+        DeveloperViewModel developer,
+        SettingsViewModel settings)
     {
         _localization = localization;
         _settingsStore = settingsStore;
@@ -54,6 +55,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Library = library;
         GameDetail = gameDetail;
         Developer = developer;
+        Settings = settings;
         _currentPage = login;
 
         AppName = configuration.AppName;
@@ -87,6 +89,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public GameDetailViewModel GameDetail { get; }
 
     public DeveloperViewModel Developer { get; }
+
+    public SettingsViewModel Settings { get; }
 
     public bool IsSignedIn => _authentication.IsAuthenticated;
 
@@ -148,6 +152,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         CurrentPage = Developer;
         _lastListPage = Developer;
         await Developer.LoadAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task ShowSettingsAsync(CancellationToken cancellationToken)
+    {
+        // Not remembered as the list page: "back" from a game should never land in settings.
+        CurrentPage = Settings;
+        await Settings.LoadAsync(cancellationToken).ConfigureAwait(true);
     }
 
     [RelayCommand]
