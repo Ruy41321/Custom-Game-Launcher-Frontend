@@ -94,6 +94,12 @@ belongs in Infrastructure behind an interface declared in Core.
 | D24 | **Manifest paths are resolved against the install root and refused if they escape it** | The server validates them on ingestion and the database enforces it again, and this is still worth a string comparison: a client that writes wherever it is told is one compromised server away from writing into the user's startup folder. The client's own check is the one that protects *this* machine. | Trusting the server's validation (the client is the last line, and it is free to be) |
 | D25 | **410 from the file server is its own error code, apart from 403** | nginx distinguishes an expired signature from a bad one deliberately, and the client acts on the difference: an expiry is fixed by asking for a fresh plan, and nothing about the account or the build has changed, whereas a bad signature is a bug or a clock. Collapsing them would make the recoverable case look like the unrecoverable one. | One "download refused" code (the client cannot tell whether retrying is worth anything) |
 | D26 | **Progress is bytes and a phase; the speed and the estimate come from a sliding window** | A single percentage cannot say that a step is running but transferring nothing, so the phases that move no bytes get an indeterminate bar rather than one that fills up while nothing happens. The rate is measured over the last few seconds because what a person wants to know is how fast it is going *now* — an average since the start takes minutes to notice the line has come back. Both the speed and the estimate are omitted until there is something to base them on: a countdown that says four hours and then twelve seconds is worse than no countdown. | A single percentage (cannot express a phase that transfers nothing); an average since the start (wrong for minutes after any stall) |
+| D27 | **Every decision about how to start a game lives in a pure `LaunchPlanner`; the process itself is a thin wrapper** | The refusals — not installed, an unfinished install, a missing executable, an entrypoint that escapes the install directory — are the part worth testing, and none of them needs a process to exist. What is left is `Process.Start`, whose one interesting behaviour is noticing the exit, and that gets a test which really starts the platform's own shell. The game is a **child** so the launcher can tell it is running and stop offering to start it twice, and is deliberately **not** killed when the launcher closes: a player who quits the launcher has not asked to quit the game. | A launcher class that both decides and starts (nothing testable without a real executable); a detached process (cannot tell whether it is running) |
+| D28 | **Arguments stay a command line, and the player's go after the build's** | The publisher wrote a string into the manifest and the player writes a string into the options. Re-tokenising either into a list here would be a second argument parser to get wrong, and it would disagree with the one the game itself uses. The player's arguments are appended because nearly every parser lets the last occurrence win, which is what makes an override an override. `LaunchOptions` is a column of its own beside `LaunchArgs`: an update rewrites everything the manifest says, and it must not take a preference the player set with it. | Parsing into `ProcessStartInfo.ArgumentList` (a second parser, and a different one); one field for both (an update silently resets the player's choice) |
+| D29 | **An unreachable server keeps the session and the library falls back to disk; a server that answers and refuses does not** | Signing in is no more possible offline than refreshing is, so answering an unreachable server with the sign-in screen locks a player out of games already on their disk for no reason. `RestoreAsync` therefore keeps the stored session untouched and reports success, and the first call that reaches a server is the one that rotates it. The library reads the install store first and unconditionally, so the offline list is the half of the answer that never needed a server. A refusal is different and stays an error: an expired session has to be said out loud, or the player sees a short library and no explanation. | Signing out when the server is unreachable (locks the player out of local games); treating every failure as offline (hides a revoked session behind a banner) |
+| D30 | **Publishing is its own API interface, and the client re-checks the manifest path rules before uploading** | Every publishing route needs a permission a player's account does not have, and a separate `IPublishingApi` puts that in the type system rather than in a comment. The path rules are copied from the server's `validateRelativePath` and applied first, because a name the server will refuse is worth catching before gigabytes travel — as is an entrypoint that is not one of the files, which is the same mistake with a more expensive ending. That the copy can drift is stated in the type's own comment. | Adding the routes to `ICatalogApi` (a player's client carrying calls it can never make); trusting the server's validation alone (the refusal arrives after the upload) |
+| D31 | **Uploads are one blob at a time, in 4 MiB chunks, at whatever offset the server says** | The offset is assigned server-side by a conditional `UPDATE`, so a client that disagrees is the one that is wrong: a refused chunk is answered by *asking* where the session is, never by guessing, and two corrections in a row is the limit because more means a disagreement a retry will not fix. Sequential because the server bounds open sessions per user and its staging disk is that bound times the largest blob — four at once would be four times the scratch space on a machine chosen for being cheap. The chunk size is under the server's 8 MiB default with headroom; nothing advertises the real limit, so it is a guess and is recorded as a debt. | Parallel uploads (multiplies the server's staging disk); trusting the client's own offset (silently duplicates or skips a range, and the hash only catches it at the end) |
+| D32 | **The folder dialog sits behind `IFolderPicker`, and background events marshal through a captured `SynchronizationContext`** | The file dialog is the one step of publishing that cannot be driven from a test, so it is the one thing behind an interface; everything else in the flow is exercised end to end. `ViewModelBase.OnUiThread` posts to the context captured where the view model was built — the UI thread in the running app, and nothing at all in a test, which is what makes a callback run inline there instead of on the thread pool. A binding updated off the UI thread is a crash that only happens on a user's machine. | Calling `StorageProvider` from the view model (untestable); `Dispatcher.UIThread` directly (needs an initialised Avalonia in every test) |
 
 ---
 
@@ -218,6 +224,8 @@ is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
 | **`Microsoft.Data.Sqlite` 10.x needs .NET 10** | The 9.0.x line is the one that matches the pinned SDK, and 9.0.18 lines up with the `Microsoft.Extensions.*` versions already in `Directory.Packages.props` |
 | **`Microsoft.Data.Sqlite` pools connections, so the file stays open after the store is disposed** | A temporary directory holding a test database can refuse to delete. Harmless for the suite, which ignores the failure, but do not write a test that asserts the file is gone without `SqliteConnection.ClearAllPools()` |
 | **`Order()` on strings is culture-aware** | `"data/pak"` sorts *before* `"Game.exe"` under a culture comparison and after it under an ordinal one. An assertion on a sorted list of paths must say `Order(StringComparer.Ordinal)`, or it passes or fails depending on the machine's locale |
+| **NSubstitute's last stub wins** | A test that arranges a return *before* calling a factory which stubs the same call gets the factory's answer, and the failure looks like the production code ignoring its input. Arrange after the object is built, or move the arrangement into the factory |
+| **A control character pasted into a source file is invisible** | A tool that writes a bell or a newline escape as the character itself produces a file that compiles, tests the wrong thing, and shows nothing in the diff. Build such a string from its code point instead — `"name" + (char)7` — so the intent is on the page |
 | **`Progress<T>` posts its callback to a captured context** | With no `SynchronizationContext` — which is every test — that means the thread pool, so a test that asserts on what a progress callback recorded is asserting on whether the pool has caught up. Both test projects have a synchronous `IProgress<T>` for this; the view model funnels every report through one property so the same path is exercised either way |
 
 ---
@@ -356,8 +364,37 @@ all four self-contained publishes. The macOS leg is therefore verified for the f
   reinstalling repaired it as a full download while leaving the save file alone. Installing an
   up-to-date build moved nothing, and uninstalling removed the directory and the row
 
+### Milestone 8 — Launching, publishing and offline ✅
+- ✅ `LaunchPlanner` + `ProcessGameLauncher`: start an installed game, know when it exits,
+  refuse the four cases that cannot work (D27); per-game launch options in their own column (D28)
+- ✅ The library binds to a card that carries both what the account owns and what this disk
+  has, and plays it — open debt 8, closed
+- ✅ Offline: an unreachable server keeps the session, and the library falls back to the
+  install store with a banner; a refusal is still an error (D29)
+- ✅ `IPublishingApi` + `PublishingApiClient`: games, versions, builds, blob negotiation,
+  resumable upload sessions, manifest submission (D30)
+- ✅ `DirectoryBuildPackager`: a directory hashed once, with the server's path rules applied
+  before anything travels
+- ✅ `BuildPublisher`: package → negotiate → upload → finalize, resuming at whatever offset
+  the server names (D31)
+- ✅ The developer dashboard: own games including drafts, versions, and publishing a build
+  from a chosen directory with progress (D32)
+- ✅ 48 new resource keys in English, Italian and French
+
+### Verified on 2026-08-04
+- 420/420 tests green (150 Core, 166 Infrastructure, 105 App)
+- `dotnet format --verify-no-changes` clean
+- **End to end against the real stack**: the client created a game, published a three-file
+  build from a directory, then published a second build that changed one file — **one blob
+  travelled, 49 bytes, and the unchanged asset was recognised as already stored**. The same
+  client then installed the first build as a full download, verified it against the manifest,
+  updated to the second **as a delta of exactly those 49 bytes**, and dropped the file the new
+  build no longer had. Launching the published "executable" — a text file — was refused with
+  `StartFailed` rather than swallowed, and the install row was readable with no server involved
+
 ### Next up
-- ⬜ **M8** Launching a game, dev dashboard, launch parameters, offline mode, self-update
+- ⬜ **M9** Self-update: needs a launcher-release surface on the server that does not exist
+  yet, so it is a milestone of its own rather than a client-side detail
 - ⬜ **M10** `Documentation/` per module, crash-report upload
 
 ---
