@@ -731,4 +731,13 @@
   <data name="Publish.GameDeleted" xml:space="preserve">
     <value>"{0}" è stato cancellato. Lo spazio che occupavano le sue build torna sulla tua quota.</value>
   </data>
+  <data name="Settings.Diagnostics" xml:space="preserve">
+    <value>Diagnostica</value>
+  </data>
+  <data name="Settings.SendCrashReports" xml:space="preserve">
+    <value>Invia i rapporti di crash</value>
+  </data>
+  <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
+    <value>Quando il launcher va in crash scrive un rapporto accanto ai suoi log. Con questa opzione attiva, il rapporto viene inviato al successivo avvio. Contiene l’errore e dove è successo, mai il tuo nome, il tuo account o i tuoi percorsi — e con l’opzione disattivata non viene inviato nulla.</value>
+  </data>
 </root>

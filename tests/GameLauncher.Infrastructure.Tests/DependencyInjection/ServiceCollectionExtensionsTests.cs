@@ -1,6 +1,7 @@
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -51,6 +52,8 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IBuildPublisher))]
     [InlineData(typeof(IImageLoader))]
     [InlineData(typeof(ICapabilitiesApi))]
+    [InlineData(typeof(ICrashReportApi))]
+    [InlineData(typeof(ICrashReportUploader))]
     [InlineData(typeof(IServerCapabilityProvider))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {

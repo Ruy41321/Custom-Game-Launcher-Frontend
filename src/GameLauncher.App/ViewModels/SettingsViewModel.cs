@@ -63,6 +63,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     [ObservableProperty]
     private string _themeVariant = DefaultTheme;
 
+    /// <summary>
+    /// Opt-in, and off until somebody says otherwise. It appears here now because it finally
+    /// does something: until the uploader existed, an inert checkbox would have been a promise
+    /// the launcher did not keep.
+    /// </summary>
+    [ObservableProperty]
+    private bool _sendCrashReports;
+
     private const string DefaultTheme = "dark";
 
     public SettingsViewModel(
@@ -114,6 +122,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
         InstallDirectory = _settings.InstallDirectory ?? string.Empty;
         ThemeVariant = _settings.ThemeVariant ?? DefaultTheme;
+        SendCrashReports = _settings.SendCrashReports;
         StatusMessage = null;
         ErrorMessage = null;
 
@@ -166,6 +175,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         {
             InstallDirectory = trimmed.Length == 0 ? null : trimmed,
             ThemeVariant = ThemeVariant,
+            SendCrashReports = SendCrashReports,
         };
 
         await _store.SaveAsync(_settings).ConfigureAwait(true);
@@ -252,6 +262,20 @@ public sealed partial class SettingsViewModel : ViewModelBase
         DeletePassword = string.Empty;
         DeleteReason = string.Empty;
         RaiseDeletionDerived();
+    }
+
+    /// <summary>
+    /// Saved as soon as it is toggled rather than on a button, like the theme: a consent
+    /// checkbox that needs a second press to take effect is one somebody will believe they set.
+    /// Turning it *off* matters more than turning it on, and it takes effect at once — the
+    /// uploader deletes the pending reports on the next start rather than sending them.
+    /// </summary>
+    partial void OnSendCrashReportsChanged(bool value)
+    {
+        if (value != _settings.SendCrashReports)
+        {
+            _ = SaveAsync();
+        }
     }
 
     partial void OnDeletePasswordChanged(string value) => RaiseDeletionDerived();

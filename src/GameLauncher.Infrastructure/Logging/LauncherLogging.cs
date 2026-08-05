@@ -1,4 +1,5 @@
 using System.Globalization;
+using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Platform;
 using Serilog;
 using Serilog.Events;
@@ -66,6 +67,15 @@ public static class LauncherLogging
         };
     }
 
+    /// <summary>
+    /// Writes the report that a later run may send, if its owner has asked for that.
+    ///
+    /// **Redacted here, not at upload time.** The file on disk is the request body, so
+    /// redacting later would leave the unredacted copy sitting in the log directory of a
+    /// machine whose owner asked for the opposite — and would mean the thing somebody could
+    /// review was not the thing that got sent. The rolling log beside it keeps the exception in
+    /// full, and that copy never leaves the machine.
+    /// </summary>
     public static void WriteCrashReport(IPathProvider pathProvider, Exception exception, string kind)
     {
         Log.Fatal(exception, "Crash ({Kind})", kind);
@@ -73,25 +83,39 @@ public static class LauncherLogging
         try
         {
             Directory.CreateDirectory(pathProvider.LogDirectory);
-            string path = Path.Combine(
-                pathProvider.LogDirectory,
-                $"crash-{DateTime.UtcNow:yyyyMMdd-HHmmssfff}-{kind}.log");
+
+            CrashReport report = Describe(exception, kind);
+            report = CrashReportRedactor.Redact(
+                report,
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                pathProvider.UserDataDirectory,
+                pathProvider.DefaultInstallDirectory);
 
             File.WriteAllText(
-                path,
-                $"""
-                 Kind:        {kind}
-                 UTC:         {DateTime.UtcNow:O}
-                 OS:          {Environment.OSVersion}
-                 Runtime:     {Environment.Version}
-                 App version: {typeof(LauncherLogging).Assembly.GetName().Version}
-
-                 {exception}
-                 """);
+                Path.Combine(
+                    pathProvider.LogDirectory, CrashReportFiles.NameFor(report.OccurredAt, kind)),
+                CrashReportFiles.Serialize(report));
         }
-        catch (IOException)
+        catch (Exception failure) when (
+            failure is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             // Nothing useful left to do: the crash report itself failed to write.
         }
     }
+
+    private static CrashReport Describe(Exception exception, string kind) => new()
+    {
+        Kind = kind,
+        OccurredAt = DateTimeOffset.UtcNow,
+        LauncherVersion =
+            typeof(LauncherLogging).Assembly.GetName().Version?.ToString() ?? string.Empty,
+        // The OS and the runtime, and deliberately not the machine name or the user name:
+        // "which Windows" is diagnostic and "whose Windows" is not.
+        Platform = $"{Environment.OSVersion} / .NET {Environment.Version}",
+        ExceptionType = exception.GetType().FullName ?? exception.GetType().Name,
+        Message = exception.Message,
+        // ToString() rather than StackTrace, because it carries the inner exceptions — which
+        // are usually the ones that say what actually went wrong.
+        StackTrace = exception.ToString(),
+    };
 }

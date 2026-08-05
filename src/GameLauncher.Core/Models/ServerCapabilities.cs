@@ -29,6 +29,8 @@ public sealed record ServerCapabilities
     public MediaCapabilities Media { get; init; } = new();
 
     public CatalogCapabilities Catalog { get; init; } = new();
+
+    public CrashReportCapabilities CrashReports { get; init; } = new();
 }
 
 public sealed record UploadCapabilities
@@ -78,6 +80,22 @@ public sealed record MediaCapabilities
     /// </summary>
     public IReadOnlyList<string> ContentTypes { get; init; } =
         ["image/png", "image/jpeg", "image/webp"];
+}
+
+public sealed record CrashReportCapabilities
+{
+    /// <summary>
+    /// Whether sending them is worth attempting. The fallback is **false**, unlike every other
+    /// default here: the rest are limits on something the launcher is going to do anyway, and
+    /// this is permission to send something about the user. A server that did not answer has
+    /// not agreed to receive anything, so the launcher keeps the reports on disk rather than
+    /// posting into a route that may not exist.
+    /// </summary>
+    public bool Enabled { get; init; }
+
+    public int MaxMessageLength { get; init; } = 2000;
+
+    public int MaxStackLength { get; init; } = 16000;
 }
 
 public sealed record CatalogCapabilities

@@ -147,6 +147,69 @@ public sealed class SettingsViewModelTests
         Assert.Contains("system", model.Themes);
     }
 
+    // --- crash reports ----------------------------------------------------------------------
+
+    // It appears on the page now because it finally does something: until the uploader existed,
+    // an inert checkbox would have been a promise the launcher did not keep.
+    [Fact]
+    public async Task TheStoredCrashReportChoiceIsWhatTheBoxShows()
+    {
+        Stored(new UserSettings { SendCrashReports = true });
+
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.SendCrashReports);
+    }
+
+    [Fact]
+    public async Task ConsentIsOffUntilSomebodyTurnsItOn()
+    {
+        Stored(new UserSettings());
+
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.SendCrashReports);
+    }
+
+    /// <summary>
+    /// Saved as soon as it is toggled rather than behind a button: a consent checkbox that needs
+    /// a second press to take effect is one somebody will believe they set.
+    /// </summary>
+    [Fact]
+    public async Task TogglingConsentSavesItStraightAway()
+    {
+        Stored(new UserSettings());
+        UserSettings? saved = null;
+        _store.SaveAsync(Arg.Do<UserSettings>(settings => saved = settings), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        model.SendCrashReports = true;
+
+        Assert.True(saved?.SendCrashReports);
+    }
+
+    // Turning it off matters more than turning it on, and it has to reach the file too.
+    [Fact]
+    public async Task WithdrawingConsentIsSavedAsWell()
+    {
+        Stored(new UserSettings { SendCrashReports = true });
+        UserSettings? saved = null;
+        _store.SaveAsync(Arg.Do<UserSettings>(settings => saved = settings), Arg.Any<CancellationToken>())
+            .Returns(Task.CompletedTask);
+
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        model.SendCrashReports = false;
+
+        Assert.False(saved?.SendCrashReports);
+    }
+
     // --- erasing the account ---------------------------------------------------------------
 
     private async Task<SettingsViewModel> LoadedPage()

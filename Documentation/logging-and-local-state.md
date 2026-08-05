@@ -172,24 +172,75 @@ the most to diagnose: a user reports that "it just closed" and there is nothing 
 
 ### Crash reports
 
-`crash-<utc>-<kind>.log` beside the ordinary logs, carrying the kind, the UTC instant, the OS
-version, the runtime version, the app version and the exception.
+`crash-<utc>-<kind>.json` beside the ordinary logs. **The file is the request body**: one JSON
+document in exactly the shape `POST /api/v1/crash-reports` accepts, so there is nothing to parse
+back and no second definition of the same facts to keep in step. It is still readable — the
+document is indented — and the rolling log beside it carries the same exception in full.
 
-The write is wrapped in a `try`/`catch (IOException)` that does nothing, because there is
-nothing useful left to do: the crash report itself failed to write.
+It carries the kind, the instant, the launcher version, the OS and runtime, the exception type,
+the message and the full `ToString()` — which is used rather than `StackTrace` because it
+includes the inner exceptions, and those are usually the ones that say what went wrong.
 
-**Nothing is ever transmitted.** Crash reports are written to disk only. The `SendCrashReports`
-setting exists in `UserSettings` and is read by nothing.
+The write is wrapped in a `catch` that does nothing, because there is nothing useful left to do:
+the crash report itself failed to write.
+
+#### Redacted where it is written, not where it is sent
+
+`CrashReportRedactor` replaces this machine's user profile, data and default install
+directories with `<redacted>` **before the file is written**, and a narrower backstop catches a
+home directory that is not this machine's — one baked into a build by whoever compiled it, or a
+second profile on the same box.
+
+Doing it here rather than at upload time is the whole point. The file on disk is what gets sent,
+so redacting later would leave the unredacted copy sitting in the log directory of a machine
+whose owner asked for the opposite — and would mean the thing somebody could review was not the
+thing that travelled.
+
+What is left still says which file it was: only the prefix goes, never the rest of the path.
+
+This is a reduction of risk and not a guarantee — a message can carry anything a caller put in
+it. That is exactly why **the server stores no account against a report either**: two partial
+measures that fail differently, rather than one that is trusted. See the server repository's
+`Documentation/crash-reports.md`.
+
+#### Sending them
+
+`CrashReportUploader` runs **once at startup**, before the session is restored. A crash report
+is written by a process that is dying, so the run that can send it is always the next one; there
+is no queue and no retry timer, and a report that could not be sent is simply still on disk when
+the launcher next starts.
+
+| Situation | What happens to the file |
+|---|---|
+| `SendCrashReports` is off | **Deleted.** Not merely "not sent": somebody who said no should not have a growing pile of unsent crash reports about them on their own disk |
+| The server does not accept reports | Deleted — carrying them forever for a server that will never take them is carrying them for nothing |
+| The server could not be reached, or asked us to slow down | Kept, and the sweep stops there: the rest would fail the same way, and burning the rate limit on them would delay the report that matters |
+| The server refused it outright | Deleted. It will be refused identically forever |
+| The file is truncated or is not a report | Deleted, so one bad file cannot block every real report behind it |
+
+At most **five** are sent per start, oldest first: a launcher that crashed thirty times
+overnight has one bug, not thirty, and the file name begins with the timestamp so the sort is
+the order the crashes happened in.
+
+It **never throws**. A launcher that failed to start because it could not report a previous
+failure would be the worst possible outcome of this feature.
+
+The consent checkbox is on the Settings page and saves as soon as it is toggled, like the theme:
+a consent checkbox that needs a second press to take effect is one somebody will believe they
+set. It appears there now because it finally does something — until the uploader existed, an
+inert checkbox would have been a promise the launcher did not keep.
 
 ---
 
 ## What is not implemented
 
-- **Crash-report upload.** The opt-in setting exists; there is no uploader, no endpoint on the
-  server, and no UI offering it. This is why the Settings page does not show the checkbox.
 - **No log viewer in the application.** Finding the log means finding the directory.
-- **No telemetry or analytics of any kind** leaves this client. The server records download
-  events from the plan it issues; the launcher sends nothing on its own.
+- **No telemetry or analytics of any kind** leaves this client beyond an opted-in crash report.
+  There is no usage tracking, no session reporting and no periodic beacon: the launcher sends
+  something about itself only when it has crashed and been told it may.
+- **No way to review a pending crash report before it is sent.** The files are readable JSON in
+  the log directory, which is the honest version of that — but nothing in the UI shows them.
+- **No log attachment.** A crash report is one exception, not a session.
 - **No self-update, so nothing writes to the application directory.** Everything above is under
   the user's data directory, and the application directory is read-only after install.
 

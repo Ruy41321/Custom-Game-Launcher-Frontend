@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Localization;
 
@@ -21,6 +22,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IUserSettingsStore _settingsStore;
     private readonly IAuthenticationService _authentication;
     private readonly IInstallationService _installations;
+    private readonly ICrashReportUploader _crashReports;
 
     [ObservableProperty]
     private string _welcomeMessage = string.Empty;
@@ -42,6 +44,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LauncherConfiguration configuration,
         IAuthenticationService authentication,
         IInstallationService installations,
+        ICrashReportUploader crashReports,
         LoginViewModel login,
         ExploreViewModel explore,
         LibraryViewModel library,
@@ -53,6 +56,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _settingsStore = settingsStore;
         _authentication = authentication;
         _installations = installations;
+        _crashReports = crashReports;
 
         Login = login;
         Explore = explore;
@@ -125,6 +129,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             // Nothing here is worth a blank window.
         }
+
+        // Before signing in, because a report is sent without a session and the crashes worth
+        // having are often the ones that happened on the sign-in screen. Never awaited for its
+        // result and never able to fail the start: it swallows everything itself.
+        await _crashReports.UploadPendingAsync(cancellationToken).ConfigureAwait(true);
 
         bool restored;
         try

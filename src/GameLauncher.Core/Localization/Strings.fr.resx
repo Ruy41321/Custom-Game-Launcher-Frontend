@@ -731,4 +731,13 @@
   <data name="Publish.GameDeleted" xml:space="preserve">
     <value>« {0} » a été supprimé. L'espace occupé par ses builds est recrédité sur votre quota.</value>
   </data>
+  <data name="Settings.Diagnostics" xml:space="preserve">
+    <value>Diagnostic</value>
+  </data>
+  <data name="Settings.SendCrashReports" xml:space="preserve">
+    <value>Envoyer les rapports de plantage</value>
+  </data>
+  <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
+    <value>Quand le lanceur plante, il écrit un rapport à côté de ses journaux. Avec cette option activée, le rapport est envoyé au démarrage suivant. Il contient l'erreur et l'endroit où elle s'est produite, jamais votre nom, votre compte ni vos chemins de fichiers — et rien n'est envoyé tant qu'elle est désactivée.</value>
+  </data>
 </root>

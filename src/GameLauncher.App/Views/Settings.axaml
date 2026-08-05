@@ -37,6 +37,15 @@
                   MinWidth="180" HorizontalAlignment="Left" />
       </StackPanel>
 
+      <!-- Opt-in and off by default. It appears here now because it finally does something. -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.Diagnostics}" FontSize="13" FontWeight="SemiBold" />
+        <CheckBox Content="{loc:Tr Settings.SendCrashReports}"
+                  IsChecked="{Binding SendCrashReports}" />
+        <TextBlock Text="{loc:Tr Settings.SendCrashReportsExplain}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
       <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12"
                  IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 

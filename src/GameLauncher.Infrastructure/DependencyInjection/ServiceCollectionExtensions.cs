@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -15,6 +16,7 @@ using GameLauncher.Infrastructure.Configuration;
 using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Launching;
+using GameLauncher.Infrastructure.Logging;
 using GameLauncher.Infrastructure.Media;
 using GameLauncher.Infrastructure.Platform;
 using GameLauncher.Infrastructure.Publishing;
@@ -67,6 +69,10 @@ public static class ServiceCollectionExtensions
         // Also tokenless, and for a related reason: the limits document is what a launcher
         // reads before it knows whether it can sign in at all, and the route needs no token.
         services.AddHttpClient<ICapabilitiesApi, CapabilitiesApiClient>(ConfigureClient);
+
+        // Tokenless for a third reason, and the sharpest of them: the crashes worth having are
+        // often the ones that happen before anybody has signed in.
+        services.AddHttpClient<ICrashReportApi, CrashReportApiClient>(ConfigureClient);
         services.AddSingleton<IServerCapabilityProvider, CachedServerCapabilityProvider>();
 
         // Authenticated, unlike the auth client beside it: erasing an account is something a
@@ -101,6 +107,7 @@ public static class ServiceCollectionExtensions
         // is taking thirty seconds is a picture the page is better off without.
         services.AddHttpClient<IImageLoader, CachingImageLoader>(ConfigureMediaClient);
 
+        services.AddSingleton<ICrashReportUploader, CrashReportUploader>();
         services.AddSingleton<IInstallationService, InstallationService>();
         services.AddSingleton<IGameLauncher, ProcessGameLauncher>();
         services.AddSingleton<IBuildPackager, DirectoryBuildPackager>();

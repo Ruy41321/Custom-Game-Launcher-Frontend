@@ -731,4 +731,13 @@
   <data name="Publish.GameDeleted" xml:space="preserve">
     <value>"{0}" was deleted. The space its builds used is credited back to your quota.</value>
   </data>
+  <data name="Settings.Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="Settings.SendCrashReports" xml:space="preserve">
+    <value>Send crash reports</value>
+  </data>
+  <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
+    <value>When the launcher crashes it writes a report next to its logs. With this on, the report is sent the next time the launcher starts. It carries the error and where it happened, never your name, your account or your file paths — and nothing is sent while this is off.</value>
+  </data>
 </root>

@@ -3,6 +3,7 @@ using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -26,6 +27,9 @@ public sealed class MainWindowViewModelTests
     private readonly ICatalogApi _catalog = Substitute.For<ICatalogApi>();
     private readonly ILibraryApi _library = Substitute.For<ILibraryApi>();
     private readonly IUserSettingsStore _settings = Substitute.For<IUserSettingsStore>();
+    private readonly ICrashReportUploader _crashReports =
+        Substitute.For<ICrashReportUploader>();
+
     private readonly IInstallationService _installations =
         Substitute.For<IInstallationService>();
     private readonly ResourceManagerLocalizationService _localization =
@@ -56,6 +60,7 @@ public sealed class MainWindowViewModelTests
             new LauncherConfiguration { AppName = "Test Launcher" },
             _authentication,
             _installations,
+            _crashReports,
             new LoginViewModel(_authentication, errors, _localization),
             new ExploreViewModel(
                 _catalog,
