@@ -695,6 +695,33 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Versione cancellata.</value>
   </data>
+  <data name="Settings.Account" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Settings.DeleteAccount" xml:space="preserve">
+    <value>Cancella il mio account</value>
+  </data>
+  <data name="Settings.DeleteAccountExplain" xml:space="preserve">
+    <value>Il tuo account, la tua libreria e ogni dispositivo collegato vengono rimossi, e non si torna indietro. Digita la password per continuare.</value>
+  </data>
+  <data name="Settings.DeletePassword" xml:space="preserve">
+    <value>La tua password</value>
+  </data>
+  <data name="Settings.DeleteReason" xml:space="preserve">
+    <value>Perché te ne vai? (facoltativo)</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccount" xml:space="preserve">
+    <value>Cancellare definitivamente questo account? La tua libreria e ogni dispositivo collegato spariscono con lui, e con questo indirizzo non si accede più. Non si torna indietro.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountPublisher" xml:space="preserve">
+    <value>Cancellare definitivamente questo account? La tua libreria e ogni dispositivo collegato spariscono con lui, e non si torna indietro. Quello che hai pubblicato resta online a nome di un account cancellato, così chi lo ha installato può ancora aggiornarlo: se vuoi che sparisca, cancella prima quei giochi.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountButton" xml:space="preserve">
+    <value>Cancella il mio account</value>
+  </data>
+  <data name="Settings.KeepAccount" xml:space="preserve">
+    <value>Tieni il mio account</value>
+  </data>
   <data name="Publish.DeleteGame" xml:space="preserve">
     <value>Cancella questo gioco</value>
   </data>

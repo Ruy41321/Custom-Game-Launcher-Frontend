@@ -695,6 +695,33 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Version supprimee.</value>
   </data>
+  <data name="Settings.Account" xml:space="preserve">
+    <value>Compte</value>
+  </data>
+  <data name="Settings.DeleteAccount" xml:space="preserve">
+    <value>Supprimer mon compte</value>
+  </data>
+  <data name="Settings.DeleteAccountExplain" xml:space="preserve">
+    <value>Votre compte, votre bibliothèque et tous les appareils connectés sont supprimés, et c'est irréversible. Saisissez votre mot de passe pour continuer.</value>
+  </data>
+  <data name="Settings.DeletePassword" xml:space="preserve">
+    <value>Votre mot de passe</value>
+  </data>
+  <data name="Settings.DeleteReason" xml:space="preserve">
+    <value>Pourquoi partez-vous ? (facultatif)</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccount" xml:space="preserve">
+    <value>Supprimer définitivement ce compte ? Votre bibliothèque et tous les appareils connectés disparaissent avec lui, et personne ne pourra plus se connecter avec cette adresse. Aucun retour en arrière.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountPublisher" xml:space="preserve">
+    <value>Supprimer définitivement ce compte ? Votre bibliothèque et tous les appareils connectés disparaissent avec lui, sans retour en arrière. Ce que vous avez publié reste en ligne sous un nom supprimé, afin que ceux qui l'ont installé puissent encore le mettre à jour : supprimez d'abord ces jeux si vous voulez qu'ils disparaissent.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountButton" xml:space="preserve">
+    <value>Supprimer mon compte</value>
+  </data>
+  <data name="Settings.KeepAccount" xml:space="preserve">
+    <value>Garder mon compte</value>
+  </data>
   <data name="Publish.DeleteGame" xml:space="preserve">
     <value>Supprimer ce jeu</value>
   </data>

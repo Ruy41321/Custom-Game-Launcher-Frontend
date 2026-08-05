@@ -1,6 +1,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using GameLauncher.App.Services;
+using GameLauncher.Core.Api;
+using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
@@ -10,8 +12,12 @@ using GameLauncher.Core.Platform;
 namespace GameLauncher.App.ViewModels;
 
 /// <summary>
-/// The preferences a user can change. Deliberately short: a setting that does nothing is worse
-/// than an absent one, so only what is actually honoured appears here.
+/// The preferences a user can change, and the one action that ends the account.
+///
+/// Deliberately short: a setting that does nothing is worse than an absent one, so only what is
+/// actually honoured appears here. Erasure lives on this page rather than on a page of its own
+/// because it is where somebody goes looking for it, and because a page whose only purpose is
+/// to delete an account is a page that only ever gets opened by mistake.
 /// </summary>
 public sealed partial class SettingsViewModel : ViewModelBase
 {
@@ -20,12 +26,35 @@ public sealed partial class SettingsViewModel : ViewModelBase
     private readonly IInstallStore _installs;
     private readonly IFolderPicker _folders;
     private readonly IThemeSwitcher _theme;
+    private readonly IAccountService _account;
+    private readonly IAuthenticationService _authentication;
+    private readonly IApiErrorPresenter _errors;
     private readonly ILocalizationService _localization;
 
     private UserSettings _settings = new();
 
     [ObservableProperty]
     private string? _statusMessage;
+
+    [ObservableProperty]
+    private string? _errorMessage;
+
+    /// <summary>
+    /// Re-authentication, and the server requires it. Never persisted, and cleared the moment
+    /// the deletion is armed, confirmed or abandoned.
+    /// </summary>
+    [ObservableProperty]
+    private string _deletePassword = string.Empty;
+
+    /// <summary>Optional, and read by nobody but a server operator.</summary>
+    [ObservableProperty]
+    private string _deleteReason = string.Empty;
+
+    [ObservableProperty]
+    private PendingDeletion? _pendingDeletion;
+
+    [ObservableProperty]
+    private bool _isDeleting;
 
     /// <summary>Empty means "wherever the platform puts things", which is shown alongside.</summary>
     [ObservableProperty]
@@ -42,6 +71,9 @@ public sealed partial class SettingsViewModel : ViewModelBase
         IInstallStore installs,
         IFolderPicker folders,
         IThemeSwitcher theme,
+        IAccountService account,
+        IAuthenticationService authentication,
+        IApiErrorPresenter errors,
         ILocalizationService localization)
     {
         _store = store;
@@ -49,10 +81,21 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _installs = installs;
         _folders = folders;
         _theme = theme;
+        _account = account;
+        _authentication = authentication;
+        _errors = errors;
         _localization = localization;
     }
 
     public IReadOnlyList<string> Themes { get; } = ["dark", "light", "system"];
+
+    public bool HasPendingDeletion => PendingDeletion is not null;
+
+    /// <summary>
+    /// The password is what the server checks, so an empty box is a round trip that can only be
+    /// refused. Advisory like every client-side check (D8): the server asks again regardless.
+    /// </summary>
+    public bool CanDeleteAccount => !IsDeleting && DeletePassword.Length > 0;
 
     /// <summary>Shown under the box, so an empty setting is not a mystery.</summary>
     public string DefaultInstallDirectory => _paths.DefaultInstallDirectory;
@@ -72,6 +115,11 @@ public sealed partial class SettingsViewModel : ViewModelBase
         InstallDirectory = _settings.InstallDirectory ?? string.Empty;
         ThemeVariant = _settings.ThemeVariant ?? DefaultTheme;
         StatusMessage = null;
+        ErrorMessage = null;
+
+        // Leaving a typed password and an armed deletion behind when the page is reopened would
+        // be a confirmation somebody could walk into.
+        CancelAccountDeletion();
 
         IReadOnlyList<InstalledGame> installed = await _installs
             .GetAllAsync(cancellationToken).ConfigureAwait(true);
@@ -122,6 +170,96 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
         await _store.SaveAsync(_settings).ConfigureAwait(true);
         StatusMessage = _localization.Translate("Settings.Saved");
+    }
+
+    // --- erasing the account ---------------------------------------------------------------
+
+    /// <summary>
+    /// Arms the erasure. Nothing is sent until <see cref="ConfirmDeletionCommand"/> runs.
+    ///
+    /// The prompt says **what survives**, not only what goes, because that is the part nobody
+    /// expects: the server anonymises the account rather than deleting it, so anything a
+    /// publisher released stays online under a deleted name. Somebody who wanted their games
+    /// gone has to delete them first, and being told that after the fact is being told too late.
+    /// </summary>
+    [RelayCommand]
+    private void AskToDeleteAccount()
+    {
+        StatusMessage = null;
+        ErrorMessage = null;
+
+        // The publisher wording is chosen on the permission rather than on a count of games:
+        // asking the server how many this account published would be a request made for a
+        // sentence, and a publisher with none is told something harmlessly true anyway.
+        string prompt = _authentication.HasPermission(Permissions.GamePublish)
+            ? _localization.Translate("Settings.ConfirmDeleteAccountPublisher")
+            : _localization.Translate("Settings.ConfirmDeleteAccount");
+
+        PendingDeletion = new PendingDeletion(prompt, DeleteAccountAsync);
+        RaiseDeletionDerived();
+    }
+
+    [RelayCommand]
+    private async Task ConfirmDeletionAsync(CancellationToken cancellationToken)
+    {
+        if (PendingDeletion is not { } deletion)
+        {
+            return;
+        }
+
+        PendingDeletion = null;
+        IsDeleting = true;
+        RaiseDeletionDerived();
+
+        try
+        {
+            await deletion.ConfirmAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (ApiException exception)
+        {
+            // The password survives a refusal on purpose: a mistyped one is the likeliest
+            // reason to be here, and clearing the box would mean typing it again to retry.
+            ErrorMessage = _errors.Describe(exception);
+        }
+        finally
+        {
+            IsDeleting = false;
+            RaiseDeletionDerived();
+        }
+    }
+
+    [RelayCommand]
+    private void CancelDeletion() => CancelAccountDeletion();
+
+    /// <summary>
+    /// The account itself. Nothing is shown afterwards: the sign-out inside this raises a
+    /// session change, and the shell answers that by showing the sign-in screen — so a status
+    /// message here would be written onto a page nobody is looking at any more.
+    /// </summary>
+    private async Task DeleteAccountAsync(CancellationToken cancellationToken)
+    {
+        await _account
+            .DeleteAsync(DeletePassword, DeleteReason, cancellationToken)
+            .ConfigureAwait(true);
+
+        DeletePassword = string.Empty;
+        DeleteReason = string.Empty;
+    }
+
+    private void CancelAccountDeletion()
+    {
+        PendingDeletion = null;
+        DeletePassword = string.Empty;
+        DeleteReason = string.Empty;
+        RaiseDeletionDerived();
+    }
+
+    partial void OnDeletePasswordChanged(string value) => RaiseDeletionDerived();
+
+    private void RaiseDeletionDerived()
+    {
+        OnPropertyChanged(nameof(HasPendingDeletion));
+        OnPropertyChanged(nameof(CanDeleteAccount));
     }
 
     /// <summary>

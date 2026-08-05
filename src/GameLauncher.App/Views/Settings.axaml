@@ -40,6 +40,42 @@
       <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12"
                  IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+      <!-- The account. Last on the page and behind two presses: the first arms the deletion and
+           says what disappears, the second sends it. -->
+      <StackPanel Spacing="8" Margin="0,16,0,0">
+        <TextBlock Text="{loc:Tr Settings.Account}" FontSize="13" FontWeight="SemiBold" />
+
+        <TextBlock Text="{loc:Tr Settings.DeleteAccountExplain}" Opacity="0.7" FontSize="12"
+                   TextWrapping="Wrap" />
+
+        <TextBox PasswordChar="•" Watermark="{loc:Tr Settings.DeletePassword}"
+                 Text="{Binding DeletePassword}" MaxWidth="320" HorizontalAlignment="Left" />
+
+        <TextBox Watermark="{loc:Tr Settings.DeleteReason}" Text="{Binding DeleteReason}"
+                 MaxWidth="320" HorizontalAlignment="Left" />
+
+        <Button Content="{loc:Tr Settings.DeleteAccount}" HorizontalAlignment="Left"
+                Command="{Binding AskToDeleteAccountCommand}"
+                IsEnabled="{Binding CanDeleteAccount}" />
+
+        <Border Classes="card" IsVisible="{Binding HasPendingDeletion}">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding PendingDeletion.Prompt}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="{loc:Tr Settings.ConfirmDeleteAccountButton}"
+                      Command="{Binding ConfirmDeletionCommand}" />
+              <Button Content="{loc:Tr Settings.KeepAccount}" Classes="accent"
+                      Command="{Binding CancelDeletionCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsDeleting}" />
+
+        <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+
     </StackPanel>
   </ScrollViewer>
 

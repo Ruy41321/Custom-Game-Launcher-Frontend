@@ -90,6 +90,9 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IFolderPicker>(),
                 Substitute.For<IThemeSwitcher>(),
+                Substitute.For<IAccountService>(),
+                _authentication,
+                errors,
                 _localization));
     }
 

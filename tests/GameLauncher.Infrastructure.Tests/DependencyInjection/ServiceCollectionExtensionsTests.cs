@@ -36,6 +36,8 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(ITokenStore))]
     [InlineData(typeof(IAuthenticationService))]
     [InlineData(typeof(IAuthApi))]
+    [InlineData(typeof(IAccountApi))]
+    [InlineData(typeof(IAccountService))]
     [InlineData(typeof(ICatalogApi))]
     [InlineData(typeof(ILibraryApi))]
     [InlineData(typeof(IDownloadApi))]
@@ -66,6 +68,22 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.NotNull(provider.GetRequiredService<IAuthApi>());
         Assert.NotNull(provider.GetRequiredService<ICatalogApi>());
+    }
+
+    /// <summary>
+    /// The cycle erasure would have introduced if it had gone on <c>IAuthenticationService</c>:
+    /// the account route runs on the authenticated client, whose handler needs the session
+    /// service, so a session service that needed the account client back would make the graph
+    /// unbuildable. Composing them in <c>AccountService</c> is what keeps this resolvable, and
+    /// this asserts it rather than leaving it to a comment.
+    /// </summary>
+    [Fact]
+    public void ErasureDoesNotMakeTheSessionServiceDependOnItsOwnTokenHandler()
+    {
+        using ServiceProvider provider = BuildProvider();
+
+        Assert.NotNull(provider.GetRequiredService<IAccountService>());
+        Assert.NotNull(provider.GetRequiredService<IAuthenticationService>());
     }
 
     [Fact]

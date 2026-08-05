@@ -131,6 +131,64 @@ failure to revoke is logged and the session expires on its own.
 
 ---
 
+## Erasing the account
+
+The Settings page carries it, and it is the only irreversible thing the launcher can do to a
+person's own data.
+
+```
+POST /api/v1/me/deletion    {"password": "...", "reason": "optional"}   -> 204
+```
+
+### Two presses, and the prompt is the safety
+
+Nothing is sent on the first one. `AskToDeleteAccountCommand` arms a `PendingDeletion` — the
+same shape the developer dashboard uses (D43) — and the sentence it carries is the point, not
+the button beside it. The prompt says **what survives**, because that is the part nobody
+expects: the server anonymises the account rather than deleting it, so anything a publisher
+released stays online under a deleted name so that the people who installed it can still
+update. Somebody who wanted their games gone has to delete them first, and being told that
+afterwards is being told too late.
+
+There are two wordings, chosen on whether the account holds `game.publish`. Asking the server
+how many games it published would be a request made for the sake of a sentence, and a
+publisher with none is told something harmlessly true.
+
+The password is asked for because the server requires it: a token says who is asking, not that
+the owner is at the keyboard. The box is emptied when the deletion is armed, cancelled or
+succeeds — and deliberately **kept after a refusal**, because a mistyped password is the
+likeliest way to arrive there and clearing it would mean typing it again to retry. Reopening
+the page disarms anything left armed, so a confirmation cannot be walked into.
+
+### Why it is not on `IAuthenticationService`
+
+An erasure ends a session, so the obvious home for it is the service that owns sessions. It
+cannot live there, and the reason is structural: the account route runs on the **authenticated**
+client, whose `BearerTokenHandler` depends on `IAuthenticationService`. A session service that
+needed the account client back would close a cycle the container refuses to build at all — the
+same shape D14 keeps out of `/auth`, arriving from the other direction.
+
+So `IAccountService` composes the two from outside: it calls the route, and **only if that
+succeeds** it signs out. That order is the whole of it. Signing out is a local truth the server
+is merely told about; an erasure is the server's answer, and forgetting the session after a
+refusal would leave somebody signed out of an account that still exists, unable to read the
+reason they were given. A DI test asserts the graph still builds, rather than leaving the
+reasoning in a comment.
+
+Nothing is shown when it succeeds: the sign-out raises a session change, and the shell answers
+that by showing the sign-in screen, so a status message would be written onto a page nobody is
+looking at.
+
+### What the launcher does not clean up
+
+**Installed games stay on disk**, and so do their rows in the local install store. That is
+deliberate: the files belong to the machine rather than to the account, the server never knew
+about them, and deleting somebody's games because they closed an account would be a second,
+larger action they did not ask for. The library will simply be empty the next time an account
+signs in on this machine.
+
+---
+
 ## Where the session is stored (D16)
 
 `%LOCALAPPDATA%\CustomGameLauncher\session.json` on Windows, the platform equivalent elsewhere
@@ -185,8 +243,11 @@ they are easiest to break:
 
 ## What is not implemented
 
-- **No account deletion or data export.** GDPR erasure is a server-side milestone that has not
-  been built; there is no client surface for it and no placeholder.
+- **No data export.** Erasure exists; the other half of the same regulation does not, on either
+  side. There is no route to ask the server for a copy of what it holds.
+- **No deferred erasure.** The server's own schema has a `pending` state and the launcher could
+  show a countdown, but the erasure is immediate by decision — so there is nothing to cancel and
+  no screen for cancelling it.
 - **No "remember me" / "stay signed out" distinction.** A restored session is restored; there
   is one behaviour.
 - **No second factor.** The server has none, so the client has none.

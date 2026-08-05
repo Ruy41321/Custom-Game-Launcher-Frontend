@@ -695,6 +695,33 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Version deleted.</value>
   </data>
+  <data name="Settings.Account" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Settings.DeleteAccount" xml:space="preserve">
+    <value>Delete my account</value>
+  </data>
+  <data name="Settings.DeleteAccountExplain" xml:space="preserve">
+    <value>Your account, your library and every signed-in device are removed, and this cannot be undone. Type your password to continue.</value>
+  </data>
+  <data name="Settings.DeletePassword" xml:space="preserve">
+    <value>Your password</value>
+  </data>
+  <data name="Settings.DeleteReason" xml:space="preserve">
+    <value>Why are you leaving? (optional)</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccount" xml:space="preserve">
+    <value>Delete this account for good? Your library and every signed-in device go with it, and nobody can sign in with this address again. There is no way to bring it back.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountPublisher" xml:space="preserve">
+    <value>Delete this account for good? Your library and every signed-in device go with it, and there is no way to bring it back. Anything you published stays online under a deleted name, so that the people who installed it can still update — delete those games first if you want them gone.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountButton" xml:space="preserve">
+    <value>Delete my account</value>
+  </data>
+  <data name="Settings.KeepAccount" xml:space="preserve">
+    <value>Keep my account</value>
+  </data>
   <data name="Publish.DeleteGame" xml:space="preserve">
     <value>Delete this game</value>
   </data>

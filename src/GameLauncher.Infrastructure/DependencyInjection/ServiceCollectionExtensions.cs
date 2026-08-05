@@ -52,6 +52,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITokenStore, FileTokenStore>();
         services.AddSingleton<IInstallStore, SqliteInstallStore>();
         services.AddSingleton<IAuthenticationService, AuthenticationService>();
+
+        // Erasure sits here rather than on IAuthenticationService because the account route
+        // runs on the authenticated client, whose handler depends on IAuthenticationService:
+        // the container would refuse a graph where the session service needed it back.
+        services.AddSingleton<IAccountService, AccountService>();
         services.AddTransient<BearerTokenHandler>();
 
         // The auth client deliberately carries no bearer token: refreshing has to work exactly
@@ -63,6 +68,12 @@ public static class ServiceCollectionExtensions
         // reads before it knows whether it can sign in at all, and the route needs no token.
         services.AddHttpClient<ICapabilitiesApi, CapabilitiesApiClient>(ConfigureClient);
         services.AddSingleton<IServerCapabilityProvider, CachedServerCapabilityProvider>();
+
+        // Authenticated, unlike the auth client beside it: erasing an account is something a
+        // signed-in account does to itself, and the password in the body is a second proof
+        // rather than the first one.
+        services.AddHttpClient<IAccountApi, AccountApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<BearerTokenHandler>();
 
         services.AddHttpClient<ICatalogApi, CatalogApiClient>(ConfigureClient)
             .AddHttpMessageHandler<BearerTokenHandler>();

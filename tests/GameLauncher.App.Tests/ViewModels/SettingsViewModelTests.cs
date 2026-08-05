@@ -1,10 +1,13 @@
 using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
+using GameLauncher.Core.Api;
+using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace GameLauncher.App.Tests.ViewModels;
 
@@ -15,13 +18,21 @@ public sealed class SettingsViewModelTests
     private readonly IInstallStore _installs = Substitute.For<IInstallStore>();
     private readonly IFolderPicker _folders = Substitute.For<IFolderPicker>();
     private readonly IThemeSwitcher _theme = Substitute.For<IThemeSwitcher>();
+    private readonly IAccountService _account = Substitute.For<IAccountService>();
+    private readonly IAuthenticationService _authentication =
+        Substitute.For<IAuthenticationService>();
+
     private readonly ResourceManagerLocalizationService _localization = new("en");
+    private readonly ApiErrorPresenter _errors;
+
+    public SettingsViewModelTests() => _errors = new ApiErrorPresenter(_localization);
 
     private SettingsViewModel CreateViewModel()
     {
         _paths.DefaultInstallDirectory.Returns("/home/luigi/Games");
         return new SettingsViewModel(
-            _store, _paths, _installs, _folders, _theme, _localization);
+            _store, _paths, _installs, _folders, _theme, _account, _authentication,
+            _errors, _localization);
     }
 
     private void Stored(UserSettings settings) =>
@@ -134,5 +145,143 @@ public sealed class SettingsViewModelTests
 
         Assert.Equal("system", model.ThemeVariant);
         Assert.Contains("system", model.Themes);
+    }
+
+    // --- erasing the account ---------------------------------------------------------------
+
+    private async Task<SettingsViewModel> LoadedPage()
+    {
+        Stored(new UserSettings());
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        return model;
+    }
+
+    [Fact]
+    public async Task NothingIsSentUntilTheSecondPress()
+    {
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+
+        model.AskToDeleteAccountCommand.Execute(null);
+
+        Assert.True(model.HasPendingDeletion);
+        await _account.DidNotReceive().DeleteAsync(
+            Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ConfirmingSendsThePasswordAndTheReason()
+    {
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+        model.DeleteReason = "moving on";
+
+        model.AskToDeleteAccountCommand.Execute(null);
+        await model.ConfirmDeletionCommand.ExecuteAsync(null);
+
+        await _account.Received(1).DeleteAsync(
+            "hunter2", "moving on", Arg.Any<CancellationToken>());
+        Assert.False(model.HasPendingDeletion);
+        Assert.Empty(model.DeletePassword);
+    }
+
+    /// <summary>
+    /// The prompt is the safety, not the button, so what it says is asserted on. This is the
+    /// part somebody in this position does not expect: the account goes and the games do not.
+    /// </summary>
+    [Fact]
+    public async Task APublisherIsToldTheirGamesSurviveTheirAccount()
+    {
+        _authentication.HasPermission(Permissions.GamePublish).Returns(true);
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+
+        model.AskToDeleteAccountCommand.Execute(null);
+
+        Assert.NotNull(model.PendingDeletion);
+        Assert.Contains(
+            "stays online", model.PendingDeletion.Prompt, StringComparison.Ordinal);
+        Assert.Contains(
+            "delete those games first",
+            model.PendingDeletion.Prompt,
+            StringComparison.Ordinal);
+    }
+
+    // A player has nothing published, so the sentence about published games would be noise.
+    [Fact]
+    public async Task APlayerIsNotToldAboutGamesTheyNeverPublished()
+    {
+        _authentication.HasPermission(Permissions.GamePublish).Returns(false);
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+
+        model.AskToDeleteAccountCommand.Execute(null);
+
+        Assert.NotNull(model.PendingDeletion);
+        Assert.DoesNotContain(
+            "stays online", model.PendingDeletion.Prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task CancellingSendsNothingAndForgetsThePassword()
+    {
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+        model.AskToDeleteAccountCommand.Execute(null);
+
+        model.CancelDeletionCommand.Execute(null);
+
+        Assert.False(model.HasPendingDeletion);
+        Assert.Empty(model.DeletePassword);
+        await _account.DidNotReceive().DeleteAsync(
+            Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>());
+    }
+
+    // An empty password is a round trip the server can only refuse.
+    [Fact]
+    public async Task TheButtonIsOffUntilAPasswordIsTyped()
+    {
+        SettingsViewModel model = await LoadedPage();
+
+        Assert.False(model.CanDeleteAccount);
+        model.DeletePassword = "hunter2";
+        Assert.True(model.CanDeleteAccount);
+    }
+
+    /// <summary>
+    /// A mistyped password is the likeliest reason to be here, so the box keeps what was typed
+    /// and the refusal is shown as itself rather than as a generic failure.
+    /// </summary>
+    [Fact]
+    public async Task AWrongPasswordIsReportedAndTheBoxKeepsWhatWasTyped()
+    {
+        _account.DeleteAsync(Arg.Any<string>(), Arg.Any<string?>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Unauthenticated, "the password is incorrect"));
+
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "wrong";
+        model.AskToDeleteAccountCommand.Execute(null);
+
+        await model.ConfirmDeletionCommand.ExecuteAsync(null);
+
+        Assert.NotNull(model.ErrorMessage);
+        Assert.Equal("wrong", model.DeletePassword);
+        Assert.False(model.IsDeleting);
+    }
+
+    // Reopening the page must not present a confirmation somebody could walk into.
+    [Fact]
+    public async Task ReloadingThePageDisarmsAnythingLeftArmed()
+    {
+        SettingsViewModel model = await LoadedPage();
+        model.DeletePassword = "hunter2";
+        model.AskToDeleteAccountCommand.Execute(null);
+        Assert.True(model.HasPendingDeletion);
+
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.HasPendingDeletion);
+        Assert.Empty(model.DeletePassword);
     }
 }
