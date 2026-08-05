@@ -17,8 +17,17 @@ public sealed class ExploreViewModelTests
 
     private readonly IImageProvider _images = Substitute.For<IImageProvider>();
 
+    private readonly FakeTimeProvider _clock =
+        new(new DateTimeOffset(2026, 8, 5, 12, 0, 0, TimeSpan.Zero));
+
     private ExploreViewModel CreateViewModel() =>
-        new(_catalog, _library, new ApiErrorPresenter(_localization), _localization, _images);
+        new(
+            _catalog,
+            _library,
+            new ApiErrorPresenter(_localization),
+            _localization,
+            _images,
+            _clock);
 
     private static PagedResult<Game> PageOf(int total, int limit, int offset, params string[] titles) =>
         new()
@@ -239,12 +248,134 @@ public sealed class ExploreViewModelTests
         Assert.Equal("O", card.CoverPlaceholder);
     }
 
+    /// <summary>
+    /// A request that never answers of its own accord, so a test can watch what happens to it
+    /// when the next one starts.
+    /// </summary>
+    private static Task<PagedResult<Game>> NeverAnswers(CancellationToken cancellationToken)
+    {
+        TaskCompletionSource<PagedResult<Game>> pending = new();
+        cancellationToken.Register(() => pending.TrySetCanceled(cancellationToken));
+        return pending.Task;
+    }
+
+    private List<CancellationToken> RecordTokensAndNeverAnswer()
+    {
+        List<CancellationToken> asked = [];
+
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                CancellationToken token = call.Arg<CancellationToken>();
+                asked.Add(token);
+                return NeverAnswers(token);
+            });
+
+        return asked;
+    }
+
+    // Typing a word was one request per letter, of which only the last was ever read.
+    [Fact]
+    public async Task TypingAWordIsOneRequest()
+    {
+        Returns(PageOf(0, 20, 0));
+        ExploreViewModel model = CreateViewModel();
+
+        model.SearchText = "orb";
+        model.SearchText = "orbi";
+        _clock.Advance(TimeSpan.FromMilliseconds(200));
+        await Task.Yield();
+
+        // Still typing: the pause the debounce waits for has not happened yet.
+        await _catalog.DidNotReceive().ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+
+        model.SearchText = "orbital";
+        _clock.Advance(TimeSpan.FromMilliseconds(300));
+        await Task.Yield();
+
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Search == "orbital" && query.Page == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    // The debounce alone would still leave a race: a slow answer for "orb" landing after the
+    // answer for "orbital" is not a wasted request, it is the wrong results on screen.
+    [Fact]
+    public async Task ANewSearchCancelsTheOneStillInFlight()
+    {
+        List<CancellationToken> asked = RecordTokensAndNeverAnswer();
+        ExploreViewModel model = CreateViewModel();
+
+        Task first = model.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.False(first.IsCompleted);
+
+        model.SearchText = "orbital";
+        _clock.Advance(TimeSpan.FromMilliseconds(300));
+
+        Assert.Equal(2, asked.Count);
+        Assert.True(asked[0].IsCancellationRequested);
+        Assert.False(asked[1].IsCancellationRequested);
+
+        await first;
+    }
+
+    // Cancelling is how the launcher keeps up with typing, so it must not read as a failure.
+    [Fact]
+    public async Task ASearchThatWasSupersededLeavesNoErrorOnScreen()
+    {
+        RecordTokensAndNeverAnswer();
+        ExploreViewModel model = CreateViewModel();
+
+        Task first = model.LoadAsync(TestContext.Current.CancellationToken);
+
+        model.SearchText = "orbital";
+        _clock.Advance(TimeSpan.FromMilliseconds(300));
+        await first;
+
+        Assert.Null(model.ErrorMessage);
+
+        // Nor as emptiness: nothing has been answered yet, and "no games match" would be a lie.
+        Assert.False(model.IsEmpty);
+
+        // The search that replaced it is still running, so the page still says it is working.
+        Assert.True(model.IsBusy);
+    }
+
+    [Fact]
+    public async Task PressingEnterSearchesWithoutWaitingForTheDebounce()
+    {
+        Returns(PageOf(0, 20, 0));
+        ExploreViewModel model = CreateViewModel();
+        model.SearchText = "orbital";
+
+        await model.SearchCommand.ExecuteAsync(null);
+
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Search == "orbital"), Arg.Any<CancellationToken>());
+
+        // And the pending debounce is dropped rather than repeating the same search a moment
+        // later, which the user would see as the page reloading for no reason.
+        _clock.Advance(TimeSpan.FromSeconds(1));
+        await Task.Yield();
+
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public void TheSortNamesFollowTheChosenLanguage()
     {
         var localization = new ResourceManagerLocalizationService("en");
         var model = new ExploreViewModel(
-            _catalog, _library, new ApiErrorPresenter(localization), localization, _images);
+            _catalog,
+            _library,
+            new ApiErrorPresenter(localization),
+            localization,
+            _images,
+            _clock);
 
         Assert.Equal("Release date", model.SortOptions[0].Name);
 

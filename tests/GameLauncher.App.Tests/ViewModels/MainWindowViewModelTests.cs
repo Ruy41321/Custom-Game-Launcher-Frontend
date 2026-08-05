@@ -57,7 +57,13 @@ public sealed class MainWindowViewModelTests
             _authentication,
             _installations,
             new LoginViewModel(_authentication, errors, _localization),
-            new ExploreViewModel(_catalog, _library, errors, _localization, _images),
+            new ExploreViewModel(
+                _catalog,
+                _library,
+                errors,
+                _localization,
+                _images,
+                new FakeTimeProvider(DateTimeOffset.UnixEpoch)),
             new LibraryViewModel(
                 _library,
                 Substitute.For<IInstallStore>(),

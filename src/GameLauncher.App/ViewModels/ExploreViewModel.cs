@@ -29,13 +29,35 @@ public sealed class StoreCardViewModel(Game game) : GameCoverCardViewModel(game)
 /// The store front. Paging, sorting and searching are all the server's decisions — this only
 /// asks and renders, which is why an older client cannot be broken by a new sort order.
 /// </summary>
-public sealed partial class ExploreViewModel : ViewModelBase
+public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
 {
+    /// <summary>
+    /// How long the box waits after the last keystroke. Long enough that typing a word is one
+    /// request instead of one per letter, and short enough that somebody who has stopped typing
+    /// does not experience it as a pause — around a fifth of a second is where a delay starts
+    /// being felt, and the request itself costs more than this either way.
+    /// </summary>
+    private static readonly TimeSpan SearchDebounce = TimeSpan.FromMilliseconds(300);
+
     private readonly ICatalogApi _catalog;
     private readonly ILibraryApi _library;
     private readonly IApiErrorPresenter _errors;
     private readonly ILocalizationService _localization;
     private readonly IImageProvider _images;
+    private readonly TimeProvider _time;
+
+    /// <summary>
+    /// Armed by a keystroke and rearmed by the next one, so only the pause at the end of the
+    /// word fires it. Created lazily: a page nobody types into never needs one.
+    /// </summary>
+    private ITimer? _debounce;
+
+    /// <summary>
+    /// The request currently in flight, so a newer one can stop it. Owned by the call that
+    /// created it, which disposes it in its own <c>finally</c> whether it finished or was
+    /// superseded.
+    /// </summary>
+    private CancellationTokenSource? _inFlight;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -67,13 +89,15 @@ public sealed partial class ExploreViewModel : ViewModelBase
         ILibraryApi library,
         IApiErrorPresenter errors,
         ILocalizationService localization,
-        IImageProvider images)
+        IImageProvider images,
+        TimeProvider time)
     {
         _catalog = catalog;
         _library = library;
         _errors = errors;
         _localization = localization;
         _images = images;
+        _time = time;
 
         SortOptions =
         [
@@ -113,6 +137,17 @@ public sealed partial class ExploreViewModel : ViewModelBase
     [RelayCommand]
     public async Task LoadAsync(CancellationToken cancellationToken)
     {
+        // A newer request stops the one it replaces rather than racing it. Without this, a slow
+        // answer for "orb" arriving after the answer for "orbital" is not merely a wasted
+        // request — it is the wrong results left on screen, which no amount of debouncing makes
+        // impossible.
+        CancellationTokenSource request =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        CancellationTokenSource? superseded = _inFlight;
+        _inFlight = request;
+        superseded?.Cancel();
+
         IsBusy = true;
         ErrorMessage = null;
         OnPropertyChanged(nameof(IsEmpty));
@@ -127,7 +162,7 @@ public sealed partial class ExploreViewModel : ViewModelBase
                         Sort = SelectedSort.Sort,
                         Page = Page,
                     },
-                    cancellationToken)
+                    request.Token)
                 .ConfigureAwait(true);
 
             Games.Clear();
@@ -140,6 +175,13 @@ public sealed partial class ExploreViewModel : ViewModelBase
             PageCount = result.PageCount;
             HasLoaded = true;
         }
+        catch (OperationCanceledException)
+        {
+            // A search nobody is waiting for any more: the user typed another letter, or left
+            // the page. Neither is a failure, and putting one where the results will be would
+            // make ordinary typing look broken.
+            return;
+        }
         catch (ApiException exception)
         {
             ErrorMessage = _errors.Describe(exception);
@@ -147,10 +189,19 @@ public sealed partial class ExploreViewModel : ViewModelBase
         }
         finally
         {
-            IsBusy = false;
-            OnPropertyChanged(nameof(IsEmpty));
-            OnPropertyChanged(nameof(HasNextPage));
-            OnPropertyChanged(nameof(HasPreviousPage));
+            // Only the request that is still the current one owns what is on screen. A
+            // superseded one clearing the busy indicator would clear it for the search that
+            // replaced it and is still running.
+            if (ReferenceEquals(_inFlight, request))
+            {
+                _inFlight = null;
+                IsBusy = false;
+                OnPropertyChanged(nameof(IsEmpty));
+                OnPropertyChanged(nameof(HasNextPage));
+                OnPropertyChanged(nameof(HasPreviousPage));
+            }
+
+            request.Dispose();
         }
 
         // After the grid is on screen: the titles are the page, and a cover that has not
@@ -161,13 +212,43 @@ public sealed partial class ExploreViewModel : ViewModelBase
         }
     }
 
-    /// <summary>A new search starts from the first page; staying on page 4 would show nothing.</summary>
+    /// <summary>
+    /// Enter, or the search button. It searches at once and drops any pending debounce:
+    /// somebody who presses Enter has already said they have finished typing, so the pause the
+    /// debounce waits for has nobody left to wait for.
+    ///
+    /// A new search starts from the first page; staying on page 4 would show nothing.
+    /// </summary>
     [RelayCommand]
     private Task SearchAsync(CancellationToken cancellationToken)
     {
+        Disarm();
         Page = 1;
         return LoadAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Every keystroke rearms the timer, so only the pause at the end fires it. The delay comes
+    /// from <see cref="TimeProvider"/> rather than from <c>Task.Delay</c> so a test advances it
+    /// by hand instead of sleeping: a debounce a test really waits out is a slow test that
+    /// eventually fails on a loaded machine rather than on a bug.
+    /// </summary>
+    partial void OnSearchTextChanged(string value)
+    {
+        _debounce ??= _time.CreateTimer(
+            _ => OnUiThread(() =>
+            {
+                Page = 1;
+                _ = LoadAsync(CancellationToken.None);
+            }),
+            state: null,
+            Timeout.InfiniteTimeSpan,
+            Timeout.InfiniteTimeSpan);
+
+        _debounce.Change(SearchDebounce, Timeout.InfiniteTimeSpan);
+    }
+
+    private void Disarm() => _debounce?.Change(Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
 
     [RelayCommand]
     private Task NextPageAsync(CancellationToken cancellationToken)
@@ -222,4 +303,19 @@ public sealed partial class ExploreViewModel : ViewModelBase
     }
 
     partial void OnSelectedSortChanged(SortOption value) => Page = 1;
+
+    /// <summary>
+    /// The page lives as long as the window, so this runs when the container is torn down. It
+    /// exists because the view model owns a timer and a cancellation source, not because
+    /// anything here is expected to be reclaimed early.
+    /// </summary>
+    public void Dispose()
+    {
+        _debounce?.Dispose();
+        _debounce = null;
+
+        _inFlight?.Cancel();
+        _inFlight?.Dispose();
+        _inFlight = null;
+    }
 }
