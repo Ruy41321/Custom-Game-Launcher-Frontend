@@ -16,7 +16,8 @@ friends and small tester groups without zip files on Discord or manual Drive lin
 
 This repository is the **client**: an Avalonia application for **Windows, Linux and macOS**.
 It handles authentication, library and store browsing, resumable delta downloads, install
-management, game launching, and updating itself.
+management, game launching, and publishing — builds, artwork and the devlog — from the
+developer dashboard. Updating *itself* is designed and not implemented; see §10.
 
 Anyone can fork it and rebrand it by editing a single `launcher.config.json`.
 
@@ -108,6 +109,10 @@ belongs in Infrastructure behind an interface declared in Core.
 | D38 | **The devlog is paged from the page itself, and its failures are its own** | It is an unbounded list next to a fixed-size one, so it arrives after the page and grows on request; the page number is derived from how many entries are already shown, which makes a reload and a "show older" the same call and makes fetching a page twice impossible. `DevlogError` is separate from `ErrorMessage` because the devlog is the least important thing on the page: a game that can still be installed and played must not be replaced by an apology about its blog. Bodies are rendered as text — rendering remote Markdown is rendering remote markup, for a feature that does not need it. | One error field (a devlog outage looks like a broken page); fetching the whole devlog with the detail (an unbounded list inside a fixed response); a Markdown renderer (remote markup, and a dependency, for a few paragraphs) |
 | D39 | **The client asks the server what it accepts, and falls back rather than failing when it cannot** | The chunk size, the largest blob, the path length and the file count were constants copied from the server's defaults, so a deployment that narrowed one broke publishing with an error that did not name the limit. `GET /api/v1/capabilities` needs no token, so it rides on the tokenless client beside `/auth`: asking for one would mean refreshing a session before the launcher knows it can reach this server at all. The provider caches for fifteen minutes rather than for the process, so a reconfigured server does not need everybody to restart, and it **never throws** — an unreachable server, or one older than the route, yields `ServerCapabilities.Fallback`, because refusing to publish over a document *about* publishing would be worse than the guessing it replaces. A failure is not cached. The announced chunk size is obeyed exactly, capped only by what this client will allocate: a remote number reaching `new byte[]` unchecked is how a misconfigured deployment becomes an out-of-memory failure on a user's laptop. | Caching for the process (a reconfigured server needs every launcher restarted); treating a missing document as fatal (an older server becomes unusable for a limit that has a sane default); trusting the announced size unclamped (remote input sizing an allocation) |
 | D40 | **Only the *numbers* of the manifest path rules come from the server; the shape rules stay client-side** | `ManifestPathRules` no longer hard-codes `maxPathLength` or `maxFiles` — those are the server's to state. The structural refusals do stay: no absolute path, no `..`, no backslash, no control character. They are what makes a path safe to resolve inside an install directory, which is this machine's problem and not the server's (D24), so the client would keep enforcing them even against a server that stopped. That splits the old debt in two rather than pretending it is closed: the part that could drift is gone, the part that must not is deliberate. | Fetching the whole rule set as data (a path grammar over the wire, for rules that protect the client from the server); leaving the numbers hard-coded (the drift this closes) |
+| D41 | **The client sniffs an image to refuse it early, never to vouch for it, and declares no content type when uploading** | The server decides what an image is from its leading bytes and ignores what an uploader declares, because that answer becomes the `Content-Type` of a **public** URL (D28 of the backend). So the upload sends `application/octet-stream`: naming `image/png` would be a guess dressed as a fact and an invitation for a later reader to trust it. The client still checks the signature, but only so a file that is obviously not PNG/JPEG/WebP is refused before gigabytes — or a cover — travel; a positive answer is never treated as sufficient. **SVG is not recognised on either side**, because it is a document format that can carry script rather than a picture. `ImageFormats` therefore moved from Infrastructure to Core: the artwork loader and the uploader apply the same rule for the same reason, and one rule with two implementations is one rule that will eventually disagree with itself. | Declaring the sniffed type (a claim the server ignores and a reader believes); trusting the client's sniff as sufficient (the server is the authority, and it re-checks anyway); no client-side check (an upload spent to be told no); a second copy of the signature table in the publisher (drift between the side that fetches images and the side that sends them) |
+| D42 | **A picker returns bytes, not a path, and image validation reads the server's announced limits with no constant of its own** | `IFilePicker` hands back the file's contents because a view model that received a path would have to read it — I/O in a view model, and a *second* untestable step next to the dialog; here the dialog and the read are one operation and one substitution replaces both. Its read is capped so a hostile or mistaken file cannot be pulled into memory unbounded, and the real refusal happens afterwards in `MediaUploadRules`, which reads `media.maxBytes`, `maxScreenshotsPerGame` and `maxAltTextLength` from `IServerCapabilityProvider` (D39) and hard-codes none of them. The limits are shown on the page **before a file is chosen**, which is the whole point: a publisher learns what the deployment accepts from the page rather than from a refusal after the upload. The gallery cap applies to screenshots only — uploading another cover *is* how a cover is replaced, and counting those would refuse a legitimate replacement. | Returning a path (I/O in a view model, and a second thing to substitute); an uncapped read (a remote-sized allocation, locally); constants copied from the server repository (the debt D39 closed, reopened on a new surface); validating only after the upload (the refusal costs the transfer) |
+| D43 | **A deletion is armed as view-model state that says what disappears, not performed on a click and not shown through a dialog service** | Every deletion here is irreversible — the server has no undo route and the collector eventually reclaims the bytes — so the sentence the user reads is part of the safety, not decoration: "this version and its 3 builds" is actionable and "are you sure?" is not. `PendingDeletion` carries that sentence and the call, and nothing is sent until a second command runs. A dialog behind an interface would work equally well in the app and be a **second thing no test can drive**, and D32 spends that budget on the file picker alone; as state, a test arms the deletion, asserts on **exactly what the user is told**, and then confirms or cancels — so the wording is covered, which is the half that actually protects somebody's build. The devlog's prompt names the reversible alternative, because somebody who wants a post to stop being visible almost always wants to withdraw it. | A confirmation dialog behind an `IDialogService` (a second untestable step, and the wording goes uncovered); deleting on the click with an undo toast (there is nothing to undo with); a generic "are you sure?" (says nothing about what is at stake) |
+| D44 | **The dashboard's four surfaces are child view models under one page, shown as tabs** | A publisher works on **one game at a time**, so the selected game is the context the builds, the details, the artwork and the devlog all share. Separate pages would mean selecting it three times, or a shared navigation state D17 deliberately does not have — the shell knows its children and the children raise events, and a page that needed to tell another page which game it was looking at would be the cycle D17 exists to prevent. Tabs over child view models are *binding*, not navigation, so nothing about the one-way rule changes. The split also buys three readable test classes instead of one 1,200-line one, which is the practical reason it survived: a view model whose tests are hard to read is a view model whose next feature ships untested. The editor announces a save with an event and the dashboard swaps the row, with the selection reload suppressed while it does — assigning `SelectedGame` otherwise means "the publisher picked another game", and letting a save mean that refetches the detail, reloads three children and wipes a message nobody has read. | One enormous `DeveloperViewModel` (untestable in practice, and the tests are what would go); four navigable pages (three extra selections, or a cycle); a game picked once and cached in a shared service (a locator by another name — see §2) |
 
 ---
 
@@ -250,6 +255,9 @@ is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
 | **A `Task<T>`-returning member of an unconfigured substitute yields `default(T)`, not an empty document** | `GetPatchNotesAsync` returned a null `PagedResult`, so every existing detail test crashed with a `NullReferenceException` inside the view model the moment the page started loading a devlog. Any new call a shared view model makes on every load has to be arranged in every test class that builds it |
 | **`Bitmap` cannot be constructed without an initialised Avalonia** | Which is why decoding sits behind `IImageProvider` (D37). A test can substitute the interface and assert *which URL was asked for*; it cannot assert on a decoded picture, and trying to construct one is how a view-model test starts needing a UI toolkit |
 | **`ReadOnlySpan<byte>.SequenceEqual` needs the other side to be a span, not a collection literal** | `bytes[..8].SequenceEqual([0x89, …])` binds to the `int` overload and fails to compile with a message about `Span<int>`. Put the signature in a `static ReadOnlySpan<byte> X => [...]` property and compare against that |
+| **NSubstitute's `Arg.Is<T>` lambda parameter is nullable, and `TreatWarningsAsErrors` is on** | `Arg.Is<GameChanges>(changes => changes.Summary == "…")` fails the build with CS8602, not with a test failure — so a whole test file stops compiling over an assertion that is correct. Write `changes!.Summary` on the **first** dereference in the lambda, as the existing `Arg.Is<GameQuery>(query => query!.Search …)` does. A blanket search-and-replace misses the multi-line form, where the parameter and the first use are on different lines |
+| **A `[RelayCommand]` on a `partial void On…Changed` path runs without a `SynchronizationContext` in a test** | `OnSelectedGameChanged` starts its load with a bare `_ =`, so in a test the continuation only runs when the thread is yielded. A test that sets `SelectedGame` and asserts immediately sees the state from *before* the load. `await Task.Yield()` after the assignment is what makes it deterministic — this is the same class of problem as the `Progress<T>` row below, from the other direction |
+| **A resx written from PowerShell needs LF and no BOM, and the three files must be edited in one pass** | Two convention tests enforce that English, Italian and French carry the same keys, and `dotnet format` fails a file with a BOM (`error CHARSET`) or CRLF. Adding ~50 keys by hand across three files is how one language ends up short; generate all three from one table with `[System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding $false))` after replacing `` `r`n `` with `` `n `` |
 | **`Progress<T>` posts its callback to a captured context** | With no `SynchronizationContext` — which is every test — that means the thread pool, so a test that asserts on what a progress callback recorded is asserting on whether the pool has caught up. Both test projects have a synchronous `IProgress<T>` for this; the view model funnels every report through one property so the same path is exercised either way |
 
 ---
@@ -458,19 +466,53 @@ Open debt 9 of `HANDOFF.md`, the client half, and the numeric part of debt 12.
   the server's `maxBlobBytes`, `maxFiles` and `maxPathLength` (D40)
 - ✅ 487/487 tests green (150 Core, 208 Infrastructure, 129 App), `dotnet format` clean
 
+### `Documentation/` per module — verified on 2026-08-05
+
+Open debt 4 of `HANDOFF.md`. This repository had only `architecture.md` from day one, and it is
+the repository a new contributor orients themselves in most: it is the one that explains what
+the user sees, and it is open source.
+
+- ✅ Eight documents, matching the backend's granularity, indexed in the README:
+  `architecture` (rewritten), `authentication-and-session`, `catalog-and-artwork`,
+  `downloads-and-installs`, `launching-games`, `publishing`, `configuration-and-localization`,
+  `logging-and-local-state`
+- ✅ Each states what is **deliberately not implemented** rather than leaving it to be inferred
+- ✅ Two stale README claims corrected: the status line predated authentication, and the feature
+  list advertised self-updating as if it worked
+
+### The dashboard modifies what it publishes — verified on 2026-08-05
+
+Open debt 2 in *writing* and the whole of open debt 10. Eight server routes had no caller: a
+publisher uploaded a cover with `curl`, and a game created as a draft was published from
+outside the launcher.
+
+- ✅ Eight methods on `IPublishingApi`, never on `ICatalogApi` (D30): media upload / edit /
+  delete, patch-note create / edit / delete, `DELETE` on builds and versions
+- ✅ `MediaUploadRules` validates against `MediaCapabilities` with **no constant of its own** —
+  the last piece of open debt 9 (D42). The limits are on the page *before* a file is chosen
+- ✅ `ImageFormats` moved to Core and is shared by the loader and the uploader; the client
+  sniffs to refuse early and never to vouch, and declares no content type (D41)
+- ✅ Three child view models under one page, shown as tabs (D44): `GameEditorViewModel`,
+  `GameMediaViewModel`, `GameDevlogViewModel`
+- ✅ Gallery reordering as two arrows, each swap two explicit `PATCH`es
+- ✅ `PendingDeletion`: a deletion is armed with a sentence that says what disappears, and the
+  wording is asserted on (D43)
+- ✅ `IFilePicker` joins `IFolderPicker` as the only untestable step; it returns bytes, capped
+- ✅ 57 new resource keys in English, Italian and French
+- ✅ 575 tests green (167 Core, 223 Infrastructure, 185 App), `dotnet format` clean
+
 ### Next up
 
-The numbering is shared with the backend repository, and this file briefly disagreed with it:
-`M9` there has always meant the localhost admin GUI. Self-update is not a numbered milestone —
-it was part of M8 in the original plan and came out of it because it cannot be built here
-alone.
+The numbering is shared with the backend repository. Self-update is not a numbered milestone —
+it was part of M8 in the original plan and came out of it because it cannot be built here alone.
 
-- ⬜ **M9** Localhost admin web GUI (backend): users, roles, quotas, and the download analytics
-  that currently land in a table nobody can read
-- ⬜ **M10** `Documentation/` per module — this repository still has only `architecture.md`
-  from day one — plus crash-report upload
+- ⬜ **M10** (backend-led) security hardening, GDPR erasure, crash-report upload. The client
+  half of the last one is `SendCrashReports`, which is in `UserSettings` and read by nothing —
+  which is why the Settings page does not show it
 - ⬜ **Self-update**, once there is a launcher-release surface on the server to talk to. The
   client half is a stub with its command line already designed; the swap is unwritten
+- ⬜ **Smaller, and worth doing before either**: `coverUrl` on the install row, so the library
+  has covers offline (open debt 11); a debounce on the Explore search box (open debt 7)
 
 ---
 

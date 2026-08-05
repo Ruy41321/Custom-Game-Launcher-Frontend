@@ -35,9 +35,10 @@ The rule has a mechanical consequence worth stating, because it is the one a new
 runs into first: **if a type needs `HttpClient`, Avalonia or the file system, it does not go in
 Core — an interface for it goes in Core and the type goes in Infrastructure or App.**
 `IImageLoader` is in Core and `CachingImageLoader` is in Infrastructure. `IGameLauncher` is in
-Core and `ProcessGameLauncher` is in Infrastructure. `IFolderPicker` and `IImageProvider` are in
-App rather than Core, because what they hand back — a chosen path, a decoded `Bitmap` — is an
-Avalonia type, and pushing them down would drag Avalonia into Core to save one file.
+Core and `ProcessGameLauncher` is in Infrastructure. `IFolderPicker`, `IFilePicker` and
+`IImageProvider` are in App rather than Core, because what they wrap — Avalonia's storage
+provider, a decoded `Bitmap` — is an Avalonia type, and pushing them down would drag Avalonia
+into Core to save one file.
 
 ### What breaks if you change it
 
@@ -248,6 +249,8 @@ Stated explicitly, because the alternative is a reader inferring it from silence
   (D7) — but the swap is unwritten, and it cannot be finished in this repository alone: it
   needs a launcher-release surface on the server (releases, channels, signature verification)
   that does not exist yet. It is **not** a numbered milestone.
+- **Deleting a game.** Builds and versions can be deleted; a game cannot, on either side. It is
+  designed together with account erasure, because it is the same question: what survives whom.
 - **Crash-report upload.** Crash reports are written to disk and nothing transmits them; see
   [logging-and-local-state.md](logging-and-local-state.md).
 - **`UserSettings.SendCrashReports` and `LaunchMinimized`** exist in the model and are read by

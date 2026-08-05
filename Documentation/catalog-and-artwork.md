@@ -186,18 +186,32 @@ own and nobody else does.
 
 ---
 
+## The publisher's side
+
+Uploading a picture, describing it, reordering the gallery and writing a devlog entry are all
+done from the developer dashboard — see [publishing.md](publishing.md), which covers the write
+routes, the validation against the server's announced limits, and why the gallery is reordered
+with two arrows rather than a drag.
+
+Two rules from this document apply there in reverse:
+
+- **The client does not decide what an image is.** It refuses what is obviously not PNG, JPEG
+  or WebP to save a pointless upload, and never treats a positive answer as a guarantee. SVG is
+  refused on both sides.
+- **A picture is never replaced in place.** There is no route that swaps bytes under an existing
+  id, so changing a cover is uploading a new one and removing the old.
+
+---
+
 ## What is not implemented
 
 Stated explicitly:
 
-- **The read side is complete; the write side is not.** No screen uploads an image, edits alt
-  text, reorders a gallery or writes a devlog entry. The server has had four media routes and
-  four patch-note routes since 2026-08-04, and a publisher does all of it with `curl` today.
-  This is an open debt, tracked alongside the developer dashboard's other missing edits.
-- **`media.maxBytes`, `maxScreenshotsPerGame` and `maxAltTextLength` are read from
-  `/capabilities` and displayed nowhere**, because nothing uploads a picture yet.
 - **No full-screen screenshot viewer.** The gallery is a hero image plus a thumbnail strip.
 - **No search debounce and no infinite scroll** in Explore.
+- **No Markdown rendering.** Devlog bodies are shown as text, on both the player's page and the
+  publisher's — rendering remote markup is a decision this feature does not need.
+- **Offline, the library shows no covers**, because the install row does not keep `coverUrl`.
 
 ## Related documents
 
