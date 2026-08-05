@@ -14,6 +14,12 @@ public sealed class PublishingApiClient(HttpClient httpClient) : IPublishingApi
     /// <summary>The content type the upload protocol uses for a chunk, as tus does.</summary>
     private const string ChunkContentType = "application/offset+octet-stream";
 
+    /// <summary>
+    /// What an image upload declares: nothing. The server sniffs the leading bytes and never
+    /// reads this header, so saying <c>image/png</c> would be a guess dressed as a fact.
+    /// </summary>
+    private const string UnknownContentType = "application/octet-stream";
+
     private readonly ApiTransport _transport = new(httpClient);
 
     public Task<Game> CreateGameAsync(
@@ -87,7 +93,64 @@ public sealed class PublishingApiClient(HttpClient httpClient) : IPublishingApi
         _transport.PostAsync<GameBuild>(
             BuildPath(buildId) + "/manifest", manifest, cancellationToken);
 
+    public Task<GameMedia> UploadMediaAsync(
+        string idOrSlug, MediaUpload upload, CancellationToken cancellationToken = default) =>
+        _transport.PostBytesAsync<GameMedia>(
+            GamePath(idOrSlug) + "/media"
+                + "?kind=" + Uri.EscapeDataString(WireName(upload.Kind))
+                + "&altText=" + Uri.EscapeDataString(upload.AltText)
+                + "&sortOrder=" + upload.SortOrder.ToString(CultureInfo.InvariantCulture),
+            upload.Content,
+            // Deliberately not an image type. The server decides what these bytes are from the
+            // bytes, and a client that named a type would be claiming something it cannot know
+            // — and inviting a later reader to believe the claim.
+            UnknownContentType,
+            cancellationToken);
+
+    public Task<GameMedia> UpdateMediaAsync(
+        string mediaId, MediaChanges changes, CancellationToken cancellationToken = default) =>
+        _transport.PatchAsync<GameMedia>(MediaPath(mediaId), changes, cancellationToken);
+
+    public Task DeleteMediaAsync(string mediaId, CancellationToken cancellationToken = default) =>
+        _transport.DeleteAsync(MediaPath(mediaId), cancellationToken);
+
+    public Task<PatchNote> CreatePatchNoteAsync(
+        string idOrSlug,
+        CreatePatchNoteRequest request,
+        CancellationToken cancellationToken = default) =>
+        _transport.PostAsync<PatchNote>(
+            GamePath(idOrSlug) + "/patch-notes", request, cancellationToken);
+
+    public Task<PatchNote> UpdatePatchNoteAsync(
+        string noteId, PatchNoteChanges changes, CancellationToken cancellationToken = default) =>
+        _transport.PatchAsync<PatchNote>(PatchNotePath(noteId), changes, cancellationToken);
+
+    public Task DeletePatchNoteAsync(
+        string noteId, CancellationToken cancellationToken = default) =>
+        _transport.DeleteAsync(PatchNotePath(noteId), cancellationToken);
+
+    public Task DeleteBuildAsync(string buildId, CancellationToken cancellationToken = default) =>
+        _transport.DeleteAsync(BuildPath(buildId), cancellationToken);
+
+    public Task DeleteVersionAsync(
+        string idOrSlug, string versionId, CancellationToken cancellationToken = default) =>
+        _transport.DeleteAsync(
+            GamePath(idOrSlug) + "/versions/" + Uri.EscapeDataString(versionId),
+            cancellationToken);
+
+    /// <summary>
+    /// The wire spelling of a media kind: the server's enum is lower case, and
+    /// <c>ToString()</c> on a C# enum is not.
+    /// </summary>
+    private static string WireName(MediaKind kind) =>
+        kind.ToString().ToLowerInvariant();
+
     private static string GamePath(string idOrSlug) => "games/" + Uri.EscapeDataString(idOrSlug);
+
+    private static string MediaPath(string mediaId) => "media/" + Uri.EscapeDataString(mediaId);
+
+    private static string PatchNotePath(string noteId) =>
+        "patch-notes/" + Uri.EscapeDataString(noteId);
 
     private static string BuildPath(string buildId) => "builds/" + Uri.EscapeDataString(buildId);
 

@@ -257,4 +257,220 @@ public sealed class PublishingApiClientTests
         Assert.Equal("/api/v1/uploads/s1", handler.LastRequest.PathAndQuery);
         Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
     }
+
+    // --- artwork ---------------------------------------------------------------------------
+
+    private const string MediaJson = """
+        {
+          "id": "m1", "gameId": "g1", "kind": "screenshot",
+          "url": "http://files.example/media/ab/cd/abcd.png",
+          "contentType": "image/png", "sizeBytes": 4096,
+          "altText": "The bridge", "sortOrder": 2,
+          "createdAt": "2026-01-02T03:04:05Z"
+        }
+        """;
+
+    // The image is the body and nothing else travels with it: no multipart, and everything
+    // that describes the picture is a query parameter.
+    [Fact]
+    public async Task AnImageIsUploadedAsTheRawBodyWithItsDescriptionInTheQuery()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, MediaJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        byte[] png = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02];
+
+        GameMedia media = await client.UploadMediaAsync(
+            "orbital-drift",
+            new MediaUpload
+            {
+                Kind = MediaKind.Screenshot,
+                Content = png,
+                AltText = "The bridge",
+                SortOrder = 2,
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Post, handler.LastRequest.Method);
+        Assert.Equal(
+            "/api/v1/games/orbital-drift/media?kind=screenshot&altText=The%20bridge&sortOrder=2",
+            handler.LastRequest.PathAndQuery);
+        Assert.Equal(png, handler.LastRequest.Bytes);
+        Assert.Equal("m1", media.Id);
+        Assert.Equal(MediaKind.Screenshot, media.Kind);
+    }
+
+    // The server decides what the bytes are and never reads this header, so declaring an image
+    // type would be a guess dressed as a fact — and an invitation to trust it later.
+    [Fact]
+    public async Task AnImageUploadDeclaresNoImageType()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, MediaJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.UploadMediaAsync(
+            "g1",
+            new MediaUpload { Kind = MediaKind.Cover, Content = new byte[] { 0xFF, 0xD8, 0xFF } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("application/octet-stream", handler.LastRequest.ContentType);
+    }
+
+    // The server's enum is lower case; a C# enum's ToString() is not.
+    [Theory]
+    [InlineData(MediaKind.Cover, "cover")]
+    [InlineData(MediaKind.Banner, "banner")]
+    [InlineData(MediaKind.Logo, "logo")]
+    [InlineData(MediaKind.Screenshot, "screenshot")]
+    public async Task TheKindIsSpelledTheWayTheServerSpellsIt(MediaKind kind, string wire)
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, MediaJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.UploadMediaAsync(
+            "g1",
+            new MediaUpload { Kind = kind, Content = new byte[] { 0xFF, 0xD8, 0xFF } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Contains(
+            "kind=" + wire, handler.LastRequest.PathAndQuery, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task EditingAPictureSendsOnlyWhatChanged()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.OK, MediaJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.UpdateMediaAsync(
+            "m1", new MediaChanges { SortOrder = 5 }, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/media/m1", handler.LastRequest.PathAndQuery);
+        Assert.Equal("""{"sortOrder":5}""", handler.LastRequest.Body);
+    }
+
+    [Fact]
+    public async Task RemovingAPictureIsADeleteOnTheMediaId()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeleteMediaAsync("m1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/media/m1", handler.LastRequest.PathAndQuery);
+    }
+
+    // --- the devlog ------------------------------------------------------------------------
+
+    private const string PatchNoteJson = """
+        {
+          "id": "n1", "gameId": "g1", "versionId": "",
+          "title": "Docking rework", "bodyMarkdown": "It is better now.",
+          "publishedAt": "", "published": false,
+          "createdAt": "2026-01-02T03:04:05Z", "updatedAt": "2026-01-02T03:04:05Z",
+          "author": { "id": "u1", "displayName": "Luigi" }
+        }
+        """;
+
+    [Fact]
+    public async Task ADraftIsWrittenWithPublishFalse()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, PatchNoteJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        PatchNote note = await client.CreatePatchNoteAsync(
+            "orbital-drift",
+            new CreatePatchNoteRequest
+            {
+                Title = "Docking rework",
+                BodyMarkdown = "It is better now.",
+                Publish = false,
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("/api/v1/games/orbital-drift/patch-notes", handler.LastRequest.PathAndQuery);
+        Assert.Equal(
+            """{"title":"Docking rework","bodyMarkdown":"It is better now.","publish":false}""",
+            handler.LastRequest.Body);
+        Assert.False(note.Published);
+        Assert.Null(note.PublishedAt);
+    }
+
+    // Publishing and withdrawing are the same field, because a note that went out by mistake
+    // has to be able to come back.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PublishingAndWithdrawingAreTheSameCall(bool published)
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.OK, PatchNoteJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.UpdatePatchNoteAsync(
+            "n1",
+            new PatchNoteChanges { Published = published },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/patch-notes/n1", handler.LastRequest.PathAndQuery);
+        Assert.Equal(
+            $$"""{"published":{{(published ? "true" : "false")}}}""", handler.LastRequest.Body);
+    }
+
+    // An absent field means "leave it alone", so detaching a note from its version is the one
+    // thing that has to be said with an empty string rather than with a null.
+    [Fact]
+    public async Task DetachingANoteFromItsVersionSendsAnEmptyVersionId()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.OK, PatchNoteJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.UpdatePatchNoteAsync(
+            "n1",
+            new PatchNoteChanges { VersionId = string.Empty },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("""{"versionId":""}""", handler.LastRequest.Body);
+    }
+
+    [Fact]
+    public async Task RemovingADevlogEntryIsADeleteOnTheNoteId()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeletePatchNoteAsync("n1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/patch-notes/n1", handler.LastRequest.PathAndQuery);
+    }
+
+    // --- taking things back ------------------------------------------------------------------
+
+    [Fact]
+    public async Task ABuildIsDeletedByItsOwnId()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeleteBuildAsync("b1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/builds/b1", handler.LastRequest.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task AVersionIsDeletedUnderItsGame()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeleteVersionAsync(
+            "orbital-drift", "v1", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/games/orbital-drift/versions/v1", handler.LastRequest.PathAndQuery);
+    }
 }

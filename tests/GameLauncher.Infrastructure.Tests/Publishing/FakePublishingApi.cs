@@ -169,6 +169,45 @@ internal sealed class FakePublishingApi : IPublishingApi
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new GameVersion { Id = "v1", Semver = request.Semver });
 
+    // Artwork, the devlog and the delete routes are not part of the upload conversation this
+    // fake exists to play, and a stub that answered them would be a stub that let a test pass
+    // without exercising anything. They throw, so a caller that wandered in here is told.
+
+    public Task<GameMedia> UploadMediaAsync(
+        string idOrSlug, MediaUpload upload, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task<GameMedia> UpdateMediaAsync(
+        string mediaId, MediaChanges changes, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task DeleteMediaAsync(string mediaId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task<PatchNote> CreatePatchNoteAsync(
+        string idOrSlug,
+        CreatePatchNoteRequest request,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task<PatchNote> UpdatePatchNoteAsync(
+        string noteId, PatchNoteChanges changes, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task DeletePatchNoteAsync(
+        string noteId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task DeleteBuildAsync(string buildId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    public Task DeleteVersionAsync(
+        string idOrSlug, string versionId, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
+    private const string NotPartOfTheUploadFlow =
+        "This fake plays the build-upload protocol only.";
+
     private UploadSession SessionFor(string id)
     {
         long received = _sessions[id].Length;

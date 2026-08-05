@@ -52,9 +52,13 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        string? body = request.Content is null
+        // Captured as bytes as well as text: an image upload is a binary body, and reading it
+        // back as UTF-8 mangles exactly the leading bytes a test about image formats is for.
+        byte[]? bytes = request.Content is null
             ? null
-            : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            : await request.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+
+        string? body = bytes is null ? null : Encoding.UTF8.GetString(bytes);
 
         Dictionary<string, string> headers = request.Headers.ToDictionary(
             header => header.Key,
@@ -67,7 +71,8 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
             body,
             request.Headers.Authorization?.ToString(),
             headers,
-            request.Content?.Headers.ContentType?.MediaType));
+            request.Content?.Headers.ContentType?.MediaType,
+            bytes));
 
         return _respond(request);
     }
@@ -79,7 +84,8 @@ internal sealed record RecordedRequest(
     string? Body,
     string? Authorization,
     IReadOnlyDictionary<string, string> Headers,
-    string? ContentType)
+    string? ContentType,
+    byte[]? Bytes = null)
 {
     /// <summary>Path and query, which is what a route assertion is actually about.</summary>
     public string PathAndQuery => Uri.PathAndQuery;

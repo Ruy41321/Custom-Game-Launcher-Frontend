@@ -38,6 +38,26 @@ internal sealed class ApiTransport(HttpClient httpClient)
     public Task PostAsync(string path, object body, CancellationToken cancellationToken)
         => SendAsync(Request(HttpMethod.Post, path, body), cancellationToken);
 
+    /// <summary>
+    /// A body that is bytes rather than a document — an image upload, where everything that
+    /// describes the file travels in the query string and the body is the file itself.
+    /// </summary>
+    public async Task<T> PostBytesAsync<T>(
+        string path,
+        ReadOnlyMemory<byte> body,
+        string contentType,
+        CancellationToken cancellationToken)
+    {
+        HttpRequestMessage request = new(HttpMethod.Post, path)
+        {
+            Content = new ReadOnlyMemoryContent(body),
+        };
+
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+
+        return await SendAsync<T>(request, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<T> PatchAsync<T>(string path, object body, CancellationToken cancellationToken)
         => await SendAsync<T>(Request(HttpMethod.Patch, path, body), cancellationToken)
             .ConfigureAwait(false);

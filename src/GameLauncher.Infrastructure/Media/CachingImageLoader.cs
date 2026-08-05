@@ -76,7 +76,7 @@ public sealed class CachingImageLoader(
 
             // What the bytes are is decided by the bytes, never by the declared type — the
             // same rule the server applies on upload, applied again by the side that is going
-            // to hand them to an image decoder.
+            // to hand them to an image decoder. Shared with the uploader, in Core.
             if (bytes is null || !ImageFormats.LooksLikeAnImage(bytes))
             {
                 logger.LogWarning("What {Url} served is not an image the launcher renders", address);
@@ -206,29 +206,4 @@ public sealed class CachingImageLoader(
         return Path.Combine(paths.ImageCacheDirectory, Convert.ToHexString(digest)
             .ToLower(CultureInfo.InvariantCulture));
     }
-}
-
-/// <summary>
-/// What a picture starts with. The launcher renders what the server accepts — PNG, JPEG and
-/// WebP — and nothing else: SVG is refused here as it is refused there, because it is a
-/// document format that can carry script rather than a picture.
-/// </summary>
-internal static class ImageFormats
-{
-    public static bool LooksLikeAnImage(ReadOnlySpan<byte> bytes) =>
-        IsPng(bytes) || IsJpeg(bytes) || IsWebp(bytes);
-
-    private static ReadOnlySpan<byte> PngSignature =>
-        [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
-
-    private static bool IsPng(ReadOnlySpan<byte> bytes) =>
-        bytes.Length >= 8 && bytes[..8].SequenceEqual(PngSignature);
-
-    private static bool IsJpeg(ReadOnlySpan<byte> bytes) =>
-        bytes.Length >= 3 && bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF;
-
-    private static bool IsWebp(ReadOnlySpan<byte> bytes) =>
-        bytes.Length >= 12
-        && bytes[..4].SequenceEqual("RIFF"u8)
-        && bytes[8..12].SequenceEqual("WEBP"u8);
 }
