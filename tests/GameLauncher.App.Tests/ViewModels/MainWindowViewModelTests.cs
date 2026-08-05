@@ -77,14 +77,7 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IGameLauncher>(),
                 _images,
                 TimeProvider.System),
-            new DeveloperViewModel(
-                _catalog,
-                Substitute.For<IPublishingApi>(),
-                Substitute.For<IBuildPublisher>(),
-                errors,
-                _localization,
-                runtime,
-                Substitute.For<IFolderPicker>()),
+            DeveloperPage(errors, runtime),
             new SettingsViewModel(
                 _settings,
                 Substitute.For<IPathProvider>(),
@@ -92,6 +85,37 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IFolderPicker>(),
                 Substitute.For<IThemeSwitcher>(),
                 _localization));
+    }
+
+    /// <summary>
+    /// The dashboard and its three children. Assembled here because the shell only needs it to
+    /// exist — what it does is covered by <see cref="DeveloperViewModelTests"/> and the three
+    /// child test classes.
+    /// </summary>
+    private DeveloperViewModel DeveloperPage(
+        IApiErrorPresenter errors, IRuntimePlatform runtime)
+    {
+        var publishing = Substitute.For<IPublishingApi>();
+        var capabilities = Substitute.For<IServerCapabilityProvider>();
+        capabilities.GetAsync(Arg.Any<CancellationToken>()).Returns(ServerCapabilities.Fallback);
+
+        return new DeveloperViewModel(
+            _catalog,
+            publishing,
+            Substitute.For<IBuildPublisher>(),
+            errors,
+            _localization,
+            runtime,
+            Substitute.For<IFolderPicker>(),
+            new GameEditorViewModel(publishing, errors, _localization),
+            new GameMediaViewModel(
+                _catalog,
+                publishing,
+                capabilities,
+                errors,
+                _localization,
+                Substitute.For<IFilePicker>()),
+            new GameDevlogViewModel(_catalog, publishing, errors, _localization));
     }
 
     [Fact]

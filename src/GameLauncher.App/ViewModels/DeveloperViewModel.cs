@@ -12,8 +12,15 @@ using GameLauncher.Core.Publishing;
 namespace GameLauncher.App.ViewModels;
 
 /// <summary>
-/// The publisher's page: their own games including drafts, the versions of the selected one,
-/// and the flow that turns a directory into a build people can install.
+/// The publisher's page: their own games including drafts, the versions and builds of the
+/// selected one, the flow that turns a directory into a build people can install, and — through
+/// three child view models — the game's own fields, its artwork and its devlog.
+///
+/// The children are children rather than pages of their own because a publisher works on **one
+/// game at a time**: the selected game is the context all four share, and separate pages would
+/// mean selecting it three times or inventing a shared navigation state that D17 does not have.
+/// Tabs over child view models are binding, not navigation, so the one-way rule stays intact —
+/// and three smaller view models give three readable test classes instead of one enormous one.
 ///
 /// Every rule this page appears to enforce is enforced again server-side. What it does here is
 /// avoid offering an action that would be refused (D8).
@@ -29,6 +36,12 @@ public sealed partial class DeveloperViewModel : ViewModelBase
     private readonly IFolderPicker _folders;
 
     private CancellationTokenSource? _publishCancellation;
+
+    /// <summary>See <see cref="OnGameUpdated"/>: a saved edit is not a change of selection.</summary>
+    private bool _suppressSelectionReload;
+
+    [ObservableProperty]
+    private PendingDeletion? _pendingDeletion;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -91,7 +104,10 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         IApiErrorPresenter errors,
         ILocalizationService localization,
         IRuntimePlatform platform,
-        IFolderPicker folders)
+        IFolderPicker folders,
+        GameEditorViewModel editor,
+        GameMediaViewModel artwork,
+        GameDevlogViewModel devlog)
     {
         _catalog = catalog;
         _publishing = publishing;
@@ -101,9 +117,24 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         _platform = platform;
         _folders = folders;
 
+        Editor = editor;
+        Artwork = artwork;
+        Devlog = devlog;
+
+        // The editor is the one child that can change what the list above shows, so the list
+        // hears about a save rather than being reloaded wholesale for a title edit.
+        Editor.GameUpdated += OnGameUpdated;
+
         BuildPlatform = platform.Platform;
         Architecture = platform.Architecture;
     }
+
+    /// <summary>The selected game's own fields — title, summary, release date, visibility.</summary>
+    public GameEditorViewModel Editor { get; }
+
+    public GameMediaViewModel Artwork { get; }
+
+    public GameDevlogViewModel Devlog { get; }
 
     public ObservableCollection<Game> Games { get; } = [];
 
@@ -134,6 +165,8 @@ public sealed partial class DeveloperViewModel : ViewModelBase
     private GameVisibility _newGameVisibility = GameVisibility.Draft;
 
     public bool IsPublishing => Progress is not null;
+
+    public bool HasPendingDeletion => PendingDeletion is not null;
 
     public bool CanCreateGame => !IsBusy && !IsPublishing && NewGameTitle.Trim().Length > 0;
 
@@ -378,7 +411,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
 
     partial void OnSelectedGameChanged(Game? value)
     {
-        if (value is not null)
+        if (value is not null && !_suppressSelectionReload)
         {
             _ = LoadSelectedAsync(value);
         }
@@ -406,6 +439,10 @@ public sealed partial class DeveloperViewModel : ViewModelBase
             }
 
             SelectedVersion = Versions.FirstOrDefault();
+
+            Editor.Show(detail.Game);
+            await Artwork.ShowAsync(detail.Game).ConfigureAwait(true);
+            await Devlog.ShowAsync(detail.Game, detail.Versions).ConfigureAwait(true);
         }
         catch (ApiException exception)
         {
@@ -414,6 +451,156 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         finally
         {
             RaiseDerived();
+        }
+    }
+
+    // --- deleting a build or a version -----------------------------------------------------
+
+    /// <summary>
+    /// Arms the deletion of one build. The prompt names the platform, the architecture and the
+    /// version it belongs to, because a publisher looking at four rows of "Ready" needs to know
+    /// which one is about to go.
+    /// </summary>
+    [RelayCommand]
+    private void AskToDeleteBuild(GameBuild build)
+    {
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        string version = Versions
+            .FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, build.VersionId, StringComparison.Ordinal))
+            ?.Semver ?? build.VersionId;
+
+        PendingDeletion = new PendingDeletion(
+            _localization.Translate(
+                "Publish.ConfirmDeleteBuild",
+                version,
+                build.Platform.ToString(),
+                build.Architecture.ToString()),
+            async cancellationToken =>
+            {
+                await _publishing.DeleteBuildAsync(build.Id, cancellationToken)
+                    .ConfigureAwait(true);
+
+                Builds.Remove(build);
+                StatusMessage = _localization.Translate("Publish.BuildDeleted");
+            });
+
+        RaiseDerived();
+    }
+
+    /// <summary>
+    /// Arms the deletion of a version. The prompt says **how many builds go with it**: a
+    /// version is a container, and deleting one takes everything under it — which is exactly
+    /// the part somebody clicking a row labelled "0.3.0" would not otherwise be told.
+    /// </summary>
+    [RelayCommand]
+    private void AskToDeleteVersion(GameVersion version)
+    {
+        if (Selected is null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        int builds = Builds.Count(build =>
+            string.Equals(build.VersionId, version.Id, StringComparison.Ordinal));
+
+        PendingDeletion = new PendingDeletion(
+            _localization.Translate(
+                "Publish.ConfirmDeleteVersion",
+                version.Semver,
+                builds.ToString(CultureInfo.CurrentCulture)),
+            async cancellationToken =>
+            {
+                await _publishing.DeleteVersionAsync(
+                    Selected.Game.Id, version.Id, cancellationToken).ConfigureAwait(true);
+
+                Versions.Remove(version);
+                foreach (GameBuild build in Builds
+                    .Where(build =>
+                        string.Equals(build.VersionId, version.Id, StringComparison.Ordinal))
+                    .ToList())
+                {
+                    Builds.Remove(build);
+                }
+
+                SelectedVersion = Versions.FirstOrDefault();
+                StatusMessage = _localization.Translate("Publish.VersionDeleted");
+            });
+
+        RaiseDerived();
+    }
+
+    [RelayCommand]
+    private async Task ConfirmDeletionAsync(CancellationToken cancellationToken)
+    {
+        if (PendingDeletion is not { } deletion)
+        {
+            return;
+        }
+
+        PendingDeletion = null;
+        IsBusy = true;
+        RaiseDerived();
+
+        try
+        {
+            await deletion.ConfirmAsync(cancellationToken).ConfigureAwait(true);
+        }
+        catch (ApiException exception)
+        {
+            ErrorMessage = _errors.Describe(exception);
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseDerived();
+        }
+    }
+
+    [RelayCommand]
+    private void CancelDeletion()
+    {
+        PendingDeletion = null;
+        RaiseDerived();
+    }
+
+    /// <summary>
+    /// Replaces the row in the list rather than reloading it. An edit that changed a title has
+    /// to be visible above, and refetching every game the publisher owns to learn one field
+    /// would make saving a summary cost a page load.
+    ///
+    /// The reload is suppressed while the row is swapped: assigning <see cref="SelectedGame"/>
+    /// is what normally means "the publisher picked another game", and letting a save mean that
+    /// would refetch the detail, reload three children, and wipe the "saved" message the
+    /// publisher has not read yet.
+    /// </summary>
+    private void OnGameUpdated(object? sender, Game updated)
+    {
+        Game? row = Games.FirstOrDefault(game =>
+            string.Equals(game.Id, updated.Id, StringComparison.Ordinal));
+
+        _suppressSelectionReload = true;
+        try
+        {
+            if (row is not null)
+            {
+                Games[Games.IndexOf(row)] = updated;
+                SelectedGame = updated;
+            }
+
+            if (Selected is { } detail)
+            {
+                Selected = detail with { Game = updated };
+            }
+        }
+        finally
+        {
+            _suppressSelectionReload = false;
         }
     }
 
@@ -432,6 +619,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
 
     private void RaiseDerived()
     {
+        OnPropertyChanged(nameof(HasPendingDeletion));
         OnPropertyChanged(nameof(IsPublishing));
         OnPropertyChanged(nameof(CanCreateGame));
         OnPropertyChanged(nameof(CanCreateVersion));

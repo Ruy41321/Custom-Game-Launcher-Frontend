@@ -79,6 +79,7 @@ public partial class App : Application
         // The picker resolves the window at call time rather than holding it: the shell is
         // built before the window exists.
         services.AddSingleton<IFolderPicker>(_ => new StorageProviderFolderPicker(this));
+        services.AddSingleton<IFilePicker>(_ => new StorageProviderFilePicker(this));
         services.AddSingleton<IThemeSwitcher>(_ => new ApplicationThemeSwitcher(this));
 
         // Decoded artwork is shared by every page: a cover seen in Explore is the same bitmap
@@ -92,6 +93,9 @@ public partial class App : Application
         services.AddSingleton<ExploreViewModel>();
         services.AddSingleton<LibraryViewModel>();
         services.AddSingleton<GameDetailViewModel>();
+        services.AddSingleton<GameEditorViewModel>();
+        services.AddSingleton<GameMediaViewModel>();
+        services.AddSingleton<GameDevlogViewModel>();
         services.AddSingleton<DeveloperViewModel>();
         services.AddSingleton<SettingsViewModel>();
         services.AddSingleton<MainWindowViewModel>();

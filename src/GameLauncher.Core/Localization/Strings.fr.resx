@@ -506,4 +506,193 @@
   <data name="Settings.Saved" xml:space="preserve">
     <value>Enregistré.</value>
   </data>
+  <data name="Publish.TabBuilds" xml:space="preserve">
+    <value>Builds</value>
+  </data>
+  <data name="Publish.TabDetails" xml:space="preserve">
+    <value>Details du jeu</value>
+  </data>
+  <data name="Publish.TabArtwork" xml:space="preserve">
+    <value>Illustrations</value>
+  </data>
+  <data name="Publish.TabDevlog" xml:space="preserve">
+    <value>Journal</value>
+  </data>
+  <data name="Publish.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Publish.ReleaseDate" xml:space="preserve">
+    <value>Date de sortie</value>
+  </data>
+  <data name="Publish.SaveChanges" xml:space="preserve">
+    <value>Enregistrer les modifications</value>
+  </data>
+  <data name="Publish.GameUpdated" xml:space="preserve">
+    <value>Enregistre.</value>
+  </data>
+  <data name="Publish.NoChanges" xml:space="preserve">
+    <value>Rien n'a encore change.</value>
+  </data>
+  <data name="Publish.Artwork" xml:space="preserve">
+    <value>Illustrations</value>
+  </data>
+  <data name="Publish.Gallery" xml:space="preserve">
+    <value>Captures d'ecran</value>
+  </data>
+  <data name="Publish.Identity" xml:space="preserve">
+    <value>Jaquette, banniere et logo</value>
+  </data>
+  <data name="Publish.AddImage" xml:space="preserve">
+    <value>Ajouter une image</value>
+  </data>
+  <data name="Publish.ChooseImage" xml:space="preserve">
+    <value>Choisir une image</value>
+  </data>
+  <data name="Publish.ImageKind" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="Publish.AltText" xml:space="preserve">
+    <value>Description pour les lecteurs d'ecran</value>
+  </data>
+  <data name="Publish.SaveDescription" xml:space="preserve">
+    <value>Enregistrer la description</value>
+  </data>
+  <data name="Publish.MoveUp" xml:space="preserve">
+    <value>Deplacer avant</value>
+  </data>
+  <data name="Publish.MoveDown" xml:space="preserve">
+    <value>Deplacer apres</value>
+  </data>
+  <data name="Publish.NoArtwork" xml:space="preserve">
+    <value>Ce jeu n'a pas encore d'illustrations.</value>
+  </data>
+  <data name="Publish.ImageUploaded" xml:space="preserve">
+    <value>{0} televersee.</value>
+  </data>
+  <data name="Publish.ImageUpdated" xml:space="preserve">
+    <value>Description enregistree.</value>
+  </data>
+  <data name="Publish.ImageDeleted" xml:space="preserve">
+    <value>Image supprimee.</value>
+  </data>
+  <data name="Publish.MediaLimits" xml:space="preserve">
+    <value>{0}, jusqu'a {1}. Au maximum {2} captures par jeu.</value>
+  </data>
+  <data name="Publish.GalleryCount" xml:space="preserve">
+    <value>{0} sur {1} captures</value>
+  </data>
+  <data name="Publish.NoReplaceInPlace" xml:space="preserve">
+    <value>Une image ne se remplace pas : televersez-en une autre et supprimez celle-ci.</value>
+  </data>
+  <data name="Publish.Kind.Cover" xml:space="preserve">
+    <value>Jaquette</value>
+  </data>
+  <data name="Publish.Kind.Banner" xml:space="preserve">
+    <value>Banniere</value>
+  </data>
+  <data name="Publish.Kind.Logo" xml:space="preserve">
+    <value>Logo</value>
+  </data>
+  <data name="Publish.Kind.Screenshot" xml:space="preserve">
+    <value>Capture d'ecran</value>
+  </data>
+  <data name="Publish.Media.Empty" xml:space="preserve">
+    <value>Ce fichier est vide.</value>
+  </data>
+  <data name="Publish.Media.TooLarge" xml:space="preserve">
+    <value>Ce serveur accepte des images jusqu'a {0}.</value>
+  </data>
+  <data name="Publish.Media.UnsupportedFormat" xml:space="preserve">
+    <value>Seuls PNG, JPEG et WebP sont acceptes. Pour le serveur, un SVG n'est pas une image.</value>
+  </data>
+  <data name="Publish.Media.AltTextTooLong" xml:space="preserve">
+    <value>La description peut faire au plus {0} caracteres.</value>
+  </data>
+  <data name="Publish.Media.GalleryFull" xml:space="preserve">
+    <value>Ce jeu a deja les {0} captures que ce serveur autorise.</value>
+  </data>
+  <data name="Publish.Devlog" xml:space="preserve">
+    <value>Journal de developpement</value>
+  </data>
+  <data name="Publish.NewEntry" xml:space="preserve">
+    <value>Nouvelle entree</value>
+  </data>
+  <data name="Publish.EntryTitle" xml:space="preserve">
+    <value>Titre</value>
+  </data>
+  <data name="Publish.EntryBody" xml:space="preserve">
+    <value>Texte (Markdown)</value>
+  </data>
+  <data name="Publish.LinkedVersion" xml:space="preserve">
+    <value>Concerne la version</value>
+  </data>
+  <data name="Publish.NoVersion" xml:space="preserve">
+    <value>Le jeu en general</value>
+  </data>
+  <data name="Publish.Draft" xml:space="preserve">
+    <value>Brouillon</value>
+  </data>
+  <data name="Publish.PublishEntry" xml:space="preserve">
+    <value>Publier</value>
+  </data>
+  <data name="Publish.WithdrawEntry" xml:space="preserve">
+    <value>Retirer</value>
+  </data>
+  <data name="Publish.SaveEntry" xml:space="preserve">
+    <value>Enregistrer l'entree</value>
+  </data>
+  <data name="Publish.EditEntry" xml:space="preserve">
+    <value>Modifier</value>
+  </data>
+  <data name="Publish.NoEntries" xml:space="preserve">
+    <value>Rien n'a encore ete ecrit.</value>
+  </data>
+  <data name="Publish.ShowOlder" xml:space="preserve">
+    <value>Afficher les plus anciennes</value>
+  </data>
+  <data name="Publish.EntryCreated" xml:space="preserve">
+    <value>Entree ecrite.</value>
+  </data>
+  <data name="Publish.EntrySaved" xml:space="preserve">
+    <value>Entree enregistree.</value>
+  </data>
+  <data name="Publish.EntryPublished" xml:space="preserve">
+    <value>Publiee.</value>
+  </data>
+  <data name="Publish.EntryWithdrawn" xml:space="preserve">
+    <value>Retiree. C'est de nouveau un brouillon, publiable plus tard.</value>
+  </data>
+  <data name="Publish.EntryDeleted" xml:space="preserve">
+    <value>Entree supprimee.</value>
+  </data>
+  <data name="Publish.RepublishKeepsTheDate" xml:space="preserve">
+    <value>Republier conserve la date d'origine : elle indique quand les lecteurs ont vu l'entree, pas sa derniere modification.</value>
+  </data>
+  <data name="Publish.Delete" xml:space="preserve">
+    <value>Supprimer</value>
+  </data>
+  <data name="Publish.ConfirmDelete" xml:space="preserve">
+    <value>Supprimer definitivement</value>
+  </data>
+  <data name="Publish.KeepIt" xml:space="preserve">
+    <value>Conserver</value>
+  </data>
+  <data name="Publish.ConfirmDeleteImage" xml:space="preserve">
+    <value>Supprimer "{0}" ? L'image est retiree du jeu et ne peut pas revenir : il faudrait televerser le fichier a nouveau.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteEntry" xml:space="preserve">
+    <value>Supprimer "{0}" ? L'entree disparait definitivement. Pour cesser de l'afficher sans la perdre, retirez-la plutot.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteBuild" xml:space="preserve">
+    <value>Supprimer la build {1}/{2} de {0} ? Ceux qui l'ont installee gardent leur copie, mais plus personne ne pourra la telecharger.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteVersion" xml:space="preserve">
+    <value>Supprimer la version {0} ? Ses {1} build(s) partent avec elle et aucune ne sera plus telechargeable.</value>
+  </data>
+  <data name="Publish.BuildDeleted" xml:space="preserve">
+    <value>Build supprimee. L'espace occupe est recredite sur votre quota.</value>
+  </data>
+  <data name="Publish.VersionDeleted" xml:space="preserve">
+    <value>Version supprimee.</value>
+  </data>
 </root>

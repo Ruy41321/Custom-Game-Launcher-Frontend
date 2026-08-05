@@ -506,4 +506,193 @@
   <data name="Settings.Saved" xml:space="preserve">
     <value>Saved.</value>
   </data>
+  <data name="Publish.TabBuilds" xml:space="preserve">
+    <value>Builds</value>
+  </data>
+  <data name="Publish.TabDetails" xml:space="preserve">
+    <value>Game details</value>
+  </data>
+  <data name="Publish.TabArtwork" xml:space="preserve">
+    <value>Artwork</value>
+  </data>
+  <data name="Publish.TabDevlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Publish.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Publish.ReleaseDate" xml:space="preserve">
+    <value>Release date</value>
+  </data>
+  <data name="Publish.SaveChanges" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
+  <data name="Publish.GameUpdated" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="Publish.NoChanges" xml:space="preserve">
+    <value>Nothing has changed yet.</value>
+  </data>
+  <data name="Publish.Artwork" xml:space="preserve">
+    <value>Artwork</value>
+  </data>
+  <data name="Publish.Gallery" xml:space="preserve">
+    <value>Screenshots</value>
+  </data>
+  <data name="Publish.Identity" xml:space="preserve">
+    <value>Cover, banner and logo</value>
+  </data>
+  <data name="Publish.AddImage" xml:space="preserve">
+    <value>Add an image</value>
+  </data>
+  <data name="Publish.ChooseImage" xml:space="preserve">
+    <value>Choose an image</value>
+  </data>
+  <data name="Publish.ImageKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Publish.AltText" xml:space="preserve">
+    <value>Description for screen readers</value>
+  </data>
+  <data name="Publish.SaveDescription" xml:space="preserve">
+    <value>Save description</value>
+  </data>
+  <data name="Publish.MoveUp" xml:space="preserve">
+    <value>Move earlier</value>
+  </data>
+  <data name="Publish.MoveDown" xml:space="preserve">
+    <value>Move later</value>
+  </data>
+  <data name="Publish.NoArtwork" xml:space="preserve">
+    <value>This game has no artwork yet.</value>
+  </data>
+  <data name="Publish.ImageUploaded" xml:space="preserve">
+    <value>{0} uploaded.</value>
+  </data>
+  <data name="Publish.ImageUpdated" xml:space="preserve">
+    <value>Description saved.</value>
+  </data>
+  <data name="Publish.ImageDeleted" xml:space="preserve">
+    <value>Image removed.</value>
+  </data>
+  <data name="Publish.MediaLimits" xml:space="preserve">
+    <value>{0}, up to {1}. At most {2} screenshots per game.</value>
+  </data>
+  <data name="Publish.GalleryCount" xml:space="preserve">
+    <value>{0} of {1} screenshots</value>
+  </data>
+  <data name="Publish.NoReplaceInPlace" xml:space="preserve">
+    <value>An image is never replaced: upload another one and remove this.</value>
+  </data>
+  <data name="Publish.Kind.Cover" xml:space="preserve">
+    <value>Cover</value>
+  </data>
+  <data name="Publish.Kind.Banner" xml:space="preserve">
+    <value>Banner</value>
+  </data>
+  <data name="Publish.Kind.Logo" xml:space="preserve">
+    <value>Logo</value>
+  </data>
+  <data name="Publish.Kind.Screenshot" xml:space="preserve">
+    <value>Screenshot</value>
+  </data>
+  <data name="Publish.Media.Empty" xml:space="preserve">
+    <value>That file is empty.</value>
+  </data>
+  <data name="Publish.Media.TooLarge" xml:space="preserve">
+    <value>This server accepts images up to {0}.</value>
+  </data>
+  <data name="Publish.Media.UnsupportedFormat" xml:space="preserve">
+    <value>Only PNG, JPEG and WebP are accepted. SVG is not an image as far as the server is concerned.</value>
+  </data>
+  <data name="Publish.Media.AltTextTooLong" xml:space="preserve">
+    <value>The description may be at most {0} characters.</value>
+  </data>
+  <data name="Publish.Media.GalleryFull" xml:space="preserve">
+    <value>This game already has the {0} screenshots this server allows.</value>
+  </data>
+  <data name="Publish.Devlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Publish.NewEntry" xml:space="preserve">
+    <value>New entry</value>
+  </data>
+  <data name="Publish.EntryTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Publish.EntryBody" xml:space="preserve">
+    <value>Body (Markdown)</value>
+  </data>
+  <data name="Publish.LinkedVersion" xml:space="preserve">
+    <value>About the version</value>
+  </data>
+  <data name="Publish.NoVersion" xml:space="preserve">
+    <value>The game in general</value>
+  </data>
+  <data name="Publish.Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Publish.PublishEntry" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Publish.WithdrawEntry" xml:space="preserve">
+    <value>Withdraw</value>
+  </data>
+  <data name="Publish.SaveEntry" xml:space="preserve">
+    <value>Save entry</value>
+  </data>
+  <data name="Publish.EditEntry" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Publish.NoEntries" xml:space="preserve">
+    <value>Nothing written yet.</value>
+  </data>
+  <data name="Publish.ShowOlder" xml:space="preserve">
+    <value>Show older</value>
+  </data>
+  <data name="Publish.EntryCreated" xml:space="preserve">
+    <value>Entry written.</value>
+  </data>
+  <data name="Publish.EntrySaved" xml:space="preserve">
+    <value>Entry saved.</value>
+  </data>
+  <data name="Publish.EntryPublished" xml:space="preserve">
+    <value>Published.</value>
+  </data>
+  <data name="Publish.EntryWithdrawn" xml:space="preserve">
+    <value>Withdrawn. It is a draft again and can be published later.</value>
+  </data>
+  <data name="Publish.EntryDeleted" xml:space="preserve">
+    <value>Entry deleted.</value>
+  </data>
+  <data name="Publish.RepublishKeepsTheDate" xml:space="preserve">
+    <value>Publishing again keeps the original date: it says when readers saw the entry, not when it was last edited.</value>
+  </data>
+  <data name="Publish.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Publish.ConfirmDelete" xml:space="preserve">
+    <value>Delete for good</value>
+  </data>
+  <data name="Publish.KeepIt" xml:space="preserve">
+    <value>Keep it</value>
+  </data>
+  <data name="Publish.ConfirmDeleteImage" xml:space="preserve">
+    <value>Delete "{0}"? The image is removed from the game and cannot be brought back â€” you would have to upload the file again.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteEntry" xml:space="preserve">
+    <value>Delete "{0}"? The entry is gone for good. To stop showing it without losing it, withdraw it instead.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteBuild" xml:space="preserve">
+    <value>Delete the {1}/{2} build of {0}? Anyone who has it installed keeps their copy, but nobody can download or update to it again.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteVersion" xml:space="preserve">
+    <value>Delete version {0}? Its {1} build(s) go with it, and none of them can be downloaded again.</value>
+  </data>
+  <data name="Publish.BuildDeleted" xml:space="preserve">
+    <value>Build deleted. The space it used is credited back to your quota.</value>
+  </data>
+  <data name="Publish.VersionDeleted" xml:space="preserve">
+    <value>Version deleted.</value>
+  </data>
 </root>

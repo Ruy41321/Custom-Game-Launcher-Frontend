@@ -44,119 +44,412 @@
       </Border>
     </Grid>
 
-    <ScrollViewer Grid.Column="1">
-      <StackPanel Spacing="16">
+    <Grid Grid.Column="1" RowDefinitions="Auto,Auto,*">
 
-        <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
+      <ProgressBar Grid.Row="0" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
 
+      <StackPanel Grid.Row="1" Spacing="8">
         <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
                    IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
         <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextWrapping="Wrap"
                    IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
-        <TextBlock Text="{loc:Tr Publish.SelectGame}" Opacity="0.5"
-                   IsVisible="{Binding !!!Selected}" />
-
-        <StackPanel Spacing="16" IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
-
-          <TextBlock Text="{loc:Tr Publish.Versions}" FontSize="16" FontWeight="Light" />
-
-          <ListBox ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}"
-                   MaxHeight="160">
-            <ListBox.ItemTemplate>
-              <DataTemplate x:DataType="models:GameVersion">
-                <StackPanel Orientation="Horizontal" Spacing="10">
-                  <TextBlock Text="{Binding Semver}" FontWeight="SemiBold" />
-                  <TextBlock Text="{Binding Stage}" Opacity="0.6" FontSize="12"
-                             VerticalAlignment="Center" />
-                  <TextBlock Text="{Binding Published}" Opacity="0.4" FontSize="12"
-                             VerticalAlignment="Center" />
-                </StackPanel>
-              </DataTemplate>
-            </ListBox.ItemTemplate>
-          </ListBox>
-
-          <Border Classes="card">
-            <StackPanel Spacing="8">
-              <TextBlock Text="{loc:Tr Publish.NewVersion}" FontWeight="SemiBold" FontSize="13" />
-              <Grid ColumnDefinitions="*,*">
-                <TextBox Grid.Column="0" Margin="0,0,8,0"
-                         Watermark="{loc:Tr Publish.Semver}" Text="{Binding NewVersionSemver}" />
-                <ComboBox Grid.Column="1" ItemsSource="{Binding Stages}"
-                          SelectedItem="{Binding NewVersionStage}" HorizontalAlignment="Stretch" />
-              </Grid>
-              <TextBox Watermark="{loc:Tr Publish.ReleaseNotes}" Text="{Binding NewVersionNotes}"
-                       AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
-              <CheckBox Content="{loc:Tr Publish.PublishNow}"
-                        IsChecked="{Binding PublishVersionImmediately}" />
-              <Button Content="{loc:Tr Publish.Create}" Command="{Binding CreateVersionCommand}"
-                      IsEnabled="{Binding CanCreateVersion}" />
+        <!-- A deletion says what disappears before it happens, and nothing is sent until the
+             second button is pressed. -->
+        <Border Classes="card" IsVisible="{Binding HasPendingDeletion}">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding PendingDeletion.Prompt}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="{loc:Tr Publish.ConfirmDelete}"
+                      Command="{Binding ConfirmDeletionCommand}" />
+              <Button Content="{loc:Tr Publish.KeepIt}" Classes="accent"
+                      Command="{Binding CancelDeletionCommand}" />
             </StackPanel>
-          </Border>
+          </StackPanel>
+        </Border>
 
-          <TextBlock Text="{loc:Tr Publish.NewBuild}" FontSize="16" FontWeight="Light"
-                     Margin="0,8,0,0" />
+        <TextBlock Text="{loc:Tr Publish.SelectGame}" Opacity="0.5" Margin="0,8"
+                   IsVisible="{Binding !!!Selected}" />
+      </StackPanel>
 
-          <TextBlock Text="{loc:Tr Publish.SelectVersion}" Opacity="0.5" FontSize="12"
-                     IsVisible="{Binding !!!SelectedVersion}" />
+      <!-- Tabs rather than pages: a publisher works on one game at a time, and the selected
+           game is the context all four share. Binding, not navigation, so D17 still holds. -->
+      <TabControl Grid.Row="2" Margin="0,12,0,0"
+                  IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
 
-          <Border Classes="card">
-            <StackPanel Spacing="8">
-              <Grid ColumnDefinitions="*,Auto">
-                <TextBox Grid.Column="0" Margin="0,0,8,0"
-                         Watermark="{loc:Tr Publish.Directory}" Text="{Binding BuildDirectory}" />
-                <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}"
-                        Command="{Binding ChooseDirectoryCommand}" />
-              </Grid>
-              <TextBox Watermark="{loc:Tr Publish.Entrypoint}" Text="{Binding Entrypoint}" />
-              <TextBox Watermark="{loc:Tr Publish.LaunchArgs}" Text="{Binding LaunchArgs}" />
+        <TabItem Header="{loc:Tr Publish.TabBuilds}">
+          <ScrollViewer>
+            <StackPanel Spacing="16" Margin="0,12,0,0">
+
+              <TextBlock Text="{loc:Tr Publish.Versions}" FontSize="16" FontWeight="Light" />
+
+              <ListBox ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}"
+                       MaxHeight="160">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:GameVersion">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding Semver}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Stage}" Opacity="0.6" FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Published}" Opacity="0.4" FontSize="12"
+                                   VerticalAlignment="Center" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                              Command="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).AskToDeleteVersionCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="{loc:Tr Publish.NewVersion}" FontWeight="SemiBold" FontSize="13" />
+                  <Grid ColumnDefinitions="*,*">
+                    <TextBox Grid.Column="0" Margin="0,0,8,0"
+                             Watermark="{loc:Tr Publish.Semver}" Text="{Binding NewVersionSemver}" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding Stages}"
+                              SelectedItem="{Binding NewVersionStage}" HorizontalAlignment="Stretch" />
+                  </Grid>
+                  <TextBox Watermark="{loc:Tr Publish.ReleaseNotes}" Text="{Binding NewVersionNotes}"
+                           AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
+                  <CheckBox Content="{loc:Tr Publish.PublishNow}"
+                            IsChecked="{Binding PublishVersionImmediately}" />
+                  <Button Content="{loc:Tr Publish.Create}" Command="{Binding CreateVersionCommand}"
+                          IsEnabled="{Binding CanCreateVersion}" />
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="{loc:Tr Publish.NewBuild}" FontSize="16" FontWeight="Light"
+                         Margin="0,8,0,0" />
+
+              <TextBlock Text="{loc:Tr Publish.SelectVersion}" Opacity="0.5" FontSize="12"
+                         IsVisible="{Binding !!!SelectedVersion}" />
+
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0" Margin="0,0,8,0"
+                             Watermark="{loc:Tr Publish.Directory}" Text="{Binding BuildDirectory}" />
+                    <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}"
+                            Command="{Binding ChooseDirectoryCommand}" />
+                  </Grid>
+                  <TextBox Watermark="{loc:Tr Publish.Entrypoint}" Text="{Binding Entrypoint}" />
+                  <TextBox Watermark="{loc:Tr Publish.LaunchArgs}" Text="{Binding LaunchArgs}" />
+                  <Grid ColumnDefinitions="*,*">
+                    <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Platforms}"
+                              SelectedItem="{Binding BuildPlatform}" HorizontalAlignment="Stretch" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding Architectures}"
+                              SelectedItem="{Binding Architecture}" HorizontalAlignment="Stretch" />
+                  </Grid>
+
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{loc:Tr Publish.Start}" Classes="accent"
+                            Command="{Binding PublishCommand}" IsEnabled="{Binding CanPublish}"
+                            IsVisible="{Binding !IsPublishing}" />
+                    <Button Content="{loc:Tr Detail.CancelDownload}"
+                            Command="{Binding CancelPublishCommand}"
+                            IsVisible="{Binding IsPublishing}" />
+                  </StackPanel>
+
+                  <StackPanel Spacing="4" IsVisible="{Binding IsPublishing}">
+                    <TextBlock Text="{Binding PublishPhaseText}" FontSize="12" />
+                    <ProgressBar Minimum="0" Maximum="1" Value="{Binding PublishFraction}"
+                                 IsIndeterminate="{Binding IsPublishProgressIndeterminate}" Height="4" />
+                    <TextBlock Text="{Binding PublishDetail}" Opacity="0.6" FontSize="12" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="{loc:Tr Publish.Builds}" FontSize="16" FontWeight="Light"
+                         Margin="0,8,0,0" />
+
+              <ItemsControl ItemsSource="{Binding Builds}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:GameBuild">
+                    <Border Classes="card" Margin="0,0,0,8">
+                      <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14">
+                          <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Architecture}" Opacity="0.7" />
+                          <TextBlock Text="{Binding Status}" Opacity="0.7" />
+                          <TextBlock Text="{Binding FileCount}" Opacity="0.5" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                                Command="{Binding $parent[ItemsControl].((vm:DeveloperViewModel)DataContext).AskToDeleteBuildCommand}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <!-- The game's own fields. UpdateGameAsync existed since milestone 8 and nothing
+             called it, so a draft could only be published from outside the launcher. -->
+        <TabItem Header="{loc:Tr Publish.TabDetails}" DataContext="{Binding Editor}">
+          <ScrollViewer>
+            <StackPanel Spacing="12" Margin="0,12,0,0" x:DataType="vm:GameEditorViewModel">
+
+              <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Text="{Binding StatusMessage}" Opacity="0.8"
+                         IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+              <TextBlock Text="{loc:Tr Publish.GameTitle}" FontSize="12" Opacity="0.6" />
+              <TextBox Text="{Binding Title}" />
+
+              <TextBlock Text="{loc:Tr Publish.GameSummary}" FontSize="12" Opacity="0.6" />
+              <TextBox Text="{Binding Summary}" AcceptsReturn="True" Height="60"
+                       TextWrapping="Wrap" />
+
+              <TextBlock Text="{loc:Tr Publish.Description}" FontSize="12" Opacity="0.6" />
+              <TextBox Text="{Binding Description}" AcceptsReturn="True" Height="140"
+                       TextWrapping="Wrap" />
+
               <Grid ColumnDefinitions="*,*">
-                <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Platforms}"
-                          SelectedItem="{Binding BuildPlatform}" HorizontalAlignment="Stretch" />
-                <ComboBox Grid.Column="1" ItemsSource="{Binding Architectures}"
-                          SelectedItem="{Binding Architecture}" HorizontalAlignment="Stretch" />
+                <StackPanel Grid.Column="0" Spacing="6" Margin="0,0,8,0">
+                  <TextBlock Text="{loc:Tr Publish.ReleaseDate}" FontSize="12" Opacity="0.6" />
+                  <DatePicker SelectedDate="{Binding ReleaseDate}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="6">
+                  <TextBlock Text="{loc:Tr Publish.Visibility}" FontSize="12" Opacity="0.6" />
+                  <ComboBox ItemsSource="{Binding Visibilities}" SelectedItem="{Binding Visibility}"
+                            HorizontalAlignment="Stretch" />
+                </StackPanel>
               </Grid>
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Content="{loc:Tr Publish.SaveChanges}" Classes="accent"
+                        Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" />
+                <TextBlock Text="{loc:Tr Publish.NoChanges}" Opacity="0.5" FontSize="12"
+                           VerticalAlignment="Center" IsVisible="{Binding !HasChanges}" />
+              </StackPanel>
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="{loc:Tr Publish.TabArtwork}" DataContext="{Binding Artwork}">
+          <ScrollViewer>
+            <StackPanel Spacing="12" Margin="0,12,0,0" x:DataType="vm:GameMediaViewModel">
+
+              <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Text="{Binding StatusMessage}" Opacity="0.8"
+                         IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+              <Border Classes="card" IsVisible="{Binding PendingDeletion, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <StackPanel Spacing="10">
+                  <TextBlock Text="{Binding PendingDeletion.Prompt}" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{loc:Tr Publish.ConfirmDelete}"
+                            Command="{Binding ConfirmDeletionCommand}" />
+                    <Button Content="{loc:Tr Publish.KeepIt}" Classes="accent"
+                            Command="{Binding CancelDeletionCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="{loc:Tr Publish.AddImage}" FontWeight="SemiBold" FontSize="13" />
+                  <!-- What this deployment accepts, said before a file is chosen rather than
+                       after an upload is refused. -->
+                  <TextBlock Text="{Binding LimitsText}" Opacity="0.6" FontSize="12"
+                             TextWrapping="Wrap" />
+                  <Grid ColumnDefinitions="Auto,*">
+                    <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Kinds}"
+                              SelectedItem="{Binding UploadKind}" />
+                    <TextBox Grid.Column="1" Watermark="{loc:Tr Publish.AltText}"
+                             Text="{Binding UploadAltText}" MaxLength="{Binding MaxAltTextLength}" />
+                  </Grid>
+                  <Button Content="{loc:Tr Publish.AddImage}" Classes="accent"
+                          Command="{Binding UploadCommand}" IsEnabled="{Binding CanUpload}" />
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="{loc:Tr Publish.NoArtwork}" Opacity="0.5" FontSize="12"
+                         IsVisible="{Binding !HasArtwork}" />
+
+              <TextBlock Text="{loc:Tr Publish.Identity}" FontSize="14" FontWeight="Light"
+                         IsVisible="{Binding Identity.Count}" />
+
+              <ItemsControl ItemsSource="{Binding Identity}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:GameMedia">
+                    <Border Classes="card" Margin="0,0,0,6">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <TextBlock Grid.Column="0" Text="{Binding Kind}" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" Margin="0,0,12,0" />
+                        <TextBlock Grid.Column="1" Text="{Binding AltText}" Opacity="0.7"
+                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                        <Button Grid.Column="2" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                                Command="{Binding $parent[ItemsControl].((vm:GameMediaViewModel)DataContext).AskToDeleteCommand}"
+                                CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
 
               <StackPanel Orientation="Horizontal" Spacing="10">
-                <Button Content="{loc:Tr Publish.Start}" Classes="accent"
-                        Command="{Binding PublishCommand}" IsEnabled="{Binding CanPublish}"
-                        IsVisible="{Binding !IsPublishing}" />
-                <Button Content="{loc:Tr Detail.CancelDownload}"
-                        Command="{Binding CancelPublishCommand}"
-                        IsVisible="{Binding IsPublishing}" />
+                <TextBlock Text="{loc:Tr Publish.Gallery}" FontSize="14" FontWeight="Light" />
+                <TextBlock Text="{Binding GalleryCountText}" Opacity="0.5" FontSize="12"
+                           VerticalAlignment="Center" />
               </StackPanel>
 
-              <StackPanel Spacing="4" IsVisible="{Binding IsPublishing}">
-                <TextBlock Text="{Binding PublishPhaseText}" FontSize="12" />
-                <ProgressBar Minimum="0" Maximum="1" Value="{Binding PublishFraction}"
-                             IsIndeterminate="{Binding IsPublishProgressIndeterminate}" Height="4" />
-                <TextBlock Text="{Binding PublishDetail}" Opacity="0.6" FontSize="12" />
-              </StackPanel>
+              <ListBox ItemsSource="{Binding Gallery}" SelectedItem="{Binding Selected}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="models:GameMedia">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                      <TextBlock Grid.Column="0" Text="{Binding AltText}" Opacity="0.8"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <!-- Two arrows rather than a drag: a swap is two deterministic PATCHes,
+                           and a command is something a test can press. -->
+                      <Button Grid.Column="1" Content="{loc:Tr Publish.MoveUp}" FontSize="11"
+                              Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).MoveUpCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="2" Content="{loc:Tr Publish.MoveDown}" FontSize="11"
+                              Margin="6,0"
+                              Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).MoveDownCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="3" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                              Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).AskToDeleteCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <Border Classes="card"
+                      IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="{loc:Tr Publish.AltText}" FontSize="12" Opacity="0.6" />
+                  <TextBox Text="{Binding EditedAltText}" MaxLength="{Binding MaxAltTextLength}" />
+                  <TextBlock Text="{loc:Tr Publish.NoReplaceInPlace}" Opacity="0.5" FontSize="11"
+                             TextWrapping="Wrap" />
+                  <Button Content="{loc:Tr Publish.SaveDescription}"
+                          Command="{Binding SaveDescriptionCommand}"
+                          IsEnabled="{Binding CanSaveDescription}" />
+                </StackPanel>
+              </Border>
+
             </StackPanel>
-          </Border>
+          </ScrollViewer>
+        </TabItem>
 
-          <TextBlock Text="{loc:Tr Publish.Builds}" FontSize="16" FontWeight="Light"
-                     Margin="0,8,0,0" />
+        <TabItem Header="{loc:Tr Publish.TabDevlog}" DataContext="{Binding Devlog}">
+          <ScrollViewer>
+            <StackPanel Spacing="12" Margin="0,12,0,0" x:DataType="vm:GameDevlogViewModel">
 
-          <ItemsControl ItemsSource="{Binding Builds}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="models:GameBuild">
-                <Border Classes="card" Margin="0,0,0,8">
-                  <StackPanel Orientation="Horizontal" Spacing="14">
-                    <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding Architecture}" Opacity="0.7" />
-                    <TextBlock Text="{Binding Status}" Opacity="0.7" />
-                    <TextBlock Text="{Binding FileCount}" Opacity="0.5" />
+              <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                         IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Text="{Binding StatusMessage}" Opacity="0.8"
+                         IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+              <Border Classes="card" IsVisible="{Binding PendingDeletion, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <StackPanel Spacing="10">
+                  <TextBlock Text="{Binding PendingDeletion.Prompt}" TextWrapping="Wrap" />
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{loc:Tr Publish.ConfirmDelete}"
+                            Command="{Binding ConfirmDeletionCommand}" />
+                    <Button Content="{loc:Tr Publish.KeepIt}" Classes="accent"
+                            Command="{Binding CancelDeletionCommand}" />
                   </StackPanel>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
+                </StackPanel>
+              </Border>
 
-        </StackPanel>
-      </StackPanel>
-    </ScrollViewer>
+              <Border Classes="card">
+                <StackPanel Spacing="8">
+                  <TextBlock Text="{loc:Tr Publish.NewEntry}" FontWeight="SemiBold" FontSize="13"
+                             IsVisible="{Binding !IsEditing}" />
+                  <TextBlock Text="{loc:Tr Publish.EditEntry}" FontWeight="SemiBold" FontSize="13"
+                             IsVisible="{Binding IsEditing}" />
+
+                  <TextBox Watermark="{loc:Tr Publish.EntryTitle}" Text="{Binding EntryTitle}" />
+                  <TextBox Watermark="{loc:Tr Publish.EntryBody}" Text="{Binding EntryBody}"
+                           AcceptsReturn="True" Height="160" TextWrapping="Wrap" />
+
+                  <TextBlock Text="{loc:Tr Publish.LinkedVersion}" FontSize="12" Opacity="0.6" />
+                  <ComboBox ItemsSource="{Binding Versions}" SelectedItem="{Binding EntryVersion}"
+                            PlaceholderText="{loc:Tr Publish.NoVersion}"
+                            HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                      <DataTemplate x:DataType="models:GameVersion">
+                        <TextBlock Text="{Binding Semver}" />
+                      </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                  </ComboBox>
+
+                  <CheckBox Content="{loc:Tr Publish.PublishEntry}"
+                            IsChecked="{Binding PublishImmediately}" />
+                  <TextBlock Text="{loc:Tr Publish.RepublishKeepsTheDate}" Opacity="0.5"
+                             FontSize="11" TextWrapping="Wrap" />
+
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="{loc:Tr Publish.SaveEntry}" Classes="accent"
+                            Command="{Binding SaveCommand}" IsEnabled="{Binding CanSave}" />
+                    <Button Content="{loc:Tr Publish.NewEntry}" Command="{Binding NewEntryCommand}"
+                            IsVisible="{Binding IsEditing}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="{loc:Tr Publish.NoEntries}" Opacity="0.5" FontSize="12"
+                         IsVisible="{Binding !Entries.Count}" />
+
+              <ItemsControl ItemsSource="{Binding Entries}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="models:PatchNote">
+                    <Border Classes="card" Margin="0,0,0,8">
+                      <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBlock Grid.Column="0" Text="{Binding Title}" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="1" Text="{loc:Tr Publish.Draft}" FontSize="11"
+                                     Opacity="0.6" IsVisible="{Binding !Published}" />
+                        </Grid>
+                        <TextBlock Text="{Binding BodyMarkdown}" Opacity="0.7" FontSize="12"
+                                   MaxLines="3" TextTrimming="CharacterEllipsis"
+                                   TextWrapping="Wrap" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                          <Button Content="{loc:Tr Publish.EditEntry}" FontSize="11"
+                                  Command="{Binding $parent[ItemsControl].((vm:GameDevlogViewModel)DataContext).EditCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="{loc:Tr Publish.PublishEntry}" FontSize="11"
+                                  IsVisible="{Binding !Published}"
+                                  Command="{Binding $parent[ItemsControl].((vm:GameDevlogViewModel)DataContext).TogglePublishedCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="{loc:Tr Publish.WithdrawEntry}" FontSize="11"
+                                  IsVisible="{Binding Published}"
+                                  Command="{Binding $parent[ItemsControl].((vm:GameDevlogViewModel)DataContext).TogglePublishedCommand}"
+                                  CommandParameter="{Binding}" />
+                          <Button Content="{loc:Tr Publish.Delete}" FontSize="11"
+                                  Command="{Binding $parent[ItemsControl].((vm:GameDevlogViewModel)DataContext).AskToDeleteCommand}"
+                                  CommandParameter="{Binding}" />
+                        </StackPanel>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+
+              <Button Content="{loc:Tr Publish.ShowOlder}" HorizontalAlignment="Center"
+                      Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMore}" />
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+      </TabControl>
+
+    </Grid>
 
   </Grid>
 
