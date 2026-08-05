@@ -35,6 +35,14 @@ public sealed record InstalledGame
 
     public string GameTitle { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The cover the catalog advertised when this build was installed. Kept here because the
+    /// artwork cache is indexed by URL and survives perfectly well offline — what it lacks with
+    /// no server is somebody who remembers the URL. Empty rather than null, matching
+    /// <see cref="Game.CoverUrl"/>, so a reader takes the field either way.
+    /// </summary>
+    public string CoverUrl { get; init; } = string.Empty;
+
     public string BuildId { get; init; } = string.Empty;
 
     public string VersionId { get; init; } = string.Empty;

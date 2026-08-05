@@ -143,11 +143,12 @@ public sealed class LibraryViewModelTests
     }
 
     private static InstalledGame InstalledGameNamed(
-        string id, InstallState state = InstallState.Installed) => new()
+        string id, InstallState state = InstallState.Installed, string coverUrl = "") => new()
         {
             GameId = id,
             GameSlug = id,
             GameTitle = id,
+            CoverUrl = coverUrl,
             BuildId = "b1",
             VersionSemver = "0.2.0",
             InstallDirectory = "/games/" + id,
@@ -291,6 +292,26 @@ public sealed class LibraryViewModelTests
         Assert.Equal(2, model.Games.Count);
         Assert.All(model.Games, card => Assert.True(card.CanPlay));
         Assert.Equal("Orbital Drift", model.Games[0].Title);
+    }
+
+    // The artwork cache is indexed by URL and needs no server, so the only thing that was
+    // missing offline was somebody who remembered the URL. The row does now. A test cannot
+    // assert on a decoded picture (D37), so it asserts on which URL was asked for.
+    [Fact]
+    public async Task WithNoServerACardStillAsksForTheCoverTheRowRemembers()
+    {
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.Network, "unreachable"));
+        Installed(InstalledGameNamed(
+            "Orbital Drift", coverUrl: "https://files.example/media/86e1.png"));
+
+        LibraryViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsOffline);
+        Assert.Equal("https://files.example/media/86e1.png", model.Games[0].Game.CoverUrl);
+        await _images.Received(1).GetAsync(
+            "https://files.example/media/86e1.png", Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -1,6 +1,9 @@
+using System.Globalization;
+using Dapper;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Models;
 using GameLauncher.Infrastructure.Installs;
+using Microsoft.Data.Sqlite;
 
 namespace GameLauncher.Infrastructure.Tests.Installs;
 
@@ -14,6 +17,7 @@ public sealed class SqliteInstallStoreTests
         GameId = "g1",
         GameSlug = "orbital-drift",
         GameTitle = "Orbital Drift",
+        CoverUrl = "https://files.example/media/86e1.png",
         BuildId = "b1",
         VersionId = "v1",
         VersionSemver = "0.2.0",
@@ -61,6 +65,7 @@ public sealed class SqliteInstallStoreTests
         Assert.Equal(GamePlatform.Windows, read.Platform);
         Assert.Equal(BuildArchitecture.X64, read.Architecture);
         Assert.Equal(Sample.InstallDirectory, read.InstallDirectory);
+        Assert.Equal("https://files.example/media/86e1.png", read.CoverUrl);
         Assert.Equal("bin/Game.exe", read.Entrypoint);
         Assert.Equal("--fullscreen", read.LaunchArgs);
         Assert.Equal("86e1", read.ManifestSha256);
@@ -155,6 +160,84 @@ public sealed class SqliteInstallStoreTests
         InstalledGame? read = await second.FindAsync("g1", TestContext.Current.CancellationToken);
 
         Assert.Equal(string.Empty, read?.LaunchOptions);
+    }
+
+    // The real case of somebody who updates the launcher: their database was written by a
+    // version that had no cover_url, and the rows in it are not re-installed. The column's
+    // default is what they get, and it has to be the empty string rather than null — the model
+    // says a missing cover is an empty string, and a null would surface as one anyway only by
+    // accident.
+    [Fact]
+    public async Task ARowWrittenBeforeTheCoverColumnExistedMigratesToAnEmptyCover()
+    {
+        using var directory = new TemporaryDirectory();
+        string path = directory.File("launcher.db");
+
+        await WriteSchemaWithoutTheCoverColumnAsync(path);
+
+        using SqliteInstallStore store = new(path);
+        InstalledGame? read = await store.FindAsync("g1", TestContext.Current.CancellationToken);
+
+        Assert.NotNull(read);
+        Assert.Equal(string.Empty, read.CoverUrl);
+        Assert.Equal("Orbital Drift", read.GameTitle);
+    }
+
+    /// <summary>
+    /// The schema exactly as the launcher shipped it before this column: migrations 0 and 1,
+    /// with <c>user_version</c> saying so. Written out rather than derived, because a migration
+    /// test that builds the old schema from the new code proves nothing about the old code.
+    /// </summary>
+    private static async Task WriteSchemaWithoutTheCoverColumnAsync(string path)
+    {
+        await using SqliteConnection connection = new(
+            new SqliteConnectionStringBuilder
+            {
+                DataSource = path,
+                Mode = SqliteOpenMode.ReadWriteCreate,
+            }.ToString());
+
+        await connection.OpenAsync(TestContext.Current.CancellationToken);
+
+        await connection.ExecuteAsync(
+            """
+            CREATE TABLE installs (
+                game_id           TEXT    NOT NULL PRIMARY KEY,
+                game_slug         TEXT    NOT NULL,
+                game_title        TEXT    NOT NULL,
+                build_id          TEXT    NOT NULL,
+                version_id        TEXT    NOT NULL,
+                version_semver    TEXT    NOT NULL,
+                platform          TEXT    NOT NULL,
+                architecture      TEXT    NOT NULL,
+                install_directory TEXT    NOT NULL,
+                entrypoint        TEXT    NOT NULL,
+                launch_args       TEXT    NOT NULL,
+                manifest_sha256   TEXT    NOT NULL,
+                size_bytes        INTEGER NOT NULL,
+                file_count        INTEGER NOT NULL,
+                state             TEXT    NOT NULL,
+                installed_at      TEXT    NOT NULL,
+                updated_at        TEXT    NOT NULL,
+                last_verified_at  TEXT        NULL,
+                last_played_at    TEXT        NULL
+            );
+            ALTER TABLE installs ADD COLUMN launch_options TEXT NOT NULL DEFAULT '';
+            PRAGMA user_version = 2;
+            """);
+
+        await connection.ExecuteAsync(
+            """
+            INSERT INTO installs (
+                game_id, game_slug, game_title, build_id, version_id, version_semver,
+                platform, architecture, install_directory, entrypoint, launch_args,
+                manifest_sha256, size_bytes, file_count, state, installed_at, updated_at)
+            VALUES (
+                'g1', 'orbital-drift', 'Orbital Drift', 'b1', 'v1', '0.2.0',
+                'Windows', 'X64', '/games/orbital-drift', 'Game.exe', '',
+                '86e1', 77, 3, 'Installed', @instant, @instant)
+            """,
+            new { instant = Installed.ToString("O", CultureInfo.InvariantCulture) });
     }
 
     [Fact]

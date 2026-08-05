@@ -180,8 +180,8 @@ public sealed partial class LibraryViewModel : ViewModelBase
 
     /// <summary>
     /// After the list is on screen, and never in front of it: the games are the page, and the
-    /// pictures are what arrives once the page is already usable. An offline card has no URL
-    /// to fetch — the install row does not keep one — so it keeps its placeholder.
+    /// pictures are what arrives once the page is already usable. Offline is no different: the
+    /// install row carries the URL and the artwork cache answers from disk.
     /// </summary>
     private async Task LoadCoversAsync(CancellationToken cancellationToken)
     {
@@ -205,6 +205,11 @@ public sealed partial class LibraryViewModel : ViewModelBase
                 Id = install.GameId,
                 Slug = install.GameSlug,
                 Title = install.GameTitle,
+
+                // The row kept the URL, and the artwork cache is indexed by URL and needs no
+                // server. So an offline card asks for its cover exactly as an online one does,
+                // and finds it on this disk whenever it has been seen before.
+                CoverUrl = install.CoverUrl,
             };
 
             Games.Add(new GameCardViewModel(game, install, _games, _localization));

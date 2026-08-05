@@ -84,9 +84,15 @@ public sealed class InstallationServiceTests : IDisposable
         UrlsExpireAt = Now.AddHours(1),
     };
 
-    private static InstallRequest RequestFor(string? directory) => new()
+    private static InstallRequest RequestFor(string? directory, string coverUrl = "") => new()
     {
-        Game = new Game { Id = "g1", Slug = "orbital-drift", Title = "Orbital Drift" },
+        Game = new Game
+        {
+            Id = "g1",
+            Slug = "orbital-drift",
+            Title = "Orbital Drift",
+            CoverUrl = coverUrl,
+        },
         Version = new GameVersion { Id = "v1", GameId = "g1", Semver = "0.2.0" },
         Build = new GameBuild
         {
@@ -265,6 +271,57 @@ public sealed class InstallationServiceTests : IDisposable
 
         Assert.Equal("-windowed", result.Install.LaunchOptions);
         Assert.Equal("--fullscreen", result.Install.LaunchArgs);
+    }
+
+    // The row carries the cover so the library has pictures with no server to ask: the artwork
+    // cache is indexed by URL and survives offline, and this is what remembers the URL.
+    [Fact]
+    public async Task TheCoverTheCatalogAdvertisedIsRecordedOnTheRow()
+    {
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)));
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(InstallDirectory, coverUrl: "https://files.example/media/86e1.png"),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://files.example/media/86e1.png", result.Install.CoverUrl);
+
+        InstalledGame? stored = await _store.FindAsync(
+            "g1", TestContext.Current.CancellationToken);
+        Assert.Equal("https://files.example/media/86e1.png", stored?.CoverUrl);
+    }
+
+    // A publisher can replace a cover, and an update is where the launcher hears about it.
+    [Fact]
+    public async Task AnUpdateWithANewCoverWritesIt()
+    {
+        await _store.SaveAsync(
+            Installed("b0") with { CoverUrl = "https://files.example/media/old.png" },
+            TestContext.Current.CancellationToken);
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)), from: "b0");
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(InstallDirectory, coverUrl: "https://files.example/media/new.png"),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://files.example/media/new.png", result.Install.CoverUrl);
+    }
+
+    // A response that arrived without a cover is not a publisher who removed one. Taking it as
+    // one would throw away the only copy of the URL this machine has when there is no server.
+    [Fact]
+    public async Task AnUpdateWithNoCoverLeavesTheOneAlreadyRecorded()
+    {
+        await _store.SaveAsync(
+            Installed("b0") with { CoverUrl = "https://files.example/media/86e1.png" },
+            TestContext.Current.CancellationToken);
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)), from: "b0");
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(InstallDirectory),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal("https://files.example/media/86e1.png", result.Install.CoverUrl);
     }
 
     // Core feature 7 of the plan: the configured directory is where new games go. The field

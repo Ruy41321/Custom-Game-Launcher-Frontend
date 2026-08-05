@@ -48,12 +48,18 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
         // Arguments the player added, kept apart from the ones the manifest carries so an
         // update cannot discard them.
         "ALTER TABLE installs ADD COLUMN launch_options TEXT NOT NULL DEFAULT '';",
+
+        // The cover the catalog advertised, so the library has pictures with no server to ask.
+        // The default is what an existing row gets, and it is the empty string rather than null
+        // because a missing cover and an absent column read the same way everywhere else.
+        "ALTER TABLE installs ADD COLUMN cover_url TEXT NOT NULL DEFAULT '';",
     ];
 
     private const string SelectColumns = """
         SELECT game_id           AS GameId,
                game_slug         AS GameSlug,
                game_title        AS GameTitle,
+               cover_url         AS CoverUrl,
                build_id          AS BuildId,
                version_id        AS VersionId,
                version_semver    AS VersionSemver,
@@ -129,18 +135,19 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
         await connection.ExecuteAsync(new CommandDefinition(
             """
             INSERT INTO installs (
-                game_id, game_slug, game_title, build_id, version_id, version_semver,
+                game_id, game_slug, game_title, cover_url, build_id, version_id, version_semver,
                 platform, architecture, install_directory, entrypoint, launch_args,
                 launch_options, manifest_sha256, size_bytes, file_count, state,
                 installed_at, updated_at, last_verified_at, last_played_at)
             VALUES (
-                @GameId, @GameSlug, @GameTitle, @BuildId, @VersionId, @VersionSemver,
+                @GameId, @GameSlug, @GameTitle, @CoverUrl, @BuildId, @VersionId, @VersionSemver,
                 @Platform, @Architecture, @InstallDirectory, @Entrypoint, @LaunchArgs,
                 @LaunchOptions, @ManifestSha256, @SizeBytes, @FileCount, @State,
                 @InstalledAt, @UpdatedAt, @LastVerifiedAt, @LastPlayedAt)
             ON CONFLICT (game_id) DO UPDATE SET
                 game_slug         = excluded.game_slug,
                 game_title        = excluded.game_title,
+                cover_url         = excluded.cover_url,
                 build_id          = excluded.build_id,
                 version_id        = excluded.version_id,
                 version_semver    = excluded.version_semver,
@@ -254,6 +261,8 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
 
         public string GameTitle { get; init; } = string.Empty;
 
+        public string CoverUrl { get; init; } = string.Empty;
+
         public string BuildId { get; init; } = string.Empty;
 
         public string VersionId { get; init; } = string.Empty;
@@ -293,6 +302,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             GameId = install.GameId,
             GameSlug = install.GameSlug,
             GameTitle = install.GameTitle,
+            CoverUrl = install.CoverUrl,
             BuildId = install.BuildId,
             VersionId = install.VersionId,
             VersionSemver = install.VersionSemver,
@@ -317,6 +327,7 @@ public sealed class SqliteInstallStore : IInstallStore, IDisposable
             GameId = GameId,
             GameSlug = GameSlug,
             GameTitle = GameTitle,
+            CoverUrl = CoverUrl,
             BuildId = BuildId,
             VersionId = VersionId,
             VersionSemver = VersionSemver,

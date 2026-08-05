@@ -607,6 +607,14 @@ public sealed class InstallationService(
             GameId = request.Game.Id,
             GameSlug = request.Game.Slug,
             GameTitle = request.Game.Title,
+
+            // A publisher can change a cover, so an update rewrites it — but only with one. A
+            // response that arrived without a cover is not a publisher who removed it, and
+            // taking it as one would throw away the only copy of the URL this machine has
+            // offline, which is the whole reason the column exists.
+            CoverUrl = request.Game.CoverUrl.Length > 0
+                ? request.Game.CoverUrl
+                : existing?.CoverUrl ?? string.Empty,
             BuildId = plan.BuildId,
             VersionId = request.Version.Id,
             VersionSemver = request.Version.Semver,
