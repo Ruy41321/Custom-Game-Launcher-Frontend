@@ -228,8 +228,8 @@ thing an absent field cannot express.
 
 ## Deleting, and being told what goes
 
-`DELETE /builds/{id}` and `DELETE /games/{id}/versions/{versionId}`. Deleting a build is how a
-publisher gets **quota back**: the server's collector reclaims the blobs nothing else references
+`DELETE /builds/{id}`, `DELETE /games/{id}/versions/{versionId}` and `DELETE /games/{id}`.
+Deleting a build is how a publisher gets **quota back**: the server's collector reclaims the blobs nothing else references
 and refunds the bytes, so this is not merely tidying up.
 
 **Nothing is deleted on one click.** `PendingDeletion` holds the sentence that says *what
@@ -245,6 +245,26 @@ The devlog's prompt goes further and names the reversible alternative: somebody 
 to stop being visible almost always wants to withdraw it rather than delete it.
 
 **A 404 on any of these is shown as "not available", never as "you do not have permission."**
+
+### Deleting a whole game
+
+The button is at the bottom of the **Details** tab — the one that owns the game's own fields —
+and it arms the same prompt the other three use. Its sentence carries two things the others do
+not, because nothing else on either side will say them:
+
+- **Other people may have it in their library, and the server deletes it anyway.** A library
+  entry is a bookmark, not a licence, and refusing while one exists would let a stranger
+  permanently stop a publisher from withdrawing their own work. What those people already
+  installed keeps working — an install is a directory on their machine that this server never
+  knew about — but updating and verifying it stop, with a 404 that the launcher shows as "not
+  available".
+- **`draft` is the reversible thing they probably meant.** Somebody who wants a title to stop
+  being visible does not want it destroyed, and the prompt says so rather than letting them find
+  out afterwards.
+
+When it succeeds the page **clears its selection** instead of letting the list fall through to
+the next row: the four tabs below are all showing a game that no longer exists, and quietly
+pointing a publisher at somebody's other title is worse than showing nothing.
 
 ---
 
@@ -320,8 +340,8 @@ game the caller may not edit, and the client must not translate that into a perm
 
 ## What is not implemented
 
-- **No delete surface for games.** The server cannot delete a game either; it is designed
-  together with account erasure, because it is the same question.
+- **No bulk actions.** Games, versions and builds are deleted one at a time, each with its own
+  prompt; there is no "delete every draft" and no multi-select.
 - **No draft/preview of what a build will look like** in Explore before publishing.
 - **No upload queue or background publishing.** The dashboard publishes one build, in the
   foreground, from the page the publisher is on.

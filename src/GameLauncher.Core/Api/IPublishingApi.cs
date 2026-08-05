@@ -288,4 +288,20 @@ public interface IPublishingApi
     /// </summary>
     Task DeleteVersionAsync(
         string idOrSlug, string versionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a game and everything under it: every version and build, its artwork, its devlog,
+    /// every library entry pointing at it, and its download history.
+    ///
+    /// The server allows this **even while other accounts hold the game in their library** — an
+    /// entry is a bookmark, not a licence — so nothing refuses it on their behalf and the
+    /// caller has to say so first. What those people already installed keeps working; what
+    /// stops is updating and verifying it, and the server answers both with
+    /// <see cref="ApiErrorCode.NotFound"/> rather than a refusal, because afterwards there
+    /// genuinely is no such game.
+    ///
+    /// A publisher who only wants a title to stop being visible should set
+    /// <see cref="GameVisibility.Draft"/> instead, which is reversible.
+    /// </summary>
+    Task DeleteGameAsync(string idOrSlug, CancellationToken cancellationToken = default);
 }

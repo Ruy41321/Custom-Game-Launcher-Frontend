@@ -695,4 +695,13 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Version deleted.</value>
   </data>
+  <data name="Publish.DeleteGame" xml:space="preserve">
+    <value>Delete this game</value>
+  </data>
+  <data name="Publish.ConfirmDeleteGame" xml:space="preserve">
+    <value>Delete "{0}"? Its {1} version(s) and every build, picture and devlog entry go with it, and anyone who has it installed can never update or verify it again — although what is already on their disk keeps working. To hide it instead without losing anything, set it back to draft.</value>
+  </data>
+  <data name="Publish.GameDeleted" xml:space="preserve">
+    <value>"{0}" was deleted. The space its builds used is credited back to your quota.</value>
+  </data>
 </root>

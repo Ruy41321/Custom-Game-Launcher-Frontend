@@ -473,4 +473,29 @@ public sealed class PublishingApiClientTests
         Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
         Assert.Equal("/api/v1/games/orbital-drift/versions/v1", handler.LastRequest.PathAndQuery);
     }
+
+    [Fact]
+    public async Task AGameIsDeletedByIdOrSlug()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeleteGameAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpMethod.Delete, handler.LastRequest.Method);
+        Assert.Equal("/api/v1/games/orbital-drift", handler.LastRequest.PathAndQuery);
+    }
+
+    // A slug is publisher-chosen text on a path segment, so it is escaped like every other id
+    // this client puts in a URL.
+    [Fact]
+    public async Task ADeletedGameIdIsEscaped()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.NoContent, "{}");
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        await client.DeleteGameAsync("a/b", TestContext.Current.CancellationToken);
+
+        Assert.Equal("/api/v1/games/a%2Fb", handler.LastRequest.PathAndQuery);
+    }
 }

@@ -489,4 +489,112 @@ public sealed class DeveloperViewModelTests
         await _catalog.DidNotReceive()
             .GetGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
+
+    // --- deleting the whole game -----------------------------------------------------------
+
+    [Fact]
+    public async Task AskingToDeleteAGameSendsNothingUntilItIsConfirmed()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync([Version("v1", "0.3.0")], []);
+
+        model.AskToDeleteGameCommand.Execute(model.Selected!.Game);
+
+        Assert.True(model.HasPendingDeletion);
+        await _publishing.DidNotReceive()
+            .DeleteGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The prompt carries what the other two do not: the server allows this while other people
+    /// hold the game in their library, so nobody refuses it on their behalf and the sentence is
+    /// the only warning there is. It also names the reversible alternative, which is what
+    /// somebody in this position usually meant.
+    /// </summary>
+    [Fact]
+    public async Task ThePromptForAGameSaysWhoElseItAffectsAndOffersDraftInstead()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync(
+            [Version("v1", "0.3.0"), Version("v2", "0.2.0")], [Build("b1", "v1")]);
+
+        model.AskToDeleteGameCommand.Execute(model.Selected!.Game);
+
+        string prompt = model.PendingDeletion!.Prompt;
+        Assert.Contains("Orbital Drift", prompt, StringComparison.Ordinal);
+        Assert.Contains("2 version(s)", prompt, StringComparison.Ordinal);
+        Assert.Contains("installed", prompt, StringComparison.Ordinal);
+        Assert.Contains("draft", prompt, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ConfirmingRemovesTheGameAndEverythingItWasShowing()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync(
+            [Version("v1", "0.3.0")], [Build("b1", "v1")]);
+
+        model.AskToDeleteGameCommand.Execute(model.Selected!.Game);
+        await model.ConfirmDeletionCommand.ExecuteAsync(null);
+
+        await _publishing.Received(1)
+            .DeleteGameAsync("Orbital Drift", Arg.Any<CancellationToken>());
+
+        Assert.Empty(model.Games);
+        Assert.Null(model.Selected);
+        Assert.Null(model.SelectedGame);
+        Assert.Empty(model.Versions);
+        Assert.Empty(model.Builds);
+        Assert.False(model.Editor.HasGame);
+    }
+
+    // Clearing the selection rather than letting the list pick the next row: the tabs below
+    // would otherwise silently start showing somebody's other title.
+    [Fact]
+    public async Task DeletingOneOfTwoGamesSelectsNeither()
+    {
+        Game first = GameNamed("Orbital Drift");
+        Game second = GameNamed("Deep Cut");
+        OwnsGames(first, second);
+        Detail(new GameDetail { Game = first });
+
+        DeveloperViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        model.SelectedGame = first;
+        await Task.Yield();
+
+        model.AskToDeleteGameCommand.Execute(first);
+        await model.ConfirmDeletionCommand.ExecuteAsync(null);
+
+        Assert.Single(model.Games);
+        Assert.Equal("Deep Cut", model.Games[0].Title);
+        Assert.Null(model.SelectedGame);
+    }
+
+    [Fact]
+    public async Task ChangingYourMindAboutAGameLeavesItWhereItWas()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync([Version("v1", "0.3.0")], []);
+
+        model.AskToDeleteGameCommand.Execute(model.Selected!.Game);
+        model.CancelDeletionCommand.Execute(null);
+
+        Assert.False(model.HasPendingDeletion);
+        Assert.Single(model.Games);
+        Assert.NotNull(model.Selected);
+        await _publishing.DidNotReceive()
+            .DeleteGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ARefusedGameDeletionLeavesTheListAlone()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync([], []);
+        _publishing.DeleteGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Forbidden, "not yours"));
+
+        model.AskToDeleteGameCommand.Execute(model.Selected!.Game);
+        await model.ConfirmDeletionCommand.ExecuteAsync(null);
+
+        Assert.NotNull(model.ErrorMessage);
+        Assert.Single(model.Games);
+        Assert.NotNull(model.Selected);
+    }
 }

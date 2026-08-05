@@ -205,6 +205,9 @@ internal sealed class FakePublishingApi : IPublishingApi
         string idOrSlug, string versionId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException(NotPartOfTheUploadFlow);
 
+    public Task DeleteGameAsync(string idOrSlug, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
     private const string NotPartOfTheUploadFlow =
         "This fake plays the build-upload protocol only.";
 

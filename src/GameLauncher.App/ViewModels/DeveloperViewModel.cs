@@ -535,6 +535,77 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         RaiseDerived();
     }
 
+    /// <summary>
+    /// Arms the deletion of a whole game.
+    ///
+    /// The prompt has to carry the part the other two do not: the server allows this **even
+    /// while other people hold the game in their library**, so nothing refuses it on their
+    /// behalf. What they installed keeps working and their updates stop, and a publisher who
+    /// only wants the title to stop being visible wants <c>draft</c> instead — which the prompt
+    /// names, because it is the reversible thing somebody in this position usually meant.
+    /// </summary>
+    [RelayCommand]
+    private void AskToDeleteGame(Game game)
+    {
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        int versions = Selected is { } detail
+            && string.Equals(detail.Game.Id, game.Id, StringComparison.Ordinal)
+                ? Versions.Count
+                : 0;
+
+        PendingDeletion = new PendingDeletion(
+            _localization.Translate(
+                "Publish.ConfirmDeleteGame",
+                game.Title,
+                versions.ToString(CultureInfo.CurrentCulture)),
+            async cancellationToken =>
+            {
+                await _publishing.DeleteGameAsync(game.Id, cancellationToken).ConfigureAwait(true);
+
+                Games.Remove(game);
+
+                // Clearing the selection rather than picking the next row: the children below
+                // are all showing a game that no longer exists, and letting the list choose a
+                // replacement would silently point a publisher at somebody's other title.
+                if (Selected is { } shown
+                    && string.Equals(shown.Game.Id, game.Id, StringComparison.Ordinal))
+                {
+                    ClearSelection();
+                }
+
+                StatusMessage = _localization.Translate("Publish.GameDeleted", game.Title);
+            });
+
+        RaiseDerived();
+    }
+
+    /// <summary>
+    /// Puts the page back to "no game selected". <see cref="_suppressSelectionReload"/> is held
+    /// while it happens: assigning <see cref="SelectedGame"/> normally means a publisher picked
+    /// a game, and null would otherwise start a load of nothing.
+    /// </summary>
+    private void ClearSelection()
+    {
+        _suppressSelectionReload = true;
+        try
+        {
+            SelectedGame = null;
+        }
+        finally
+        {
+            _suppressSelectionReload = false;
+        }
+
+        Selected = null;
+        SelectedVersion = null;
+        Versions.Clear();
+        Builds.Clear();
+
+        Editor.Show(null);
+    }
+
     [RelayCommand]
     private async Task ConfirmDeletionAsync(CancellationToken cancellationToken)
     {

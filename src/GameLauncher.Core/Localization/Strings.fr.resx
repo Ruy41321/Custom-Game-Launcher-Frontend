@@ -695,4 +695,13 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Version supprimee.</value>
   </data>
+  <data name="Publish.DeleteGame" xml:space="preserve">
+    <value>Supprimer ce jeu</value>
+  </data>
+  <data name="Publish.ConfirmDeleteGame" xml:space="preserve">
+    <value>Supprimer « {0} » ? Ses {1} version(s) et chaque build, image et entrée de devlog disparaissent avec lui, et ceux qui l'ont installé ne pourront plus jamais le mettre à jour ni le vérifier — même si ce qui est déjà sur leur disque continue de fonctionner. Pour le masquer sans rien perdre, repassez-le en brouillon.</value>
+  </data>
+  <data name="Publish.GameDeleted" xml:space="preserve">
+    <value>« {0} » a été supprimé. L'espace occupé par ses builds est recrédité sur votre quota.</value>
+  </data>
 </root>

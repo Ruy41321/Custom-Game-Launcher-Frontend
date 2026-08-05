@@ -138,6 +138,9 @@ public sealed class PublishingApiClient(HttpClient httpClient) : IPublishingApi
             GamePath(idOrSlug) + "/versions/" + Uri.EscapeDataString(versionId),
             cancellationToken);
 
+    public Task DeleteGameAsync(string idOrSlug, CancellationToken cancellationToken = default) =>
+        _transport.DeleteAsync(GamePath(idOrSlug), cancellationToken);
+
     /// <summary>
     /// The wire spelling of a media kind: the server's enum is lower case, and
     /// <c>ToString()</c> on a C# enum is not.

@@ -695,4 +695,13 @@
   <data name="Publish.VersionDeleted" xml:space="preserve">
     <value>Versione cancellata.</value>
   </data>
+  <data name="Publish.DeleteGame" xml:space="preserve">
+    <value>Cancella questo gioco</value>
+  </data>
+  <data name="Publish.ConfirmDeleteGame" xml:space="preserve">
+    <value>Cancellare "{0}"? Le sue {1} versione/i e ogni build, immagine e voce di devlog spariscono con lui, e chi ce l'ha installato non potrà più aggiornarlo né verificarlo — anche se quel che ha già su disco continua a funzionare. Per nasconderlo senza perdere nulla, rimettilo in bozza.</value>
+  </data>
+  <data name="Publish.GameDeleted" xml:space="preserve">
+    <value>"{0}" è stato cancellato. Lo spazio che occupavano le sue build torna sulla tua quota.</value>
+  </data>
 </root>

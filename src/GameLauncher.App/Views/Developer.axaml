@@ -231,6 +231,14 @@
                            VerticalAlignment="Center" IsVisible="{Binding !HasChanges}" />
               </StackPanel>
 
+              <!-- Deleting the whole game. Deliberately at the bottom of the tab that owns the
+                   game's own fields, and it arms the prompt shown above the tabs rather than
+                   acting on the click. The command belongs to the page, not to the editor. -->
+              <Button Content="{loc:Tr Publish.DeleteGame}" HorizontalAlignment="Left"
+                      Margin="0,12,0,0"
+                      Command="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).AskToDeleteGameCommand}"
+                      CommandParameter="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).Selected.Game}" />
+
             </StackPanel>
           </ScrollViewer>
         </TabItem>
