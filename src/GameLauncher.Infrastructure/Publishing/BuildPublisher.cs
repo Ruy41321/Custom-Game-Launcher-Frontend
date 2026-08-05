@@ -13,14 +13,23 @@ namespace GameLauncher.Infrastructure.Publishing;
 public sealed class BuildPublisher(
     IPublishingApi api,
     IBuildPackager packager,
+    IServerCapabilityProvider capabilities,
     ILogger<BuildPublisher> logger) : IBuildPublisher
 {
     /// <summary>
-    /// Below the server's <c>uploads.maxChunkBytes</c>, whose default is 8 MiB. There is no
-    /// endpoint that advertises the real limit, so this is a guess with headroom rather than
-    /// an agreement — see the open debts.
+    /// What a chunk is when the server does not say — a server older than
+    /// <c>/capabilities</c>. Half the 8 MiB default, because guessing high is the direction
+    /// that fails: an oversized chunk is refused before the handler runs, with an error that
+    /// does not mention size.
     /// </summary>
-    public const int ChunkBytes = 4 * 1024 * 1024;
+    public const int FallbackChunkBytes = 4 * 1024 * 1024;
+
+    /// <summary>
+    /// The most this client will hold in one buffer, whatever a server allows. A publisher
+    /// that let a deployment choose an arbitrary allocation size would be handing a remote
+    /// number straight to `new byte[]`.
+    /// </summary>
+    public const int MaxChunkBytes = 16 * 1024 * 1024;
 
     /// <summary>
     /// How many times a chunk may be re-aimed at an offset the server corrected. One is the
@@ -36,6 +45,14 @@ public sealed class BuildPublisher(
     {
         PublishProgress state = new() { Phase = PublishPhase.Packaging };
         progress?.Report(state);
+
+        // The packager asks for the same document; the provider caches it, so this is one
+        // round trip for the whole publish rather than two.
+        ServerCapabilities limits = await capabilities
+            .GetAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        int chunkBytes = ChunkSizeFor(limits);
 
         BuildPackage package = await packager.PackageAsync(
             request.Directory,
@@ -92,7 +109,8 @@ public sealed class BuildPublisher(
             PackagedFile file = package.Files.First(candidate =>
                 string.Equals(candidate.Sha256, blob.Sha256, StringComparison.OrdinalIgnoreCase));
 
-            long sent = await UploadAsync(build.Id, blob, file, state, progress, cancellationToken)
+            long sent = await UploadAsync(
+                build.Id, blob, file, chunkBytes, state, progress, cancellationToken)
                 .ConfigureAwait(false);
 
             state = state with
@@ -122,6 +140,26 @@ public sealed class BuildPublisher(
     }
 
     /// <summary>
+    /// What to send, given what the server says it accepts. Clamped at both ends: the server's
+    /// number decides how much may travel, and this client decides how much it is willing to
+    /// allocate for it — a remote value reaching <c>new byte[]</c> unchecked is how a
+    /// misconfigured deployment becomes an out-of-memory failure on somebody's laptop.
+    /// </summary>
+    public static int ChunkSizeFor(ServerCapabilities limits)
+    {
+        long announced = limits.Uploads.MaxChunkBytes;
+        if (announced <= 0)
+        {
+            return FallbackChunkBytes;
+        }
+
+        // Never above what was announced, however small that is: a server that allows tiny
+        // chunks is being inefficient, but sending more than it allows is sending nothing at
+        // all. The only cap applied downwards is this client's own memory.
+        return (int)Math.Min(announced, MaxChunkBytes);
+    }
+
+    /// <summary>
     /// One blob, in chunks, resuming from whatever offset the server says it is at. The
     /// server's count is the authority: it is assigned by a conditional UPDATE, so a client
     /// that disagrees is the one that is wrong.
@@ -130,6 +168,7 @@ public sealed class BuildPublisher(
         string buildId,
         BlobDeclaration blob,
         PackagedFile file,
+        int chunkBytes,
         PublishProgress state,
         IProgress<PublishProgress>? progress,
         CancellationToken cancellationToken)
@@ -142,9 +181,9 @@ public sealed class BuildPublisher(
 
         await using FileStream source = new(
             file.SourcePath, FileMode.Open, FileAccess.Read, FileShare.Read,
-            ChunkBytes, useAsync: true);
+            chunkBytes, useAsync: true);
 
-        byte[] buffer = new byte[ChunkBytes];
+        byte[] buffer = new byte[chunkBytes];
         int corrections = 0;
 
         while (!session.Complete)
@@ -155,7 +194,7 @@ public sealed class BuildPublisher(
             source.Seek(offset, SeekOrigin.Begin);
 
             int read = await source
-                .ReadAtLeastAsync(buffer, ChunkBytes, throwOnEndOfStream: false, cancellationToken)
+                .ReadAtLeastAsync(buffer, chunkBytes, throwOnEndOfStream: false, cancellationToken)
                 .ConfigureAwait(false);
 
             if (read == 0)

@@ -59,6 +59,11 @@ public static class ServiceCollectionExtensions
         // back into this very client.
         services.AddHttpClient<IAuthApi, AuthApiClient>(ConfigureClient);
 
+        // Also tokenless, and for a related reason: the limits document is what a launcher
+        // reads before it knows whether it can sign in at all, and the route needs no token.
+        services.AddHttpClient<ICapabilitiesApi, CapabilitiesApiClient>(ConfigureClient);
+        services.AddSingleton<IServerCapabilityProvider, CachedServerCapabilityProvider>();
+
         services.AddHttpClient<ICatalogApi, CatalogApiClient>(ConfigureClient)
             .AddHttpMessageHandler<BearerTokenHandler>();
 

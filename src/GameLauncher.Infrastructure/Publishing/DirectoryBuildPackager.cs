@@ -1,4 +1,6 @@
 using System.Security.Cryptography;
+using GameLauncher.Core.Api;
+using GameLauncher.Core.Models;
 using GameLauncher.Core.Publishing;
 
 namespace GameLauncher.Infrastructure.Publishing;
@@ -8,11 +10,9 @@ namespace GameLauncher.Infrastructure.Publishing;
 /// the directory again — which is what keeps the publish flow's cost linear in the build's
 /// size rather than in the number of steps it takes.
 /// </summary>
-public sealed class DirectoryBuildPackager : IBuildPackager
+public sealed class DirectoryBuildPackager(IServerCapabilityProvider capabilities)
+    : IBuildPackager
 {
-    /// <summary>Matches the server's <c>uploads.maxBlobBytes</c> default of 2 GiB.</summary>
-    public const long MaxBlobBytes = 2L * 1024 * 1024 * 1024;
-
     private const int BufferBytes = 128 * 1024;
 
     public async Task<BuildPackage> PackageAsync(
@@ -21,6 +21,12 @@ public sealed class DirectoryBuildPackager : IBuildPackager
         IProgress<PackagingProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // Asked before the disk is walked, so a refusal names the limit the server actually
+        // has rather than the one this client was compiled with.
+        ServerCapabilities limits = await capabilities
+            .GetAsync(cancellationToken)
+            .ConfigureAwait(false);
+
         string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
         if (!Directory.Exists(root))
         {
@@ -35,11 +41,11 @@ public sealed class DirectoryBuildPackager : IBuildPackager
                 PublishFailure.NothingToPublish, "A build must contain at least one file.");
         }
 
-        if (paths.Length > ManifestPathRules.MaxFiles)
+        if (paths.Length > limits.Manifest.MaxFiles)
         {
             throw new PublishingException(
                 PublishFailure.TooManyFiles,
-                $"A build may contain at most {ManifestPathRules.MaxFiles} files.");
+                $"A build may contain at most {limits.Manifest.MaxFiles} files.");
         }
 
         List<PackagedFile> files = new(paths.Length);
@@ -53,17 +59,18 @@ public sealed class DirectoryBuildPackager : IBuildPackager
                 .GetRelativePath(root, path)
                 .Replace(Path.DirectorySeparatorChar, '/');
 
-            if (ManifestPathRules.Reject(relative) is { } reason)
+            if (ManifestPathRules.Reject(relative, limits.Manifest.MaxPathLength) is { } reason)
             {
                 throw new PublishingException(PublishFailure.InvalidPath, reason);
             }
 
             FileInfo info = new(path);
-            if (info.Length > MaxBlobBytes)
+            if (info.Length > limits.Uploads.MaxBlobBytes)
             {
                 throw new PublishingException(
                     PublishFailure.FileTooLarge,
-                    $"{relative} is larger than the {MaxBlobBytes} bytes one upload may carry.");
+                    $"{relative} is larger than the {limits.Uploads.MaxBlobBytes} bytes one "
+                        + "upload may carry.");
             }
 
             files.Add(new PackagedFile

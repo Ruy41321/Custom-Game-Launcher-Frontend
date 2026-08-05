@@ -51,8 +51,8 @@ public sealed class ManifestPathRulesTests
     [Fact]
     public void APathLongerThanTheLimitIsRefused()
     {
-        Assert.Null(ManifestPathRules.Reject(new string('a', ManifestPathRules.MaxPathLength)));
+        Assert.Null(ManifestPathRules.Reject(new string('a', ManifestPathRules.DefaultMaxPathLength)));
         Assert.NotNull(
-            ManifestPathRules.Reject(new string('a', ManifestPathRules.MaxPathLength + 1)));
+            ManifestPathRules.Reject(new string('a', ManifestPathRules.DefaultMaxPathLength + 1)));
     }
 }

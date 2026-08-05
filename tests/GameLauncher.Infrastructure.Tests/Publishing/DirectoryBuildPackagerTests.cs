@@ -10,7 +10,11 @@ namespace GameLauncher.Infrastructure.Tests.Publishing;
 public sealed class DirectoryBuildPackagerTests : IDisposable
 {
     private readonly TemporaryDirectory _directory = new();
-    private readonly DirectoryBuildPackager _packager = new();
+    private readonly FixedCapabilities _capabilities = new();
+
+    private readonly DirectoryBuildPackager _packager;
+
+    public DirectoryBuildPackagerTests() => _packager = new DirectoryBuildPackager(_capabilities);
 
     public void Dispose() => _directory.Dispose();
 

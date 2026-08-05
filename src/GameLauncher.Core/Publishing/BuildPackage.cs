@@ -1,4 +1,5 @@
 using GameLauncher.Core.Api;
+using GameLauncher.Core.Models;
 
 namespace GameLauncher.Core.Publishing;
 
@@ -35,26 +36,33 @@ public sealed class PublishingException(PublishFailure reason, string message, E
 /// its <c>build_files_relative_path_safe</c> constraint.
 ///
 /// Checked here so a name the server will refuse is caught before gigabytes travel rather than
-/// at the last call of the publish flow. It is a copy of somebody else's rule, which is a debt:
-/// if the server ever loosens one of these, this says no for a reason that no longer exists.
+/// at the last call of the publish flow.
+///
+/// The **shape** rules below are a deliberate copy: no absolute path, no <c>..</c>, no
+/// backslash, no control character. They are what makes a path safe to resolve inside an
+/// install directory (D24), so this client would keep enforcing them even if a server stopped.
+/// The **numbers** are not copied any more — <see cref="ServerCapabilities"/> carries the real
+/// <c>maxPathLength</c> and <c>maxFiles</c>, and the constants here are only what a server too
+/// old to say is assumed to mean.
 /// </summary>
 public static class ManifestPathRules
 {
-    public const int MaxPathLength = 1024;
+    /// <summary>Assumed when the server does not say. See <see cref="ManifestCapabilities"/>.</summary>
+    public const int DefaultMaxPathLength = 1024;
 
-    public const int MaxFiles = 200_000;
+    public const int DefaultMaxFiles = 200_000;
 
     /// <summary>Null when the path is acceptable, otherwise why it is not.</summary>
-    public static string? Reject(string path)
+    public static string? Reject(string path, int maxPathLength = DefaultMaxPathLength)
     {
         if (path.Length == 0)
         {
             return "a file path must not be empty";
         }
 
-        if (path.Length > MaxPathLength)
+        if (path.Length > maxPathLength)
         {
-            return $"file path is longer than {MaxPathLength} characters: {path}";
+            return $"file path is longer than {maxPathLength} characters: {path}";
         }
 
         if (path[0] == '/')

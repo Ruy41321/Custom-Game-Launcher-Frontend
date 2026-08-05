@@ -15,9 +15,21 @@ public sealed class BuildPublisherTests : IDisposable
     private readonly FakePublishingApi _api = new();
     private readonly BuildPublisher _publisher;
 
+    /// <summary>
+    /// A deliberately small chunk ceiling: the chunking behaviour is what these tests are
+    /// about, and a 4 MiB default would mean writing megabytes to disk to observe it.
+    /// </summary>
+    private const int TestChunkBytes = 64 * 1024;
+
+    private readonly FixedCapabilities _capabilities =
+        FixedCapabilities.WithChunkBytes(TestChunkBytes);
+
     public BuildPublisherTests() =>
         _publisher = new BuildPublisher(
-            _api, new DirectoryBuildPackager(), NullLogger<BuildPublisher>.Instance);
+            _api,
+            new DirectoryBuildPackager(_capabilities),
+            _capabilities,
+            NullLogger<BuildPublisher>.Instance);
 
     public void Dispose() => _directory.Dispose();
 
@@ -116,7 +128,7 @@ public sealed class BuildPublisherTests : IDisposable
     public async Task ALargeBlobTravelsInChunksAndArrivesWhole()
     {
         Write("Game.exe", "the executable");
-        WriteLarge("big.pak", (BuildPublisher.ChunkBytes * 2) + 1024);
+        WriteLarge("big.pak", (TestChunkBytes * 2) + 1024);
 
         await _publisher.PublishAsync(
             Request, cancellationToken: TestContext.Current.CancellationToken);
@@ -130,8 +142,8 @@ public sealed class BuildPublisherTests : IDisposable
 
         Assert.Equal(3, chunks.Count);
         Assert.Equal(0, chunks[0].Offset);
-        Assert.Equal(BuildPublisher.ChunkBytes, chunks[1].Offset);
-        Assert.Equal(BuildPublisher.ChunkBytes * 2L, chunks[2].Offset);
+        Assert.Equal(TestChunkBytes, chunks[1].Offset);
+        Assert.Equal(TestChunkBytes * 2L, chunks[2].Offset);
 
         Assert.Equal(expected, _api.Stored[big]);
     }

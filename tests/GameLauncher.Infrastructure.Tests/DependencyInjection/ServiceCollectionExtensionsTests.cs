@@ -48,6 +48,8 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IBuildPackager))]
     [InlineData(typeof(IBuildPublisher))]
     [InlineData(typeof(IImageLoader))]
+    [InlineData(typeof(ICapabilitiesApi))]
+    [InlineData(typeof(IServerCapabilityProvider))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();
