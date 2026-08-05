@@ -76,7 +76,20 @@ rewrite-in-place corrupts a JSON file is the moment that fact matters most. WAL 
 killed mid-write leaves a database that **opens**, rather than one that has to be thrown away.
 
 **The schema is versioned in `PRAGMA user_version`** and migrated by appending to an array, each
-element bringing the schema from its index to the next. Never edit one that has shipped.
+element bringing the schema from its index to the next. Never edit one that has shipped — the
+file remembers how far it has come, so a rewritten migration is one that never runs again on a
+machine that already applied it.
+
+Three migrations so far: the table, `launch_options`, and `cover_url`. Both additions are
+`ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT ''`, and the default is the whole point — it is
+what an **existing row** gets when somebody updates the launcher, which is the case that
+actually happens and the one worth a test. An empty string rather than a nullable column,
+because a missing value reads as an empty string everywhere else in the model.
+
+**The row carries `cover_url` so the library has pictures offline.** The artwork cache is keyed
+by URL and does not need a server; what it needed was somebody who remembered the URL. See
+[catalog-and-artwork.md](catalog-and-artwork.md) for the rule that an update never overwrites a
+cover with nothing.
 
 **Enums and instants are stored as text**, not as integers or ticks. The file is meant to be
 readable with any SQLite tool at the moment the launcher is the thing that is broken, and a

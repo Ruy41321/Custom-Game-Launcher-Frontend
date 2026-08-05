@@ -29,8 +29,32 @@ The response is `PagedResult<T>` — the server's `{ items, total, limit, offset
 **Drafts never appear.** That is enforced server-side; the client renders the list it is given
 and does not filter again.
 
-**Known gaps:** there is no infinite scrolling and no debounce on the search box. Every
-keystroke that reaches the command is a request.
+### The search box waits, and a new search cancels the old one (D46)
+
+Typing a word used to be one request per letter. The waste was the smaller half of the problem:
+nothing ordered the answers, so a slow reply for `orb` arriving after the reply for `orbital`
+left the **wrong results on screen**.
+
+So there are two mechanisms, and they do different jobs:
+
+- **A 300 ms debounce.** Every keystroke rearms the timer, so only the pause at the end of a
+  word fires a request. The delay comes from `TimeProvider`, not `Task.Delay`, which is what
+  lets a test advance it by hand — a debounce a test really waits out is a slow test that
+  eventually fails on a loaded machine rather than on a bug.
+- **Cancellation.** Each load owns a `CancellationTokenSource` and cancels the one it replaces.
+  The debounce makes the race unlikely; this makes it impossible.
+
+**Pressing Enter searches at once** and drops the pending debounce: somebody who presses Enter
+has already said they finished typing.
+
+A cancelled search is **not** an error. `OperationCanceledException` from a superseded request
+never reaches `ErrorMessage`, and the superseded request does not clear the busy indicator for
+the search that replaced it — otherwise fast typing would look like a page that keeps breaking.
+
+The debounce lives in the **view model**, not the view's code-behind: that is where Enter
+arrives as well, and a rule in a code-behind is a rule no test can press.
+
+**Known gap:** there is still no infinite scrolling. Paging is the Previous/Next pair.
 
 ---
 
@@ -51,9 +75,21 @@ what lets the same card offer Install, Update or Play.
 Adding a game is idempotent; removing one that is not there is a genuine `NotFound`, because
 there the two models really do disagree.
 
-**Known gap:** offline, the library shows no covers. The install row does not keep `coverUrl`,
-so there is nothing to look up even though the disk cache is already keyed by URL. One extra
-column on the SQLite store would close it.
+### Offline, the covers are there too (D45)
+
+The install row keeps **`coverUrl`**, so the offline card is built with the same URL the online
+one would carry and asks for its picture the same way. The disk cache is keyed by URL and needs
+no server, so a cover seen once is on screen again with the backend stopped.
+
+Two rules make that hold:
+
+- **An update rewrites the cover**, because a publisher can change one.
+- **An update never replaces a cover with nothing.** A response that arrived without a cover is
+  not a publisher who removed it, and taking it as one would discard the only copy of the URL
+  this machine has — precisely when there is no server left to ask again.
+
+The column was added by **appending** a migration, so a launcher upgraded over an existing
+database opens it and its rows take the empty default.
 
 ---
 
@@ -208,10 +244,12 @@ Two rules from this document apply there in reverse:
 Stated explicitly:
 
 - **No full-screen screenshot viewer.** The gallery is a hero image plus a thumbnail strip.
-- **No search debounce and no infinite scroll** in Explore.
+- **No infinite scroll** in Explore. The search box debounces and cancels; paging is still the
+  Previous/Next pair.
 - **No Markdown rendering.** Devlog bodies are shown as text, on both the player's page and the
   publisher's — rendering remote markup is a decision this feature does not need.
-- **Offline, the library shows no covers**, because the install row does not keep `coverUrl`.
+- **Offline, the *detail page* still does not work.** It needs the catalog. The library does,
+  covers included.
 
 ## Related documents
 
