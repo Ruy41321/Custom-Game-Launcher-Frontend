@@ -13,6 +13,7 @@ public sealed class PathProviderTests
         Assert.True(Path.IsPathRooted(paths.UserDataDirectory));
         Assert.True(Path.IsPathRooted(paths.LogDirectory));
         Assert.True(Path.IsPathRooted(paths.DownloadStagingDirectory));
+        Assert.True(Path.IsPathRooted(paths.ImageCacheDirectory));
         Assert.True(Path.IsPathRooted(paths.DefaultInstallDirectory));
         Assert.True(Path.IsPathRooted(paths.LocalDatabasePath));
     }
@@ -50,6 +51,7 @@ public sealed class PathProviderTests
             paths.UserDataDirectory,
             paths.LogDirectory,
             paths.DownloadStagingDirectory,
+            paths.ImageCacheDirectory,
             paths.DefaultInstallDirectory,
         ];
 
@@ -86,6 +88,7 @@ public sealed class PathProviderTests
         Assert.True(Directory.Exists(paths.UserDataDirectory));
         Assert.True(Directory.Exists(paths.LogDirectory));
         Assert.True(Directory.Exists(paths.DownloadStagingDirectory));
+        Assert.True(Directory.Exists(paths.ImageCacheDirectory));
     }
 
     [Fact]

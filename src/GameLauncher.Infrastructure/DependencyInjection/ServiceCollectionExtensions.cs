@@ -6,6 +6,7 @@ using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Media;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
 using GameLauncher.Infrastructure.Api;
@@ -14,6 +15,7 @@ using GameLauncher.Infrastructure.Configuration;
 using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Launching;
+using GameLauncher.Infrastructure.Media;
 using GameLauncher.Infrastructure.Platform;
 using GameLauncher.Infrastructure.Publishing;
 using Microsoft.Extensions.DependencyInjection;
@@ -77,12 +79,25 @@ public static class ServiceCollectionExtensions
         // caller's cancellation, not by a clock that started at the first byte.
         services.AddHttpClient<IBlobFetcher, BlobFetcher>(ConfigureFileServerClient);
 
+        // A fourth client, for artwork. Public, unsigned URLs on whatever host the API named,
+        // so it carries no bearer token for the same reason the file-server client does not.
+        // Unlike that one it keeps an ordinary timeout: a cover is small, and a picture that
+        // is taking thirty seconds is a picture the page is better off without.
+        services.AddHttpClient<IImageLoader, CachingImageLoader>(ConfigureMediaClient);
+
         services.AddSingleton<IInstallationService, InstallationService>();
         services.AddSingleton<IGameLauncher, ProcessGameLauncher>();
         services.AddSingleton<IBuildPackager, DirectoryBuildPackager>();
         services.AddSingleton<IBuildPublisher, BuildPublisher>();
 
         return services;
+    }
+
+    private static void ConfigureMediaClient(HttpClient client)
+    {
+        client.Timeout = RequestTimeout;
+        client.DefaultRequestHeaders.UserAgent.Add(
+            new ProductInfoHeaderValue("CustomGameLauncher", ThisAssemblyVersion()));
     }
 
     private static void ConfigureFileServerClient(HttpClient client)

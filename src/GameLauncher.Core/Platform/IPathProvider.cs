@@ -19,6 +19,12 @@ public interface IPathProvider
     /// <summary>Scratch space for in-flight downloads, cleaned up on a successful install.</summary>
     string DownloadStagingDirectory { get; }
 
+    /// <summary>
+    /// Where fetched artwork is kept. Disposable by definition: everything in it can be
+    /// downloaded again, and deleting it costs a few thumbnails on the next launch.
+    /// </summary>
+    string ImageCacheDirectory { get; }
+
     /// <summary>Default root under which games are installed.</summary>
     string DefaultInstallDirectory { get; }
 

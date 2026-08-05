@@ -81,6 +81,10 @@ public partial class App : Application
         services.AddSingleton<IFolderPicker>(_ => new StorageProviderFolderPicker(this));
         services.AddSingleton<IThemeSwitcher>(_ => new ApplicationThemeSwitcher(this));
 
+        // Decoded artwork is shared by every page: a cover seen in Explore is the same bitmap
+        // the library and the detail page show.
+        services.AddSingleton<IImageProvider, CachedImageProvider>();
+
         // View models are singletons: the shell holds all of them for the life of the window,
         // and a page that keeps its scroll position and search term when you come back to it
         // is what a user expects.

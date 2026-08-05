@@ -5,6 +5,7 @@ using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Media;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
 using GameLauncher.Infrastructure.DependencyInjection;
@@ -46,6 +47,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(IPublishingApi))]
     [InlineData(typeof(IBuildPackager))]
     [InlineData(typeof(IBuildPublisher))]
+    [InlineData(typeof(IImageLoader))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();
