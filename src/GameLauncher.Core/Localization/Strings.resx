@@ -224,6 +224,24 @@
   <data name="Detail.DownloadSize" xml:space="preserve">
     <value>Download size</value>
   </data>
+  <data name="Detail.Screenshots" xml:space="preserve">
+    <value>Screenshots</value>
+  </data>
+  <data name="Detail.Devlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Detail.DevlogEmpty" xml:space="preserve">
+    <value>Nothing has been posted yet.</value>
+  </data>
+  <data name="Detail.DevlogMore" xml:space="preserve">
+    <value>Show older posts</value>
+  </data>
+  <data name="Detail.DevlogDraft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Detail.DevlogBy" xml:space="preserve">
+    <value>by {0}</value>
+  </data>
   <data name="Detail.Versions" xml:space="preserve">
     <value>Versions</value>
   </data>

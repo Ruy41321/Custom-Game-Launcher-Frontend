@@ -1,3 +1,4 @@
+using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
@@ -14,8 +15,10 @@ public sealed class ExploreViewModelTests
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
+
     private ExploreViewModel CreateViewModel() =>
-        new(_catalog, _library, new ApiErrorPresenter(_localization), _localization);
+        new(_catalog, _library, new ApiErrorPresenter(_localization), _localization, _images);
 
     private static PagedResult<Game> PageOf(int total, int limit, int offset, params string[] titles) =>
         new()
@@ -150,7 +153,8 @@ public sealed class ExploreViewModelTests
         string? requested = null;
         model.GameSelected += (_, idOrSlug) => requested = idOrSlug;
 
-        model.OpenGameCommand.Execute(new Game { Id = "g1", Slug = "orbital-drift" });
+        model.OpenGameCommand.Execute(
+            new StoreCardViewModel(new Game { Id = "g1", Slug = "orbital-drift" }));
 
         Assert.Equal("orbital-drift", requested);
     }
@@ -163,7 +167,8 @@ public sealed class ExploreViewModelTests
         string? requested = null;
         model.GameSelected += (_, idOrSlug) => requested = idOrSlug;
 
-        model.OpenGameCommand.Execute(new Game { Id = "g1", Slug = string.Empty });
+        model.OpenGameCommand.Execute(
+            new StoreCardViewModel(new Game { Id = "g1", Slug = string.Empty }));
 
         Assert.Equal("g1", requested);
     }
@@ -174,7 +179,7 @@ public sealed class ExploreViewModelTests
         ExploreViewModel model = CreateViewModel();
 
         await model.AddToLibraryCommand.ExecuteAsync(
-            new Game { Id = "g1", Slug = "orbital-drift" });
+            new StoreCardViewModel(new Game { Id = "g1", Slug = "orbital-drift" }));
 
         await _library.Received(1).AddAsync("g1", Arg.Any<CancellationToken>());
     }
@@ -188,10 +193,50 @@ public sealed class ExploreViewModelTests
 
         _library.AddAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Throws(new ApiException(ApiErrorCode.Forbidden, "no"));
-        await model.AddToLibraryCommand.ExecuteAsync(new Game { Id = "g1" });
+        await model.AddToLibraryCommand.ExecuteAsync(
+            new StoreCardViewModel(new Game { Id = "g1" }));
 
         Assert.Equal(_localization.Translate("Error.Forbidden"), model.ErrorMessage);
         Assert.Single(model.Games);
+    }
+
+    [Fact]
+    public async Task EveryCardIsAskedForItsCoverAfterTheGridIsFilled()
+    {
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>()).Returns(
+            new PagedResult<Game>
+            {
+                Items =
+                [
+                    new Game { Id = "g1", Title = "Orbital Drift", CoverUrl = "https://f/1.png" },
+                    new Game { Id = "g2", Title = "Deep Cut" },
+                ],
+                Total = 2,
+                Limit = 20,
+            });
+
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        await _images.Received(1).GetAsync("https://f/1.png", Arg.Any<CancellationToken>());
+
+        // A game with no cover is still asked, because deciding there is nothing to fetch is
+        // the provider's job and it answers null for an empty URL.
+        await _images.Received(1).GetAsync(string.Empty, Arg.Any<CancellationToken>());
+    }
+
+    // A cover that never arrives leaves a card that still says what the game is.
+    [Fact]
+    public async Task ACardWithNoCoverShowsTheFirstLetterOfItsTitle()
+    {
+        Returns(PageOf(1, 20, 0, "Orbital Drift"));
+        ExploreViewModel model = CreateViewModel();
+
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        StoreCardViewModel card = Assert.Single(model.Games);
+        Assert.False(card.HasCover);
+        Assert.Equal("O", card.CoverPlaceholder);
     }
 
     [Fact]
@@ -199,7 +244,7 @@ public sealed class ExploreViewModelTests
     {
         var localization = new ResourceManagerLocalizationService("en");
         var model = new ExploreViewModel(
-            _catalog, _library, new ApiErrorPresenter(localization), localization);
+            _catalog, _library, new ApiErrorPresenter(localization), localization, _images);
 
         Assert.Equal("Release date", model.SortOptions[0].Name);
 

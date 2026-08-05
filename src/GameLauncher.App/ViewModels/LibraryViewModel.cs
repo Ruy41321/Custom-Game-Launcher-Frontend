@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GameLauncher.App.Services;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -18,16 +19,10 @@ public sealed partial class GameCardViewModel(
     Game game,
     InstalledGame? install,
     IGameLauncher games,
-    ILocalizationService localization) : ViewModelBase
+    ILocalizationService localization) : GameCoverCardViewModel(game)
 {
-    public Game Game { get; } = game;
-
     [ObservableProperty]
     private InstalledGame? _install = install;
-
-    public string Title => Game.Title;
-
-    public string Summary => Game.Summary;
 
     public bool IsInstalled => Install?.State == InstallState.Installed;
 
@@ -79,6 +74,7 @@ public sealed partial class LibraryViewModel : ViewModelBase
     private readonly IGameLauncher _games;
     private readonly IApiErrorPresenter _errors;
     private readonly ILocalizationService _localization;
+    private readonly IImageProvider _images;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -100,13 +96,15 @@ public sealed partial class LibraryViewModel : ViewModelBase
         IInstallStore installs,
         IGameLauncher games,
         IApiErrorPresenter errors,
-        ILocalizationService localization)
+        ILocalizationService localization,
+        IImageProvider images)
     {
         _library = library;
         _installs = installs;
         _games = games;
         _errors = errors;
         _localization = localization;
+        _images = images;
 
         // A game exits on a thread that is not the UI's, and only its own card changes.
         _games.GameExited += (_, args) => OnUiThread(() =>
@@ -175,6 +173,21 @@ public sealed partial class LibraryViewModel : ViewModelBase
         {
             IsBusy = false;
             OnPropertyChanged(nameof(IsEmpty));
+        }
+
+        await LoadCoversAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// After the list is on screen, and never in front of it: the games are the page, and the
+    /// pictures are what arrives once the page is already usable. An offline card has no URL
+    /// to fetch — the install row does not keep one — so it keeps its placeholder.
+    /// </summary>
+    private async Task LoadCoversAsync(CancellationToken cancellationToken)
+    {
+        foreach (GameCardViewModel card in Games.ToList())
+        {
+            await card.LoadCoverAsync(_images, cancellationToken).ConfigureAwait(true);
         }
     }
 

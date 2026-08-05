@@ -1,3 +1,4 @@
+using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
@@ -30,6 +31,8 @@ public sealed class GameDetailViewModelTests
 
     private readonly IGameLauncher _games = Substitute.For<IGameLauncher>();
 
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
+
     private GameDetailViewModel CreateViewModel(
         GamePlatform platform = GamePlatform.Windows,
         BuildArchitecture architecture = BuildArchitecture.X64)
@@ -37,6 +40,14 @@ public sealed class GameDetailViewModelTests
         var runtime = Substitute.For<IRuntimePlatform>();
         runtime.Platform.Returns(platform);
         runtime.Architecture.Returns(architecture);
+
+        // Every load asks for the devlog. Arranged here rather than in each test, and
+        // arranged first: a test that cares about the devlog overrides this afterwards, which
+        // is the order NSubstitute resolves in.
+        _catalog
+            .GetPatchNotesAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<PatchNote>());
 
         return new GameDetailViewModel(
             _catalog,
@@ -48,6 +59,7 @@ public sealed class GameDetailViewModelTests
             _installations,
             _installs,
             _games,
+            _images,
             new FakeTimeProvider(Now));
     }
 
@@ -513,6 +525,7 @@ public sealed class GameDetailViewModelTests
             _installations,
             _installs,
             _games,
+            _images,
             clock);
 
         model.Progress = new DownloadProgress

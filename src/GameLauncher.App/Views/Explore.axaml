@@ -50,14 +50,28 @@
           </ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
         <ItemsControl.ItemTemplate>
-          <DataTemplate x:DataType="models:Game">
-            <Border Classes="card" Width="300" Height="170" Margin="0,0,14,14">
-              <Grid RowDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Row="0" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+          <DataTemplate x:DataType="vm:StoreCardViewModel">
+            <Border Classes="card" Width="300" Margin="0,0,14,14">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                <!-- The frame is there whether or not the picture is, so a grid of cards keeps
+                     its shape while the covers are still arriving. -->
+                <Border Grid.Row="0" Height="150" CornerRadius="4" ClipToBounds="True"
+                        Background="{DynamicResource SystemChromeMediumColor}" Margin="0,0,0,8">
+                  <Panel>
+                    <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding !HasCover}" />
+                    <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                           IsVisible="{Binding HasCover}" />
+                  </Panel>
+                </Border>
+
+                <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis" />
-                <TextBlock Grid.Row="1" Text="{Binding Summary}" Opacity="0.7" FontSize="12"
-                           TextWrapping="Wrap" Margin="0,6" />
-                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8">
+                <TextBlock Grid.Row="2" Text="{Binding Summary}" Opacity="0.7" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,6" MaxHeight="52" />
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
                   <Button Content="{loc:Tr Explore.Details}" Classes="link"
                           Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).OpenGameCommand}"
                           CommandParameter="{Binding}" />

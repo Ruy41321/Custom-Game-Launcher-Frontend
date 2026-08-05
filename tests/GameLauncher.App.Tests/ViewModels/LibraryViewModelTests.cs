@@ -1,3 +1,4 @@
+using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Installs;
@@ -17,8 +18,16 @@ public sealed class LibraryViewModelTests
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
+
     private LibraryViewModel CreateViewModel() =>
-        new(_library, _installs, _games, new ApiErrorPresenter(_localization), _localization);
+        new(
+            _library,
+            _installs,
+            _games,
+            new ApiErrorPresenter(_localization),
+            _localization,
+            _images);
 
     private void Returns(params string[] titles) =>
         _library.GetLibraryAsync(Arg.Any<CancellationToken>()).Returns(
@@ -34,6 +43,17 @@ public sealed class LibraryViewModelTests
 
         Assert.Equal(2, model.Games.Count);
         Assert.False(model.IsEmpty);
+    }
+
+    [Fact]
+    public async Task EveryCardIsAskedForItsCover()
+    {
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>()).Returns(
+            [new Game { Id = "g1", Title = "Orbital Drift", CoverUrl = "https://f/1.png" }]);
+
+        await CreateViewModel().LoadAsync(TestContext.Current.CancellationToken);
+
+        await _images.Received(1).GetAsync("https://f/1.png", Arg.Any<CancellationToken>());
     }
 
     [Fact]

@@ -31,6 +31,8 @@ public sealed class MainWindowViewModelTests
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
+
     private MainWindowViewModel CreateShell()
     {
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new UserSettings());
@@ -43,6 +45,11 @@ public sealed class MainWindowViewModelTests
         runtime.Platform.Returns(GamePlatform.Windows);
         runtime.Architecture.Returns(BuildArchitecture.X64);
 
+        _catalog
+            .GetPatchNotesAsync(
+                Arg.Any<string>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<PatchNote>());
+
         return new MainWindowViewModel(
             _localization,
             _settings,
@@ -50,13 +57,14 @@ public sealed class MainWindowViewModelTests
             _authentication,
             _installations,
             new LoginViewModel(_authentication, errors, _localization),
-            new ExploreViewModel(_catalog, _library, errors, _localization),
+            new ExploreViewModel(_catalog, _library, errors, _localization, _images),
             new LibraryViewModel(
                 _library,
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IGameLauncher>(),
                 errors,
-                _localization),
+                _localization,
+                _images),
             new GameDetailViewModel(
                 _catalog,
                 _library,
@@ -67,6 +75,7 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IInstallationService>(),
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IGameLauncher>(),
+                _images,
                 TimeProvider.System),
             new DeveloperViewModel(
                 _catalog,
@@ -247,7 +256,8 @@ public sealed class MainWindowViewModelTests
         MainWindowViewModel shell = CreateShell();
         await shell.ShowExploreCommand.ExecuteAsync(null);
 
-        shell.Explore.OpenGameCommand.Execute(new Game { Id = "g1", Slug = "orbital-drift" });
+        shell.Explore.OpenGameCommand.Execute(
+            new StoreCardViewModel(new Game { Id = "g1", Slug = "orbital-drift" }));
 
         Assert.Same(shell.GameDetail, shell.CurrentPage);
     }
@@ -260,7 +270,8 @@ public sealed class MainWindowViewModelTests
             .Returns(new GameDetail());
         MainWindowViewModel shell = CreateShell();
         await shell.ShowExploreCommand.ExecuteAsync(null);
-        shell.Explore.OpenGameCommand.Execute(new Game { Id = "g1", Slug = "orbital-drift" });
+        shell.Explore.OpenGameCommand.Execute(
+            new StoreCardViewModel(new Game { Id = "g1", Slug = "orbital-drift" }));
 
         shell.GameDetail.BackCommand.Execute(null);
 

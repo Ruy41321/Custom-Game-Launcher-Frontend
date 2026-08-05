@@ -1,7 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GameLauncher.App.Services;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Downloads;
@@ -37,6 +39,66 @@ public sealed class VersionCardViewModel(GameVersion version, ILocalizationServi
 }
 
 /// <summary>
+/// One picture of the gallery. Its own object because a screenshot arrives on its own: the
+/// page shows the frames it has and fills them in as the rest land.
+/// </summary>
+public sealed partial class ScreenshotViewModel(GameMedia media) : ViewModelBase
+{
+    [ObservableProperty]
+    private Bitmap? _image;
+
+    public string Url => media.Url;
+
+    /// <summary>The publisher's description, which is what a screen reader reads out.</summary>
+    public string AltText => media.AltText;
+
+    public bool HasImage => Image is not null;
+
+    public async Task LoadAsync(
+        IImageProvider images, CancellationToken cancellationToken = default) =>
+        Image = await images.GetAsync(media.Url, cancellationToken).ConfigureAwait(true);
+
+    partial void OnImageChanged(Bitmap? value) => OnPropertyChanged(nameof(HasImage));
+}
+
+/// <summary>
+/// One devlog entry, as a card. The body is shown as the publisher typed it: rendering remote
+/// Markdown would mean rendering remote markup, and a devlog is not worth that.
+/// </summary>
+public sealed partial class PatchNoteCardViewModel : ViewModelBase
+{
+    private readonly PatchNote _note;
+    private readonly ILocalizationService _localization;
+
+    public PatchNoteCardViewModel(
+        PatchNote note, string versionLabel, ILocalizationService localization)
+    {
+        _note = note;
+        _localization = localization;
+        VersionLabel = versionLabel;
+    }
+
+    public string Title => _note.Title;
+
+    public string Body => _note.BodyMarkdown;
+
+    public string Author => _localization.Translate("Detail.DevlogBy", _note.Author.DisplayName);
+
+    /// <summary>
+    /// The semver of the version the entry names, when the detail response carried it. An
+    /// entry about a version this account cannot see shows no badge rather than an id.
+    /// </summary>
+    public string VersionLabel { get; }
+
+    public bool ShowVersion => VersionLabel.Length > 0;
+
+    /// <summary>A draft says so: only its publisher is ever sent one.</summary>
+    public string PublishedOn => _note.PublishedAt is { } published
+        ? published.ToLocalTime().ToString("d", CultureInfo.CurrentCulture)
+        : _localization.Translate("Detail.DevlogDraft");
+}
+
+/// <summary>
 /// The game page: description, what is installable here, and the version history. Reused
 /// across navigations rather than rebuilt, so <see cref="LoadAsync"/> resets everything it
 /// does not overwrite.
@@ -52,9 +114,12 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     private readonly IInstallationService _installations;
     private readonly IInstallStore _installs;
     private readonly IGameLauncher _games;
+    private readonly IImageProvider _images;
     private readonly TransferRateEstimator _rate;
 
     private CancellationTokenSource? _installCancellation;
+
+    private int _devlogTotal;
 
     [ObservableProperty]
     private bool _isBusy;
@@ -70,6 +135,27 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     [ObservableProperty]
     private InstalledGame? _installed;
+
+    /// <summary>
+    /// The banner if the publisher uploaded one, the cover otherwise, and nothing when there
+    /// is neither: a banner is the wide picture a page like this is for.
+    /// </summary>
+    [ObservableProperty]
+    private Bitmap? _hero;
+
+    /// <summary>Which screenshot is shown large. The first one, until somebody picks another.</summary>
+    [ObservableProperty]
+    private ScreenshotViewModel? _selectedScreenshot;
+
+    [ObservableProperty]
+    private bool _isDevlogBusy;
+
+    /// <summary>
+    /// Kept apart from <see cref="ErrorMessage"/> on purpose: a devlog that will not load must
+    /// not replace a page from which a game can still be installed and played.
+    /// </summary>
+    [ObservableProperty]
+    private string? _devlogError;
 
     /// <summary>Null when nothing is running; the last report otherwise.</summary>
     [ObservableProperty]
@@ -97,8 +183,10 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         IInstallationService installations,
         IInstallStore installs,
         IGameLauncher games,
+        IImageProvider images,
         TimeProvider time)
     {
+        _images = images;
         _catalog = catalog;
         _library = library;
         _errors = errors;
@@ -124,6 +212,24 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     public event EventHandler? BackRequested;
 
     public ObservableCollection<VersionCardViewModel> Versions { get; } = [];
+
+    public ObservableCollection<ScreenshotViewModel> Screenshots { get; } = [];
+
+    public ObservableCollection<PatchNoteCardViewModel> Devlog { get; } = [];
+
+    public bool HasHero => Hero is not null;
+
+    public bool HasScreenshots => Screenshots.Count > 0;
+
+    /// <summary>True once the first page has come back and there was nothing in it.</summary>
+    public bool DevlogIsEmpty =>
+        !IsDevlogBusy && Devlog.Count == 0 && DevlogError is null && _devlogTotal == 0;
+
+    /// <summary>
+    /// The server said how many entries there are, so "more" is a fact rather than a guess at
+    /// whether the last page was full.
+    /// </summary>
+    public bool HasMoreDevlog => !IsDevlogBusy && Devlog.Count < _devlogTotal;
 
     public string Title => Detail?.Game.Title ?? string.Empty;
 
@@ -259,7 +365,13 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         Detail = null;
         Installed = null;
         Progress = null;
+        Hero = null;
+        SelectedScreenshot = null;
+        DevlogError = null;
+        _devlogTotal = 0;
         Versions.Clear();
+        Screenshots.Clear();
+        Devlog.Clear();
         RaiseDerived();
 
         try
@@ -287,6 +399,107 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         {
             IsBusy = false;
             RaiseDerived();
+        }
+
+        if (Detail is null)
+        {
+            return;
+        }
+
+        // Both after the page is on screen. Neither the artwork nor the devlog is what the
+        // page is for, and a game must be installable before its screenshots have arrived.
+        await LoadArtworkAsync(cancellationToken).ConfigureAwait(true);
+        await LoadDevlogAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// The next page of the devlog, appended. Paged rather than fetched whole because a game
+    /// three years old has a devlog nobody wants delivered in one response.
+    /// </summary>
+    [RelayCommand]
+    private Task LoadMoreDevlogAsync(CancellationToken cancellationToken) =>
+        HasMoreDevlog ? LoadDevlogAsync(cancellationToken) : Task.CompletedTask;
+
+    private async Task LoadArtworkAsync(CancellationToken cancellationToken)
+    {
+        if (Detail is not { } detail)
+        {
+            return;
+        }
+
+        GameMedia? banner = detail.Artwork(MediaKind.Banner) ?? detail.Artwork(MediaKind.Cover);
+        Hero = banner is null
+            ? null
+            : await _images.GetAsync(banner.Url, cancellationToken).ConfigureAwait(true);
+
+        foreach (GameMedia shot in detail.Screenshots)
+        {
+            Screenshots.Add(new ScreenshotViewModel(shot));
+        }
+
+        SelectedScreenshot = Screenshots.FirstOrDefault();
+        RaiseDerived();
+
+        foreach (ScreenshotViewModel screenshot in Screenshots.ToList())
+        {
+            await screenshot.LoadAsync(_images, cancellationToken).ConfigureAwait(true);
+        }
+    }
+
+    private async Task LoadDevlogAsync(CancellationToken cancellationToken)
+    {
+        if (Detail is not { } detail)
+        {
+            return;
+        }
+
+        IsDevlogBusy = true;
+        DevlogError = null;
+        RaiseDevlogDerived();
+
+        try
+        {
+            // The page number follows from what is already shown, so a reload and a "show
+            // more" are the same call and neither can ask for a page twice.
+            int page = (Devlog.Count / ICatalogApi.DefaultPatchNotePageSize) + 1;
+
+            PagedResult<PatchNote> result = await _catalog
+                .GetPatchNotesAsync(detail.Game.Id, page, cancellationToken: cancellationToken)
+                .ConfigureAwait(true);
+
+            _devlogTotal = result.Total;
+            foreach (PatchNote note in result.Items)
+            {
+                Devlog.Add(new PatchNoteCardViewModel(note, VersionLabelFor(note), _localization));
+            }
+        }
+        catch (ApiException exception)
+        {
+            DevlogError = _errors.Describe(exception);
+        }
+        finally
+        {
+            IsDevlogBusy = false;
+            RaiseDevlogDerived();
+        }
+    }
+
+    /// <summary>
+    /// The semver of the version an entry names, when the detail response carried that version.
+    /// It may not: a note can point at a version this account is not allowed to see.
+    /// </summary>
+    private string VersionLabelFor(PatchNote note) =>
+        note.HasVersion && Detail is { } detail
+            ? detail.Versions.FirstOrDefault(version => version.Id == note.VersionId)?.Semver
+                ?? string.Empty
+            : string.Empty;
+
+    [RelayCommand]
+    private void ShowScreenshot(ScreenshotViewModel? screenshot)
+    {
+        if (screenshot is not null)
+        {
+            SelectedScreenshot = screenshot;
         }
     }
 
@@ -529,6 +742,8 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     partial void OnDetailChanged(GameDetail? value) => RaiseDerived();
 
+    partial void OnHeroChanged(Bitmap? value) => OnPropertyChanged(nameof(HasHero));
+
     partial void OnInstalledChanged(InstalledGame? value)
     {
         // The box follows the row whenever the row changes underneath it — a fresh install, a
@@ -554,8 +769,17 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         RaiseDerived();
     }
 
+    private void RaiseDevlogDerived()
+    {
+        OnPropertyChanged(nameof(DevlogIsEmpty));
+        OnPropertyChanged(nameof(HasMoreDevlog));
+        LoadMoreDevlogCommand.NotifyCanExecuteChanged();
+    }
+
     private void RaiseDerived()
     {
+        OnPropertyChanged(nameof(HasHero));
+        OnPropertyChanged(nameof(HasScreenshots));
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(Description));

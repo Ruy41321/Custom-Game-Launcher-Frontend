@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GameLauncher.App.Services;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
@@ -19,6 +20,12 @@ public sealed partial class SortOption(GameSort sort, string resourceKey, ILocal
 }
 
 /// <summary>
+/// One result in Explore. Nothing but the game and its cover: what this machine has of it is
+/// the library's question, and asking it here would mean a disk lookup per card.
+/// </summary>
+public sealed class StoreCardViewModel(Game game) : GameCoverCardViewModel(game);
+
+/// <summary>
 /// The store front. Paging, sorting and searching are all the server's decisions — this only
 /// asks and renders, which is why an older client cannot be broken by a new sort order.
 /// </summary>
@@ -28,6 +35,7 @@ public sealed partial class ExploreViewModel : ViewModelBase
     private readonly ILibraryApi _library;
     private readonly IApiErrorPresenter _errors;
     private readonly ILocalizationService _localization;
+    private readonly IImageProvider _images;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -58,12 +66,14 @@ public sealed partial class ExploreViewModel : ViewModelBase
         ICatalogApi catalog,
         ILibraryApi library,
         IApiErrorPresenter errors,
-        ILocalizationService localization)
+        ILocalizationService localization,
+        IImageProvider images)
     {
         _catalog = catalog;
         _library = library;
         _errors = errors;
         _localization = localization;
+        _images = images;
 
         SortOptions =
         [
@@ -85,7 +95,7 @@ public sealed partial class ExploreViewModel : ViewModelBase
     /// <summary>Raised when the user asks to see one game in full.</summary>
     public event EventHandler<string>? GameSelected;
 
-    public ObservableCollection<Game> Games { get; } = [];
+    public ObservableCollection<StoreCardViewModel> Games { get; } = [];
 
     public IReadOnlyList<SortOption> SortOptions { get; }
 
@@ -123,7 +133,7 @@ public sealed partial class ExploreViewModel : ViewModelBase
             Games.Clear();
             foreach (Game game in result.Items)
             {
-                Games.Add(game);
+                Games.Add(new StoreCardViewModel(game));
             }
 
             Total = result.Total;
@@ -141,6 +151,13 @@ public sealed partial class ExploreViewModel : ViewModelBase
             OnPropertyChanged(nameof(IsEmpty));
             OnPropertyChanged(nameof(HasNextPage));
             OnPropertyChanged(nameof(HasPreviousPage));
+        }
+
+        // After the grid is on screen: the titles are the page, and a cover that has not
+        // arrived yet is a placeholder rather than a page that has not appeared.
+        foreach (StoreCardViewModel card in Games.ToList())
+        {
+            await card.LoadCoverAsync(_images, cancellationToken).ConfigureAwait(true);
         }
     }
 
@@ -177,18 +194,19 @@ public sealed partial class ExploreViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void OpenGame(Game? game)
+    private void OpenGame(StoreCardViewModel? card)
     {
-        if (game is not null)
+        if (card is { Game: { } game })
         {
             GameSelected?.Invoke(this, game.Slug.Length > 0 ? game.Slug : game.Id);
         }
     }
 
     [RelayCommand]
-    private async Task AddToLibraryAsync(Game? game, CancellationToken cancellationToken)
+    private async Task AddToLibraryAsync(
+        StoreCardViewModel? card, CancellationToken cancellationToken)
     {
-        if (game is null)
+        if (card is not { Game: { } game })
         {
             return;
         }
