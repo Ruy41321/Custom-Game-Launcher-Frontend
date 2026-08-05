@@ -16,6 +16,30 @@ public sealed record GameDetail
 
     public IReadOnlyList<GameBuild> Builds { get; init; } = [];
 
+    /// <summary>Every picture the game has: at most one cover, banner and logo, plus the gallery.</summary>
+    public IReadOnlyList<GameMedia> Media { get; init; } = [];
+
+    /// <summary>
+    /// The one picture of a kind there can only be one of. Null when the publisher has not
+    /// uploaded it — which is the ordinary case for a banner and a logo.
+    /// </summary>
+    public GameMedia? Artwork(MediaKind kind) =>
+        kind == MediaKind.Screenshot
+            ? null
+            : Media.FirstOrDefault(item => item.Kind == kind);
+
+    /// <summary>
+    /// The gallery, in the order the publisher arranged it. Ties fall back to upload order so
+    /// two screenshots left at the default sort order do not swap places between loads.
+    /// </summary>
+    public IReadOnlyList<GameMedia> Screenshots =>
+    [
+        .. Media
+            .Where(item => item.Kind == MediaKind.Screenshot)
+            .OrderBy(item => item.SortOrder)
+            .ThenBy(item => item.CreatedAt),
+    ];
+
     /// <summary>
     /// The build to install on this machine, or null when the publisher has shipped nothing
     /// for it yet. Newest ready build for the platform, preferring the running architecture.

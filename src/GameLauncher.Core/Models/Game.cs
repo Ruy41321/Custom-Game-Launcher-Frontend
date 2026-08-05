@@ -42,6 +42,16 @@ public sealed record Game
 
     public GameVisibility Visibility { get; init; }
 
+    /// <summary>
+    /// The game's cover, or an empty string when the publisher has not uploaded one. It rides
+    /// on the game itself so a grid of cards costs one request rather than one per result;
+    /// the rest of the artwork is on the detail page. Empty rather than absent, so a client
+    /// reads the field either way instead of checking that the key exists.
+    /// </summary>
+    public string CoverUrl { get; init; } = string.Empty;
+
+    public bool HasCover => CoverUrl.Length > 0;
+
     public DateTimeOffset CreatedAt { get; init; }
 
     public DateTimeOffset UpdatedAt { get; init; }

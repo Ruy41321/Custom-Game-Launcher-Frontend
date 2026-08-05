@@ -1,3 +1,4 @@
+using System.Globalization;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Models;
 
@@ -24,6 +25,17 @@ public sealed class CatalogApiClient(HttpClient httpClient) : ICatalogApi
     public Task<PagedResult<Game>> GetMyGamesAsync(
         GameQuery query, CancellationToken cancellationToken = default) =>
         _transport.GetAsync<PagedResult<Game>>(PathFor("me/games", query), cancellationToken);
+
+    public Task<PagedResult<PatchNote>> GetPatchNotesAsync(
+        string idOrSlug,
+        int page = 1,
+        int pageSize = ICatalogApi.DefaultPatchNotePageSize,
+        CancellationToken cancellationToken = default) =>
+        _transport.GetAsync<PagedResult<PatchNote>>(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"games/{Uri.EscapeDataString(idOrSlug)}/patch-notes?page={Math.Max(page, 1)}&pageSize={Math.Max(pageSize, 1)}"),
+            cancellationToken);
 
     private static string PathFor(string resource, GameQuery query)
     {

@@ -21,6 +21,24 @@ public interface ICatalogApi
     /// <summary>The caller's own games, drafts included. Needs <c>game.publish</c>.</summary>
     Task<PagedResult<Game>> GetMyGamesAsync(
         GameQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The game's devlog, newest first. Its own paged surface rather than a field of the
+    /// detail response, because it grows without bound while a game detail does not. Drafts
+    /// are filtered server-side, so a publisher sees their own and nobody else does.
+    /// </summary>
+    Task<PagedResult<PatchNote>> GetPatchNotesAsync(
+        string idOrSlug,
+        int page = 1,
+        int pageSize = DefaultPatchNotePageSize,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What the devlog asks for. Below the server's own default of 20 on purpose: the page
+    /// shows a few entries and a "more" button, and a shorter first page reaches the screen
+    /// sooner. The server clamps anything it disagrees with.
+    /// </summary>
+    const int DefaultPatchNotePageSize = 10;
 }
 
 /// <summary>
