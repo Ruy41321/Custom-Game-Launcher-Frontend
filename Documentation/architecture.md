@@ -1,10 +1,15 @@
 # Client architecture
 
-Detailed per-module documents will be added alongside the modules themselves (auth, library,
-downloads, self-update). This document covers what exists today and the rules everything
-else has to follow.
+The shape of the application: which project may reference which, how a view model reaches a
+server, what runs before the window opens, and the two or three rules everything else in this
+repository is a consequence of.
 
-## Project graph
+Every other document in `Documentation/` describes one module. This one describes what they
+have in common, and it is the one to read first.
+
+---
+
+## Three projects and one direction
 
 ```
 GameLauncher.App  ──►  GameLauncher.Infrastructure  ──►  GameLauncher.Core
@@ -14,120 +19,247 @@ GameLauncher.App  ──►  GameLauncher.Infrastructure  ──►  GameLaunche
 GameLauncher.Updater  ──►  GameLauncher.Core
 ```
 
-**Core references nothing.** No Avalonia, no `HttpClient`, no file system, no SQLite. If a
-type needs any of those it belongs in Infrastructure, behind an interface declared in Core.
-That constraint is what keeps the domain logic testable in milliseconds.
+| Project | Holds | May reference |
+|---|---|---|
+| `GameLauncher.Core` | Domain models, service interfaces, configuration contracts, localization contracts, the pure logic — `LaunchPlanner`, `ManifestPathRules`, `PathSafety`, `TransferRateEstimator`, `ByteSize` | nothing |
+| `GameLauncher.Infrastructure` | The implementations: API clients, download engine, SQLite store, token store, image cache, platform paths, logging | Core |
+| `GameLauncher.App` | Avalonia views, view models, `App.axaml.cs` — the composition root | Core and Infrastructure |
+| `GameLauncher.Updater` | A standalone executable that swaps launcher files while the launcher is closed | Core |
 
-`GameLauncher.App` is the only project that sees both sides: it is the composition root.
+**Core references nothing.** No Avalonia, no `HttpClient`, no `System.Data.Sqlite`, no file
+system. That is not tidiness: it is what makes the interesting logic testable in milliseconds
+without a UI toolkit, a server or a disk, and the test counts show it — `GameLauncher.Core.Tests`
+is the fastest of the three projects and covers the rules that decide what the launcher does.
 
-## MVVM
+The rule has a mechanical consequence worth stating, because it is the one a new contributor
+runs into first: **if a type needs `HttpClient`, Avalonia or the file system, it does not go in
+Core — an interface for it goes in Core and the type goes in Infrastructure or App.**
+`IImageLoader` is in Core and `CachingImageLoader` is in Infrastructure. `IGameLauncher` is in
+Core and `ProcessGameLauncher` is in Infrastructure. `IFolderPicker` and `IImageProvider` are in
+App rather than Core, because what they hand back — a chosen path, a decoded `Bitmap` — is an
+Avalonia type, and pushing them down would drag Avalonia into Core to save one file.
+
+### What breaks if you change it
+
+Adding a package reference from Core to Avalonia compiles. What it costs shows up later: every
+view-model test then needs an initialised Avalonia (see the `Bitmap` row in `CLAUDE.md` §7),
+and the tests that need a UI toolkit to run are the tests that get skipped. The dependency
+direction is enforced by the `.csproj` files and by nothing else, so it is a rule a reviewer
+has to hold.
+
+---
+
+## MVVM, and why the navigation runs one way
 
 - A view is a `.axaml` file plus a code-behind containing nothing but `InitializeComponent`.
 - View models derive from `ViewModelBase` (`ObservableObject`) and use the CommunityToolkit
-  source generators. Nothing implements `INotifyPropertyChanged` by hand.
-- Dependencies arrive through the constructor. No service locator, no static access from a
-  view model — that is what makes them plain objects in tests.
-- `ViewLocator` maps `…ViewModels.FooViewModel` to `…Views.Foo` by convention, so views do
-  not have to be registered one by one.
+  source generators — `[ObservableProperty]`, `[RelayCommand]`. Nothing implements
+  `INotifyPropertyChanged` by hand.
+- Dependencies arrive through the **constructor**. There is no service locator and no static
+  access from a view model; that is what makes them plain objects in a test.
+- `ViewLocator` maps `…ViewModels.FooViewModel` to `…Views.Foo` by convention. Note that it
+  strips the literal text `ViewModel`, so the view class is `Login`, **not** `LoginView` —
+  naming it `LoginView` compiles and renders "View not found" at run time.
+
+**Navigation is one-directional (D17):** the shell knows its children, and the children raise
+events. `MainWindowViewModel` constructs the pages and subscribes; a page that wants to open
+another one raises an event rather than holding a navigator.
+
+The reason is testability, not elegance. A child holding a navigator that holds the child
+cannot be constructed in a test without building the whole object graph — and a view model
+that is expensive to construct is a view model whose tests get written last and skipped first.
+An injected `INavigator` was rejected for exactly that cycle; the shell resolving pages from
+`IServiceProvider` was rejected because it is a service locator with a different name.
+
+### Marshalling to the UI thread
+
+`ViewModelBase.OnUiThread` posts to the `SynchronizationContext` **captured where the view
+model was built** (D32). In the running application that is the UI thread. In a test there is
+no context at all, so the callback runs inline — which is precisely what makes an assertion on
+a background event deterministic instead of a race against the thread pool.
+
+Anything raised off the UI thread goes through it: `IGameLauncher.GameExited` documents that it
+fires on someone else's thread, and a binding updated from there is a crash that only ever
+happens on a user's machine.
+
+---
 
 ## Start-up sequence
 
-`Program.Main` runs before Avalonia so that a failure during initialisation is still logged:
+`Program.Main` runs **before** Avalonia, so a failure during initialisation still ends up in a
+log file rather than in a silent exit:
 
 1. Build `PathProvider` and configure Serilog.
 2. Install the global exception handlers (`AppDomain.UnhandledException`,
-   `TaskScheduler.UnobservedTaskException`).
+   `TaskScheduler.UnobservedTaskException`) — see [logging-and-local-state.md](logging-and-local-state.md).
 3. Start Avalonia. `App.OnFrameworkInitializationCompleted` then:
-   - builds the DI container,
+   - builds the DI container with `AddLauncherInfrastructure()`,
    - loads `launcher.config.json` and the user settings,
    - applies theme and language,
    - publishes `LocalizationSource` for the XAML markup extension,
-   - constructs the shell window and its view model.
+   - constructs the shell window and its view model,
+   - restores the stored session and runs the startup recovery pass (D34).
 
-Configuration and settings are read synchronously here on purpose: the shell cannot be
-rendered before the app's name, theme and language are known, and an async gap would mean
-showing a window that immediately restyles itself.
+Configuration and settings are read **synchronously** here on purpose: the shell cannot be
+rendered before the application's name, theme and language are known, and an async gap would
+mean showing a window that immediately restyles itself in front of the user.
 
-## Configuration: two files, one direction
+---
 
-| File | Written by | Contains |
-|---|---|---|
-| `launcher.config.json` | the packager, shipped read-only | app name, API endpoint, theme, branding, supported languages |
-| `launcher.settings.json` in app-data | the user, at runtime | chosen language, theme, install directory, crash-report opt-in |
+## The composition root
 
-They are never merged into one file: a self-update replaces the shipped configuration, and
-that must not touch anything the user chose. Precedence is
-**user setting → shipped configuration → built-in default**.
+`AddLauncherInfrastructure()` in
+`src/GameLauncher.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs` registers
+every implementation behind its Core interface, and the App layer then knows nothing about
+which concrete type it received. It is a single call, which is what makes the whole client
+drivable from a twenty-line console program with no UI — see [Exercising the client](#exercising-the-client-without-a-ui).
 
-An invalid `launcher.config.json` throws at start-up rather than being partially applied,
-and the exception lists *every* problem found, not the first.
+### Four HTTP clients, and why they are four
 
-## Localization
+This is the design decision most often mistaken for duplication, so it is worth having in one
+table.
 
-`Strings.resx` (English, neutral) plus one satellite per language.
-`ResourceManagerLocalizationService` resolves keys and raises `LanguageChanged`.
+| Client | Bearer token | Base address | Timeout | Used by |
+|---|---|---|---|---|
+| auth | **no** | the API | 30 s | `IAuthApi` |
+| capabilities | **no** | the API | 30 s | `ICapabilitiesApi` |
+| API | yes | the API | 30 s | `ICatalogApi`, `ILibraryApi`, `IDownloadApi`, `IPublishingApi` |
+| file server | **no** | none (absolute signed URLs) | infinite | `IBlobFetcher` |
+| artwork | **no** | none (absolute public URLs) | 30 s | `IImageLoader` |
 
-XAML never references resources directly. It goes through the markup extension:
+Four registrations, five rows — the auth and capabilities clients are separate registrations of
+the same tokenless shape.
 
-```xml
-<TextBlock Text="{loc:Tr Nav.Library}" />
-```
+- **The auth client carries no token (D14)** because refreshing a session has to work
+  *precisely* when the access token has expired. One client whose handler obtained a token
+  before every request would call `POST /auth/refresh` through that handler, which would try to
+  obtain a token, which is the same call. Splitting the registration makes the cycle impossible
+  to write rather than something a reviewer has to notice.
+- **The capabilities client carries no token (D39)** because the limits document is what a
+  launcher reads before it knows whether it can reach this server at all, and nothing in the
+  document depends on who is asking.
+- **The file-server client carries no token (D20)** because a signed URL carries its own
+  authorization and *the API names the host it is on*. Attaching the launcher's credential
+  would be handing it to a host the server chose. Its timeout is infinite because
+  `HttpClient.Timeout` covers the response body as well as the headers and a build is
+  arbitrarily large; a stalled transfer is bounded by the caller's cancellation.
+- **The artwork client carries no token (D35)** for the same reason as the file server, and
+  keeps the ordinary timeout for the opposite one: a cover is small, and one taking thirty
+  seconds is one the page is better off without.
 
-`TrExtension` returns a *binding* to an indexer on `LocalizationSource`, not a string. When
-the language changes, `LocalizationSource` raises `PropertyChanged` for the indexer and
-every localized element re-reads its value — so switching language needs no restart.
+**What breaks if you merge them:** the token leaves the API's origin. Not in a way any test
+would catch — every request still succeeds — which is exactly why the separation lives in the
+DI graph, where merging two registrations is a visible edit, rather than in a path comparison
+inside a handler, where it is a condition somebody eventually gets wrong.
 
-`LocalizationSource.Instance` is the single global in the application. A markup extension is
-instantiated by the XAML loader and has no access to the DI container, so the instance is
-published during start-up.
+---
 
-Two tests enforce the rules: one fails if any language is missing a key English has, another
-scans every `.axaml` for literal user-visible attribute values.
+## Errors
 
-## Downloads and installs (design, milestone 7)
+`ApiTransport` is the one place that knows the API speaks HTTP. Every failure leaves it as an
+`ApiException` carrying a typed `ApiErrorCode`: a refused connection and a client-side timeout
+become `Network`, the server's RFC 7807 envelope becomes its own code, a body that is not JSON
+(a proxy answering in HTML) becomes `Unknown`. No caller above it ever sees an
+`HttpRequestException`.
 
-The server stores build files content-addressed: each file is a blob keyed by its SHA-256,
-and a manifest maps relative paths to blob hashes. The client mirrors that:
+`IApiErrorPresenter` then maps an `ApiException` to one localized sentence (D18). It is one
+class rather than a method on each view model because *what the user is told* is a product
+decision, and having it in one place is what stops each page inventing its own wording. It
+takes an override for the single case where one code means two things: on the sign-in form a
+401 means the password was wrong, not that a session aged out.
 
-1. **Plan** — diff the target manifest against the installed one. Fresh install = diff
-   against an empty manifest. The server may advise a full download when the delta is too
-   large a fraction of the whole.
-2. **Space check** — compare required bytes against free space *before* touching anything.
-3. **Fetch** — download into a staging directory with HTTP `Range`, so an interruption
-   resumes. Each blob is written to `.part` and hash-verified before being accepted.
-4. **Apply** — only once every blob is present and verified, move files into place and
-   delete removed paths. An interrupted download must never leave a broken installation.
-5. **Verify** — re-hash the installed tree against the manifest.
+**Two rules the client must not break**, inherited from the server:
 
-Uninstall deletes the install directory and its local database rows, and reports freed space.
+- **A 404 is shown as "not available", never as "you do not have permission."** The server
+  answers 404 rather than 403 for anything the caller may not see — drafts, other publishers'
+  builds, other people's upload sessions — specifically so that the existence of an unannounced
+  title is not confirmed. A client that re-introduced the distinction in its wording would
+  undo that server-side care with a string.
+- **Client-side permission checks exist only so the UI does not offer an action that would be
+  refused (D8).** Every one is enforced again server-side, and the client never assumes its own
+  check was sufficient.
 
-## Local state
+---
 
-SQLite under the user-data directory holds installed games, cached manifests and download
-progress. It is transactional and survives a crash mid-write, which a plain JSON file does
-not — and download progress is exactly the state that gets written when the process dies.
+## Where the server's limits come from
 
-## Logging and crash reporting
+Nothing in the client hard-codes a number the server owns. `GET /api/v1/capabilities` is read
+at start-up through `CachedServerCapabilityProvider`, which caches for fifteen minutes and
+**never throws**: an unreachable server, or one older than the route, yields
+`ServerCapabilities.Fallback` (D39).
 
-Serilog writes rolling daily files under the platform log directory, capped at 20 MB each
-and 14 days. Timestamps use the invariant culture so logs do not change shape with the
-machine's locale.
+The split is deliberate and is stated again in [publishing.md](publishing.md): the *numbers*
+come from the server, the *shape* rules stay client-side (D40). `maxPathLength` and `maxFiles`
+are the server's to state; "no absolute path, no `..`, no backslash, no control character" is
+what makes a path safe to resolve inside an install directory on **this** machine, so the
+client would keep enforcing it against a server that stopped.
 
-Crash reports are written to disk only. Nothing is ever transmitted unless the user has
-opted in through `SendCrashReports`, and even then uploading is a separate explicit step.
-
-## Security posture
-
-Client-side permission checks exist purely so the UI does not offer actions that will fail.
-**The server is the only authority.** Any check the client makes is made again server-side,
-and the client never assumes its own check was sufficient.
+---
 
 ## Testing
 
 | Project | Covers |
 |---|---|
-| `GameLauncher.Core.Tests` | domain and service logic, localization, repository-wide conventions |
-| `GameLauncher.Infrastructure.Tests` | configuration loading, settings persistence, platform paths, API client |
+| `GameLauncher.Core.Tests` | domain and service logic with no I/O, localization, repository-wide conventions |
+| `GameLauncher.Infrastructure.Tests` | API clients against a stub `HttpMessageHandler`, the download engine, the SQLite store, config loading, the image cache |
+| `GameLauncher.App.Tests` | view models, exercised as plain objects |
 
-View models are tested as plain objects. There are no UI-automation tests: the value they
-would add does not justify their fragility on three operating systems.
+Stack: **xUnit v3 + NSubstitute**, with xUnit's built-in `Assert` and no fluent-assertion
+library (D11). Async tests take `TestContext.Current.CancellationToken`.
+
+View-model tests use the **real** `ResourceManagerLocalizationService` rather than a stub, so
+an assertion on a user-facing message also proves the resource key exists in every language.
+
+Two convention tests exist and must keep passing:
+
+- one fails when any language is missing a key English has;
+- one scans every `.axaml` and fails on a literal user-visible attribute value.
+
+There are no UI-automation tests. On three operating systems the fragility would cost more than
+the coverage is worth, and the layering above is what makes that an acceptable trade rather
+than a gap.
+
+---
+
+## Exercising the client without a UI
+
+`AddLauncherInfrastructure()` builds the whole graph on its own, so a console project that
+references Core and Infrastructure and resolves `IAuthenticationService`, `ICatalogApi`,
+`IInstallationService` and `IBuildPublisher` drives every layer against a running stack. This
+is how milestones 6, 7 and 8 were verified, and it reaches the one thing no test does: nginx
+serving a real signed URL.
+
+Two things make it safe and repeatable:
+
+- register an `IPathProvider` **after** `AddLauncherInfrastructure()` — last registration wins —
+  pointing at a temporary directory, or the run writes into the maintainer's real
+  `%LOCALAPPDATA%\CustomGameLauncher`;
+- copy `launcher.config.json` next to the executable; the configuration provider reads it from
+  `IPathProvider.ApplicationDirectory`.
+
+---
+
+## What is not implemented
+
+Stated explicitly, because the alternative is a reader inferring it from silence:
+
+- **Self-update.** `GameLauncher.Updater` is a stub. Its command line is designed and its
+  process boundary is real — a running executable cannot overwrite its own binaries on Windows
+  (D7) — but the swap is unwritten, and it cannot be finished in this repository alone: it
+  needs a launcher-release surface on the server (releases, channels, signature verification)
+  that does not exist yet. It is **not** a numbered milestone.
+- **Crash-report upload.** Crash reports are written to disk and nothing transmits them; see
+  [logging-and-local-state.md](logging-and-local-state.md).
+- **`UserSettings.SendCrashReports` and `LaunchMinimized`** exist in the model and are read by
+  nothing, which is why the Settings page does not show them: an inert checkbox is worse than
+  an absent one.
+
+## Related documents
+
+- [authentication-and-session.md](authentication-and-session.md) — the session, rotation, and working offline
+- [catalog-and-artwork.md](catalog-and-artwork.md) — Explore, the library, covers and the devlog
+- [downloads-and-installs.md](downloads-and-installs.md) — the download engine and install states
+- [launching-games.md](launching-games.md) — starting a game and per-game options
+- [publishing.md](publishing.md) — packaging, resumable upload, capabilities
+- [configuration-and-localization.md](configuration-and-localization.md) — the fork-and-rebrand surface
+- [logging-and-local-state.md](logging-and-local-state.md) — what the launcher writes to disk
