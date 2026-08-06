@@ -212,6 +212,35 @@ Self-contained publish (per RID: `win-x64`, `linux-x64`, `osx-x64`, `osx-arm64`)
 dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 ```
 
+### Pressing a real button, from PowerShell
+
+There are no UI-automation tests (§8) and there will not be, so the window is exercised by hand.
+It does not have to be exercised by *hand-eye*: UI Automation drives the running launcher from a
+script, which is how the sign-in screen's two recovery affordances were verified.
+
+```powershell
+Add-Type -AssemblyName UIAutomationClient,UIAutomationTypes
+$p = Get-Process -Name GameLauncher
+$root = [System.Windows.Automation.AutomationElement]::FromHandle($p.MainWindowHandle)
+
+# Every text box, in visual order
+$cond = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+  [System.Windows.Automation.ControlType]::Edit)
+$edits = @($root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond))
+$edits[0].GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue("a@b.c")
+
+# A button, by the text of its Content (see the gotcha about Panel-content buttons)
+$c = New-Object System.Windows.Automation.PropertyCondition(
+  [System.Windows.Automation.AutomationElement]::NameProperty, "Password dimenticata?")
+$b = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $c)
+$b.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
+```
+
+Setting a `TextBox` through `ValuePattern` updates the binding, so `CanExecute` re-evaluates
+exactly as it does under a real keyboard. To look at the result, capture the window with
+`PrintWindow($hwnd, $hdc, 2)` rather than `CopyFromScreen` — see §7.
+
 ### Exercising the whole client against a real server, without the UI
 
 `AddLauncherInfrastructure()` builds the entire graph on its own, so a console project that
@@ -273,6 +302,9 @@ is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
 | **`System.Text.Json` escapes `<`, `>`, `&` and `+` by default** | A redaction placeholder of `<redacted>` was written into every stored crash report as `<redacted>`: correct on the wire, and unreadable in the file — which is half of what that file is for. Nothing failed; the unit tests assert on the record and never on the serialised bytes, and it took driving the real thing to see it. The placeholder is `[redacted]` now. Relaxing the encoder globally would have been the other fix and a worse one: it is the same options object every API body uses |
 | **Awaiting `IAsyncRelayCommand.ExecuteAsync` twice while the first call is still running hangs the test host** | The second `await` never returns, and nothing prints: `dotnet test` sits at "1 test file matches" until it is killed, which reads like a broken build rather than one deadlocked test. It cost a cycle on the Explore scroll tests. When the point of a test is that a *second* call does nothing, assert on that directly — `Assert.True(model.LoadMoreAsync(token).IsCompleted)` — which cannot hang and says what is meant. Call the command itself only where the call completes |
 | **`Progress<T>` posts its callback to a captured context** | With no `SynchronizationContext` — which is every test — that means the thread pool, so a test that asserts on what a progress callback recorded is asserting on whether the pool has caught up. Both test projects have a synchronous `IProgress<T>` for this; the view model funnels every report through one property so the same path is exercised either way |
+| **The Fluent theme paints a disabled button's background whatever the class says** | `Button.link` sets `Background=Transparent`, and a *disabled* link still came out as a grey box, because the theme styles the templated `ContentPresenter` and that wins. A link waiting on an empty field therefore looked like a broken button. The fix is a selector that reaches into the template — `Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter` — and nothing in the suite could have caught it: it was found by looking at the window |
+| **The real window can be driven from PowerShell with UI Automation, and a button's name is its `Content`** | `[AutomationElement]::FromHandle($p.MainWindowHandle)` plus `ValuePattern` and `InvokePattern` types text into the boxes and presses the buttons of the running launcher — which is the only way to press a real button, since there are no UI tests. One trap: the automation name comes from `Content`, so `Content="{loc:Tr Auth.ForgotPassword}"` is findable by its text, while a button whose content is a `Panel` of two `TextBlock`s is named **`Avalonia.Controls.Panel`**. Searching for the visible text then finds the *TextBlock*, and invoking it fails with "Pattern non supportato" — which reads like UIA being broken rather than the wrong element |
+| **`Graphics.CopyFromScreen` photographs whatever is on top of that rectangle** | It captured an unrelated window sitting over the launcher, so the screenshot showed something else entirely. `PrintWindow($hwnd, $hdc, 2)` renders the target window itself, works when it is occluded, and does **not** steal focus from whatever the maintainer is doing. Also: `Add-Type -MemberDefinition` already emits `using System.Runtime.InteropServices;`, so passing `-UsingNamespace` for it fails the compile as a warning-as-error |
 
 ---
 
