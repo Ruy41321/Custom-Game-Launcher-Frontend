@@ -26,7 +26,7 @@ public sealed class AuthApiClient(HttpClient httpClient, TimeProvider timeProvid
         {
             User = payload.User.ToUser(),
             EmailVerificationRequired = payload.EmailVerificationRequired,
-            DevEmailVerificationToken = payload.DevEmailVerificationToken,
+            VerificationEmailSent = payload.VerificationEmailSent,
         };
     }
 
@@ -44,16 +44,9 @@ public sealed class AuthApiClient(HttpClient httpClient, TimeProvider timeProvid
     public Task VerifyEmailAsync(string token, CancellationToken cancellationToken = default) =>
         _transport.PostAsync("auth/verify-email", new { token }, cancellationToken);
 
-    public async Task<string?> RequestPasswordResetAsync(
-        string email, CancellationToken cancellationToken = default)
-    {
-        StatusPayload payload = await _transport
-            .PostAsync<StatusPayload>(
-                "auth/password-reset/request", new { email }, cancellationToken)
-            .ConfigureAwait(false);
-
-        return payload.DevPasswordResetToken;
-    }
+    public Task RequestPasswordResetAsync(
+        string email, CancellationToken cancellationToken = default) =>
+        _transport.PostAsync("auth/password-reset/request", new { email }, cancellationToken);
 
     public Task ConfirmPasswordResetAsync(
         string token, string newPassword, CancellationToken cancellationToken = default) =>

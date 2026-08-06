@@ -68,16 +68,11 @@ internal sealed record RegistrationPayload
 
     public bool EmailVerificationRequired { get; init; }
 
-    public string? DevEmailVerificationToken { get; init; }
+    public bool VerificationEmailSent { get; init; }
 }
 
-/// <summary>
-/// The endpoints whose answer is a bare acknowledgement. The reset token is present only
-/// against a development server, which has no mail transport yet.
-/// </summary>
+/// <summary>The endpoints whose answer is a bare acknowledgement.</summary>
 internal sealed record StatusPayload
 {
     public string Status { get; init; } = string.Empty;
-
-    public string? DevPasswordResetToken { get; init; }
 }

@@ -11,10 +11,15 @@ public sealed record RegistrationResult
     public bool EmailVerificationRequired { get; init; }
 
     /// <summary>
-    /// Present only against a development server, which has no mail transport yet and returns
-    /// the token directly. Never populated by a deployed environment.
+    /// Whether the verification message actually went out.
     /// </summary>
-    public string? DevEmailVerificationToken { get; init; }
+    /// <remarks>
+    /// The account exists either way — the server does not undo a registration because its
+    /// relay was down — so this is the difference between telling somebody to check their
+    /// inbox and telling them to ask for the link again. Defaults to false, which is the safe
+    /// reading of a server too old to send the field: it says "ask again" rather than "wait".
+    /// </remarks>
+    public bool VerificationEmailSent { get; init; }
 }
 
 /// <summary>
@@ -44,8 +49,10 @@ public interface IAuthApi
     /// <summary>
     /// Reports success whether or not the address exists — the server refuses to be an
     /// account-enumeration oracle, and the client must not present the answer as confirmation.
+    /// Nothing comes back: the link is delivered by mail, and the page it lands on is served
+    /// by the server itself.
     /// </summary>
-    Task<string?> RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
+    Task RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
 
     Task ConfirmPasswordResetAsync(
         string token, string newPassword, CancellationToken cancellationToken = default);

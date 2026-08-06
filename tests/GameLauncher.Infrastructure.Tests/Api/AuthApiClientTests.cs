@@ -87,7 +87,7 @@ public sealed class AuthApiClientTests
               "user": { "id": "u1", "email": "luigi@example.com", "displayName": "Luigi",
                         "emailVerified": false, "uploadQuotaBytes": 0, "uploadUsedBytes": 0 },
               "emailVerificationRequired": true,
-              "devEmailVerificationToken": "dev-token"
+              "verificationEmailSent": true
             }
             """;
         var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, body);
@@ -97,13 +97,30 @@ public sealed class AuthApiClientTests
 
         Assert.Equal("/api/v1/auth/register", handler.LastRequest.PathAndQuery);
         Assert.True(result.EmailVerificationRequired);
+        Assert.True(result.VerificationEmailSent);
         Assert.False(result.User.EmailVerified);
-        Assert.Equal("dev-token", result.DevEmailVerificationToken);
     }
 
-    // A deployed server never sends the token; the client must not depend on it existing.
+    // The account is created whether or not the message went out, so the client has to be able
+    // to tell the two apart — and an answer with the field missing is read as "it did not".
     [Fact]
-    public async Task ADeployedServerSendsNoDevelopmentToken()
+    public async Task RegisteringReportsAMessageThatDidNotGoOut()
+    {
+        const string body = """
+            { "user": { "id": "u1" }, "emailVerificationRequired": true,
+              "verificationEmailSent": false }
+            """;
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, body);
+
+        RegistrationResult result = await ClientOver(handler).RegisterAsync(
+            "a@b.c", "pw", "Luigi", TestContext.Current.CancellationToken);
+
+        Assert.True(result.EmailVerificationRequired);
+        Assert.False(result.VerificationEmailSent);
+    }
+
+    [Fact]
+    public async Task AServerThatSaysNothingAboutDeliveryIsReadAsNotHavingSent()
     {
         const string body = """
             { "user": { "id": "u1" }, "emailVerificationRequired": true }
@@ -113,7 +130,7 @@ public sealed class AuthApiClientTests
         RegistrationResult result = await ClientOver(handler).RegisterAsync(
             "a@b.c", "pw", "Luigi", TestContext.Current.CancellationToken);
 
-        Assert.Null(result.DevEmailVerificationToken);
+        Assert.False(result.VerificationEmailSent);
     }
 
     [Fact]
@@ -142,21 +159,20 @@ public sealed class AuthApiClientTests
         Assert.Contains("3YkQrefresh", handler.LastRequest.Body, StringComparison.Ordinal);
     }
 
+    // Nothing comes back any more: the link is delivered by mail, and the page it lands on is
+    // the server's. All the client can do is ask.
     [Fact]
-    public async Task APasswordResetRequestSurfacesTheDevelopmentTokenWhenThereIsOne()
+    public async Task APasswordResetRequestPostsTheAddressAndReadsNothingBack()
     {
         var handler = StubHttpMessageHandler.RespondingWith(
             HttpStatusCode.OK,
-            """
-            { "status": "if that address is registered, a reset link has been sent",
-              "devPasswordResetToken": "reset-me" }
-            """);
+            """{ "status": "if that address is registered, a reset link has been sent" }""");
 
-        string? token = await ClientOver(handler).RequestPasswordResetAsync(
+        await ClientOver(handler).RequestPasswordResetAsync(
             "a@b.c", TestContext.Current.CancellationToken);
 
         Assert.Equal("/api/v1/auth/password-reset/request", handler.LastRequest.PathAndQuery);
-        Assert.Equal("reset-me", token);
+        Assert.Contains("a@b.c", handler.LastRequest.Body, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -130,7 +130,11 @@ public sealed class LoginViewModelTests
     {
         _authentication.RegisterAsync(
                 Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new RegistrationResult { EmailVerificationRequired = true });
+            .Returns(new RegistrationResult
+            {
+                EmailVerificationRequired = true,
+                VerificationEmailSent = true,
+            });
 
         LoginViewModel model = WithCredentials(CreateViewModel());
         model.IsRegistering = true;
@@ -142,6 +146,36 @@ public sealed class LoginViewModelTests
         Assert.Contains("luigi@example.com", model.InfoMessage!, StringComparison.Ordinal);
         await _authentication.DidNotReceive().SignInAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    // The account exists either way, so the difference is what the person is told to do next:
+    // watching an inbox nothing was sent to is a wait with no end.
+    [Fact]
+    public async Task RegisteringWhenTheMessageDidNotGoOutSaysSoInsteadOfSayingToCheckTheInbox()
+    {
+        _authentication.RegisterAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new RegistrationResult
+            {
+                EmailVerificationRequired = true,
+                VerificationEmailSent = false,
+            });
+
+        LoginViewModel model = WithCredentials(CreateViewModel());
+        model.IsRegistering = true;
+        model.DisplayName = "Luigi";
+
+        await model.SubmitCommand.ExecuteAsync(null);
+
+        Assert.False(model.IsRegistering);
+        Assert.Contains("luigi@example.com", model.InfoMessage!, StringComparison.Ordinal);
+        Assert.NotEqual(
+            _localization.Translate("Auth.VerifyEmailNotice", "luigi@example.com"),
+            model.InfoMessage);
+        Assert.Equal(
+            _localization.Translate("Auth.VerifyEmailNotSent", "luigi@example.com"),
+            model.InfoMessage);
+        Assert.Null(model.ErrorMessage);
     }
 
     [Fact]

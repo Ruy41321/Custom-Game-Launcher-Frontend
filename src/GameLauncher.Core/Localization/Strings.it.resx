@@ -185,6 +185,9 @@
   <data name="Auth.VerifyEmailNotice" xml:space="preserve">
     <value>Account creato. Cerca il link di verifica su {0}, poi accedi.</value>
   </data>
+  <data name="Auth.VerifyEmailNotSent" xml:space="preserve">
+    <value>Account creato, ma il messaggio di verifica non è riuscito a partire verso {0}. Richiedi il link tra poco.</value>
+  </data>
   <data name="Explore.SearchPlaceholder" xml:space="preserve">
     <value>Cerca per titolo</value>
   </data>

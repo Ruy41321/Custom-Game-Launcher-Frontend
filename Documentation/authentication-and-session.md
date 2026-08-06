@@ -217,13 +217,22 @@ default.
 `RegisterAsync` returns `RegistrationResult`. Two fields deserve care:
 
 - `EmailVerificationRequired` — the account cannot sign in until the address is verified.
-- `DevEmailVerificationToken` — **present only against a development server**, which has no
-  mail transport yet and returns the token in the body. This is an open debt on the server
-  side; when mail delivery lands, the field disappears there and this property comes out here.
+- `VerificationEmailSent` — whether the message actually went out. The server creates the
+  account whether or not its relay answered, so these are two different facts and the sign-in
+  screen says two different things: check your inbox, or ask for the link again. It defaults
+  to **false**, which is how a server too old to send the field is read — "ask again" is
+  harmless against a server that did send, and "wait" is not.
 
-`RequestPasswordResetAsync` reports success **whether or not the address exists**. The server
-refuses to be an account-enumeration oracle, and the client must not undo that by presenting
-the answer as confirmation that an account was found.
+`RequestPasswordResetAsync` reports success **whether or not the address exists**, and returns
+nothing at all. The server refuses to be an account-enumeration oracle, and the client must not
+undo that by presenting the answer as confirmation that an account was found.
+
+**Neither flow is finished inside the launcher.** The links in both messages open pages the
+server serves, and this client has no screen for confirming an address or choosing a new
+password: `VerifyEmailAsync` and `ConfirmPasswordResetAsync` exist on `IAuthApi` and nothing
+calls them. `POST /auth/verify-email/resend` has no client method either, so the sign-in screen
+can report that a message did not go out and cannot yet offer a button that asks for another.
+That is open debt 23 of `HANDOFF.md`, not an oversight.
 
 ---
 
@@ -251,6 +260,9 @@ they are easiest to break:
 - **No "remember me" / "stay signed out" distinction.** A restored session is restored; there
   is one behaviour.
 - **No second factor.** The server has none, so the client has none.
+- **No screen for confirming an address or resetting a password**, and no way to ask for the
+  verification link again. Both flows end in a browser, on a page the server serves; the two
+  `IAuthApi` methods that would drive them from here have no caller. See above.
 
 ## Related documents
 

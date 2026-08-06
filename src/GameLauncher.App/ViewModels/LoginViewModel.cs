@@ -122,9 +122,13 @@ public sealed partial class LoginViewModel : ViewModelBase
         if (result.EmailVerificationRequired)
         {
             // Signing in now would only earn a rejection, so the form goes back to sign-in
-            // mode and says what has to happen first.
+            // mode and says what has to happen first. Which sentence depends on whether the
+            // message actually left: the account exists either way, and telling somebody to
+            // watch an inbox nothing was sent to is a wait with no end.
             IsRegistering = false;
-            InfoMessage = _localization.Translate("Auth.VerifyEmailNotice", Email.Trim());
+            InfoMessage = result.VerificationEmailSent
+                ? _localization.Translate("Auth.VerifyEmailNotice", Email.Trim())
+                : _localization.Translate("Auth.VerifyEmailNotSent", Email.Trim());
             return;
         }
 
