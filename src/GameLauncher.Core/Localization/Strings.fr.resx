@@ -197,8 +197,14 @@
   <data name="Explore.AddToLibrary" xml:space="preserve">
     <value>Ajouter à la bibliothèque</value>
   </data>
-  <data name="Explore.PageOf" xml:space="preserve">
-    <value>Page {0} sur {1}</value>
+  <data name="Explore.EndOfResults" xml:space="preserve">
+    <value>C’est tout</value>
+  </data>
+  <data name="Explore.LoadingMore" xml:space="preserve">
+    <value>Chargement de la suite…</value>
+  </data>
+  <data name="Explore.Results" xml:space="preserve">
+    <value>{0} jeux sur {1}</value>
   </data>
   <data name="Explore.Sort.ReleaseDate" xml:space="preserve">
     <value>Date de sortie</value>

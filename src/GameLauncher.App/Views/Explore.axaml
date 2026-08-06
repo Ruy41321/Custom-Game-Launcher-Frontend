@@ -5,11 +5,12 @@
              xmlns:loc="clr-namespace:GameLauncher.App.Localization"
              xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
              xmlns:models="clr-namespace:GameLauncher.Core.Models;assembly=GameLauncher.Core"
+             xmlns:views="clr-namespace:GameLauncher.App.Views"
              mc:Ignorable="d"
              x:Class="GameLauncher.App.Views.Explore"
              x:DataType="vm:ExploreViewModel">
 
-  <Grid RowDefinitions="Auto,*,Auto" Margin="24,20">
+  <Grid RowDefinitions="Auto,*" Margin="24,20">
 
     <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,0,0,16">
       <TextBox Grid.Column="0" Text="{Binding SearchText}"
@@ -42,7 +43,10 @@
                HorizontalAlignment="Center" VerticalAlignment="Center"
                IsVisible="{Binding IsEmpty}" />
 
-    <ScrollViewer Grid.Row="1">
+    <ScrollViewer Grid.Row="1"
+                  views:InfiniteScroll.Command="{Binding LoadMoreCommand}"
+                  views:InfiniteScroll.Items="{Binding Games}">
+      <StackPanel>
       <ItemsControl ItemsSource="{Binding Games}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
@@ -84,16 +88,22 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
-    </ScrollViewer>
 
-    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="10" HorizontalAlignment="Center"
-                Margin="0,14,0,0">
-      <Button Content="{loc:Tr Common.Previous}" Command="{Binding PreviousPageCommand}"
-              IsEnabled="{Binding HasPreviousPage}" Classes="link" />
-      <TextBlock Text="{Binding PageLabel}" VerticalAlignment="Center" Opacity="0.6" />
-      <Button Content="{loc:Tr Common.Next}" Command="{Binding NextPageCommand}"
-              IsEnabled="{Binding HasNextPage}" Classes="link" />
-    </StackPanel>
+      <!-- The foot of the list, and the reason it is inside the scrolled content: reaching it
+           is what asking for another page means, and a fixed bar at the bottom of the window
+           would say "loading" without ever being scrolled to. -->
+      <StackPanel Spacing="6" Margin="0,4,0,12" HorizontalAlignment="Center">
+        <ProgressBar IsIndeterminate="True" Width="160" Height="2"
+                     IsVisible="{Binding IsLoadingMore}" />
+        <TextBlock Text="{loc:Tr Explore.LoadingMore}" Opacity="0.6" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding IsLoadingMore}" />
+        <TextBlock Text="{loc:Tr Explore.EndOfResults}" Opacity="0.45" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding HasEnded}" />
+        <TextBlock Text="{Binding ResultsLabel}" Opacity="0.45" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding HasEnded}" />
+      </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
 
   </Grid>
 

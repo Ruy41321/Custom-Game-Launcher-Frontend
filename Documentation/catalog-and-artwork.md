@@ -24,7 +24,8 @@ cache keys readable.
 so the enum can grow without breaking against an older deployment.
 
 The response is `PagedResult<T>` — the server's `{ items, total, limit, offset }` envelope, with
-`Page` and `PageCount` derived rather than sent.
+`Page` and `PageCount` derived rather than sent. Explore itself no longer shows a page number;
+`Total` is what it reads, because that is what says whether there is more.
 
 **Drafts never appear.** That is enforced server-side; the client renders the list it is given
 and does not filter again.
@@ -54,7 +55,31 @@ the search that replaced it — otherwise fast typing would look like a page tha
 The debounce lives in the **view model**, not the view's code-behind: that is where Enter
 arrives as well, and a rule in a code-behind is a rule no test can press.
 
-**Known gap:** there is still no infinite scrolling. Paging is the Previous/Next pair.
+### The list grows by scrolling (D51)
+
+There is no Previous/Next any more. Reaching the bottom of the grid appends the next page, and
+four rules make that behave:
+
+- **One request at a time.** `LoadMoreCommand` refuses while anything is in flight. This is not
+  a defensive extra: the scroll handler fires on every scroll event, so without it one flick of
+  a wheel is several requests for the same page and several copies of it in the list.
+- **The page number advances only on an answer that arrived.** A failed or superseded request
+  leaves the next scroll asking for the same page rather than stepping over one nobody saw.
+- **The end is a state, not a discovery.** `HasMore` comes from the server's own count, so
+  reaching the bottom of a finished list asks for nothing — and an empty page ends the list too,
+  which guards against a total that disagrees with what is being served.
+- **A new search, or a new sort order, replaces the list.** That is the *only* path that empties
+  it: an append that cleared first would make the grid flash and lose the place of somebody
+  reading it. The scroll offset returns to the top when — and only when — the list is replaced.
+
+The two entry points are separate for exactly that reason: `LoadAsync` replaces, `LoadMoreAsync`
+appends, and no caller has to pass a flag saying which it meant.
+
+The scrolling itself is an attached behaviour, `Views/InfiniteScroll`, rather than a code-behind
+handler — a rule in a code-behind is a rule no test can press. It holds **no policy**: it fires
+the command whenever the viewport is within 200px of the end, and whether that means anything is
+the view model's decision. Only the view model's half is unit-tested; the geometry needs a
+window and is verified by looking at one.
 
 ---
 
@@ -244,8 +269,9 @@ Two rules from this document apply there in reverse:
 Stated explicitly:
 
 - **No full-screen screenshot viewer.** The gallery is a hero image plus a thumbnail strip.
-- **No infinite scroll** in Explore. The search box debounces and cancels; paging is still the
-  Previous/Next pair.
+- **No virtualisation.** Explore appends cards to a `WrapPanel` inside a `ScrollViewer`, so
+  scrolling through a very large catalog keeps every card it has loaded alive. That is fine for
+  the deployments this launcher targets and is the thing to change first if one grows.
 - **No Markdown rendering.** Devlog bodies are shown as text, on both the player's page and the
   publisher's — rendering remote markup is a decision this feature does not need.
 - **Offline, the *detail page* still does not work.** It needs the catalog. The library does,

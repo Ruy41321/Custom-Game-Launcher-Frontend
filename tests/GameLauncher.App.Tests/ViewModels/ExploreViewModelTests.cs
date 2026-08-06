@@ -42,7 +42,7 @@ public sealed class ExploreViewModelTests
         _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>()).Returns(page);
 
     [Fact]
-    public async Task LoadingFillsTheListAndThePageCount()
+    public async Task LoadingFillsTheListAndSaysThereIsMore()
     {
         Returns(PageOf(41, 20, 0, "Orbital Drift", "Deep Cut"));
         ExploreViewModel model = CreateViewModel();
@@ -51,7 +51,8 @@ public sealed class ExploreViewModelTests
 
         Assert.Equal(2, model.Games.Count);
         Assert.Equal(41, model.Total);
-        Assert.Equal(3, model.PageCount);
+        Assert.True(model.HasMore);
+        Assert.False(model.HasEnded);
         Assert.False(model.IsEmpty);
     }
 
@@ -88,53 +89,196 @@ public sealed class ExploreViewModelTests
             Arg.Any<CancellationToken>());
     }
 
-    // Searching from page 4 and staying there would show an empty result for a real match.
+    // ---------------------------------------------------------------------
+    // Scrolling for more. These replace the Previous/Next tests: the questions are the same —
+    // where the list starts, where it ends, what a filter change does — and only the mechanism
+    // moved.
+    // ---------------------------------------------------------------------
+
     [Fact]
-    public async Task ANewSearchStartsFromTheFirstPage()
+    public async Task ScrollingAppendsTheNextPageInsteadOfReplacingTheList()
     {
-        Returns(PageOf(100, 20, 60, "a"));
+        Returns(PageOf(30, 20, 0, "a", "b"));
         ExploreViewModel model = CreateViewModel();
-        model.Page = 4;
+        await model.LoadAsync(TestContext.Current.CancellationToken);
 
-        await model.SearchCommand.ExecuteAsync(null);
+        Returns(PageOf(30, 20, 20, "c"));
+        await model.LoadMoreCommand.ExecuteAsync(null);
 
-        await _catalog.Received().ExploreAsync(
-            Arg.Is<GameQuery>(query => query!.Page == 1), Arg.Any<CancellationToken>());
+        Assert.Equal(["a", "b", "c"], model.Games.Select(card => card.Title));
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Page == 2), Arg.Any<CancellationToken>());
+    }
+
+    // The end is a state the server's own count decides, not something discovered by asking one
+    // more time and getting nothing back.
+    [Fact]
+    public async Task TheEndOfTheResultsIsSaidRatherThanDiscovered()
+    {
+        Returns(PageOf(2, 20, 0, "a", "b"));
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.HasMore);
+        Assert.True(model.HasEnded);
+
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        // Still one request in total: scrolling at the bottom of a finished list asks nothing.
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    // A total the server cannot actually serve — rows deleted between two pages, say — would
+    // otherwise be an unbounded sequence of requests answering nothing.
+    [Fact]
+    public async Task APageThatComesBackEmptyEndsTheListEvenIfTheTotalDisagrees()
+    {
+        Returns(PageOf(500, 20, 0, "a"));
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.HasMore);
+
+        Returns(PageOf(500, 20, 20));
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.False(model.HasMore);
+        Assert.Single(model.Games);
     }
 
     [Fact]
-    public async Task ChangingTheSortOrderAlsoReturnsToTheFirstPage()
+    public async Task ScrollingWhileAPageIsStillArrivingAsksForNothing()
     {
         Returns(PageOf(100, 20, 0, "a"));
         ExploreViewModel model = CreateViewModel();
         await model.LoadAsync(TestContext.Current.CancellationToken);
-        model.Page = 3;
 
-        model.SelectedSort = model.SortOptions.Single(option => option.Sort == GameSort.Recent);
+        RecordTokensAndNeverAnswer();
+        Task appending = model.LoadMoreAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(1, model.Page);
+        // The scroll handler fires on every scroll event, so this is the ordinary case rather
+        // than an unlikely one: without the guard, one flick of a wheel is several requests for
+        // the same page and several copies of it in the list.
+        //
+        // Asserted as "refused without starting anything" rather than by awaiting: a guard that
+        // stopped working would hang this test instead of failing it, and a suite that hangs is
+        // a suite somebody stops running.
+        Assert.True(model.LoadMoreAsync(TestContext.Current.CancellationToken).IsCompleted);
+        Assert.True(model.LoadMoreAsync(TestContext.Current.CancellationToken).IsCompleted);
+
+        await _catalog.Received(1).ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Page == 2), Arg.Any<CancellationToken>());
+
+        model.Dispose();
+        await appending;
     }
 
     [Fact]
-    public async Task PagingStopsAtBothEnds()
+    public async Task NothingIsAppendedBeforeTheFirstPageHasLoaded()
     {
-        Returns(PageOf(30, 20, 0, "a"));
+        Returns(PageOf(100, 20, 0, "a"));
+        ExploreViewModel model = CreateViewModel();
+
+        Assert.True(model.LoadMoreAsync(TestContext.Current.CancellationToken).IsCompleted);
+
+        await _catalog.DidNotReceive().ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+    }
+
+    // Searching after scrolling three pages in would otherwise leave sixty results of the old
+    // search above the first page of the new one.
+    [Fact]
+    public async Task ANewSearchEmptiesTheListAndStartsFromTheFirstPage()
+    {
+        Returns(PageOf(100, 20, 0, "a", "b"));
         ExploreViewModel model = CreateViewModel();
         await model.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.False(model.HasPreviousPage);
-        Assert.True(model.HasNextPage);
+        Returns(PageOf(100, 20, 20, "c"));
+        await model.LoadMoreCommand.ExecuteAsync(null);
+        Assert.Equal(3, model.Games.Count);
 
-        Returns(PageOf(30, 20, 20, "b"));
-        await model.NextPageCommand.ExecuteAsync(null);
+        Returns(PageOf(1, 20, 0, "match"));
+        model.SearchText = "match";
+        await model.SearchCommand.ExecuteAsync(null);
 
-        Assert.Equal(2, model.Page);
-        Assert.True(model.HasPreviousPage);
-        Assert.False(model.HasNextPage);
+        Assert.Equal(["match"], model.Games.Select(card => card.Title));
+        await _catalog.Received().ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Search == "match" && query.Page == 1),
+            Arg.Any<CancellationToken>());
+    }
 
-        await model.NextPageCommand.ExecuteAsync(null);
+    [Fact]
+    public async Task ChangingTheSortOrderAlsoStartsTheListAgain()
+    {
+        Returns(PageOf(100, 20, 0, "a", "b"));
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal(2, model.Page);
+        Returns(PageOf(100, 20, 20, "c"));
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        Returns(PageOf(100, 20, 0, "z"));
+        model.SelectedSort = model.SortOptions.Single(option => option.Sort == GameSort.Recent);
+        await Task.Yield();
+
+        Assert.Equal(["z"], model.Games.Select(card => card.Title));
+        await _catalog.Received().ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Sort == GameSort.Recent && query.Page == 1),
+            Arg.Any<CancellationToken>());
+    }
+
+    // What is already on screen is still the right answer to the question that was asked, and
+    // the page that failed is the one the next scroll retries.
+    [Fact]
+    public async Task AFailedAppendKeepsTheResultsAndRetriesTheSamePage()
+    {
+        Returns(PageOf(100, 20, 0, "a", "b"));
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Throws(new ApiException(ApiErrorCode.Network, "offline"));
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.Equal(2, model.Games.Count);
+        Assert.Equal(_localization.Translate("Error.Network"), model.ErrorMessage);
+
+        Returns(PageOf(100, 20, 20, "c"));
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        Assert.Equal(3, model.Games.Count);
+        await _catalog.Received(2).ExploreAsync(
+            Arg.Is<GameQuery>(query => query!.Page == 2), Arg.Any<CancellationToken>());
+    }
+
+    // The covers of a page already on screen were fetched when that page arrived.
+    [Fact]
+    public async Task AppendingOnlyAsksForTheCoversOfWhatItAdded()
+    {
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>()).Returns(
+            new PagedResult<Game>
+            {
+                Items = [new Game { Id = "g1", Title = "First", CoverUrl = "https://f/1.png" }],
+                Total = 2,
+                Limit = 1,
+            });
+
+        ExploreViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>()).Returns(
+            new PagedResult<Game>
+            {
+                Items = [new Game { Id = "g2", Title = "Second", CoverUrl = "https://f/2.png" }],
+                Total = 2,
+                Limit = 1,
+                Offset = 1,
+            });
+        await model.LoadMoreCommand.ExecuteAsync(null);
+
+        await _images.Received(1).GetAsync("https://f/1.png", Arg.Any<CancellationToken>());
+        await _images.Received(1).GetAsync("https://f/2.png", Arg.Any<CancellationToken>());
     }
 
     [Fact]
