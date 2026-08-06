@@ -175,6 +175,56 @@ public sealed class AuthApiClientTests
         Assert.Contains("a@b.c", handler.LastRequest.Body, StringComparison.Ordinal);
     }
 
+    // The way back for an account created while the relay was down. Same shape as the reset
+    // request, and the same identical answer whatever the address turns out to be.
+    [Fact]
+    public async Task AskingForAnotherVerificationLinkPostsTheAddress()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(
+            HttpStatusCode.OK,
+            """{ "status": "if that address needs confirming, a new link has been sent" }""");
+
+        await ClientOver(handler).ResendVerificationEmailAsync(
+            "a@b.c", TestContext.Current.CancellationToken);
+
+        Assert.Equal("/api/v1/auth/verify-email/resend", handler.LastRequest.PathAndQuery);
+        Assert.Equal(HttpMethod.Post, handler.LastRequest.Method);
+        Assert.Contains("a@b.c", handler.LastRequest.Body, StringComparison.Ordinal);
+    }
+
+    // Both mail routes carry a bucket of their own, and a deployment that sends no mail
+    // answers 404. Neither is special-cased in the transport; this pins down that they arrive
+    // as the codes the sign-in screen switches on.
+    [Fact]
+    public async Task TheMailBucketArrivesAsRateLimitedWithItsWait()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(
+            HttpStatusCode.TooManyRequests,
+            """{ "code": "rate_limited", "detail": "too many messages requested" }""",
+            ("Retry-After", "900"));
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(
+            () => ClientOver(handler).ResendVerificationEmailAsync(
+                "a@b.c", TestContext.Current.CancellationToken));
+
+        Assert.Equal(ApiErrorCode.RateLimited, exception.Code);
+        Assert.Equal(TimeSpan.FromSeconds(900), exception.RetryAfter);
+    }
+
+    [Fact]
+    public async Task AServerConfiguredToSendNoMailAnswersNotFound()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(
+            HttpStatusCode.NotFound,
+            """{ "code": "not_found", "detail": "no such endpoint" }""");
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(
+            () => ClientOver(handler).RequestPasswordResetAsync(
+                "a@b.c", TestContext.Current.CancellationToken));
+
+        Assert.Equal(ApiErrorCode.NotFound, exception.Code);
+    }
+
     [Fact]
     public async Task ConfirmingAResetSendsTheTokenAndTheNewPassword()
     {

@@ -188,6 +188,30 @@
   <data name="Auth.VerifyEmailNotSent" xml:space="preserve">
     <value>Account creato, ma il messaggio di verifica non è riuscito a partire verso {0}. Richiedi il link tra poco.</value>
   </data>
+  <data name="Auth.ForgotPassword" xml:space="preserve">
+    <value>Password dimenticata?</value>
+  </data>
+  <data name="Auth.ResendVerification" xml:space="preserve">
+    <value>Rimanda il link di conferma</value>
+  </data>
+  <data name="Auth.PasswordResetRequested" xml:space="preserve">
+    <value>Se {0} appartiene a un account, il link per reimpostare la password è in arrivo. Aprilo dalla tua posta.</value>
+  </data>
+  <data name="Auth.VerificationLinkRequested" xml:space="preserve">
+    <value>Se {0} deve ancora essere confermato, un nuovo link è in arrivo. Aprilo dalla tua posta.</value>
+  </data>
+  <data name="Auth.MailThrottled" xml:space="preserve">
+    <value>Un link è già stato richiesto poco fa. Aspetta circa {0} minuti, poi richiedilo.</value>
+  </data>
+  <data name="Auth.MailThrottledSoon" xml:space="preserve">
+    <value>Un link è già stato richiesto poco fa. Aspetta un momento, poi richiedilo.</value>
+  </data>
+  <data name="Auth.MailUnavailable" xml:space="preserve">
+    <value>Questo server non manda email, quindi da qui non si può richiedere nessun link.</value>
+  </data>
+  <data name="Auth.ConfirmAddressFirst" xml:space="preserve">
+    <value>Conferma il tuo indirizzo email prima di accedere.</value>
+  </data>
   <data name="Explore.SearchPlaceholder" xml:space="preserve">
     <value>Cerca per titolo</value>
   </data>

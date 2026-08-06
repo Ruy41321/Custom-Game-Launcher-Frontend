@@ -44,7 +44,19 @@ public interface IAuthApi
     /// <summary>Revokes one session. Succeeds even for a token the server does not know.</summary>
     Task LogoutAsync(string refreshToken, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Consumes a verification token. Has no caller: the link is opened in a browser and the
+    /// page it lands on is the server's. It stays here as the surface a launcher-side screen
+    /// would use, if one is ever wanted.
+    /// </summary>
     Task VerifyEmailAsync(string token, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks for another verification link. Reports success for an address nobody registered,
+    /// one that is already confirmed and one that was just sent to — same reasoning as
+    /// <see cref="RequestPasswordResetAsync"/>, and the same rule for the caller.
+    /// </summary>
+    Task ResendVerificationEmailAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reports success whether or not the address exists — the server refuses to be an
@@ -54,6 +66,11 @@ public interface IAuthApi
     /// </summary>
     Task RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Sets a new password from a reset token. Has no caller either, and for the same reason
+    /// as <see cref="VerifyEmailAsync"/>: the page that collects the two password fields is
+    /// served by the server, which is also the only place the password rules are written.
+    /// </summary>
     Task ConfirmPasswordResetAsync(
         string token, string newPassword, CancellationToken cancellationToken = default);
 }

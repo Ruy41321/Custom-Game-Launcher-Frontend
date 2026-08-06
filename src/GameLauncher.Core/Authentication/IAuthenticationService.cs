@@ -40,6 +40,24 @@ public interface IAuthenticationService
         string email, string password, string displayName, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Asks the server to send the verification link again. Like <see cref="RegisterAsync"/>
+    /// this touches no session at all — it rides here rather than on a service of its own
+    /// because the sign-in screen is the only caller and the route is on the same tokenless
+    /// client (D14), so there is no cycle to compose around as there was for erasure (D47).
+    ///
+    /// The answer is the same whether or not the address is registered, so a caller must
+    /// never present it as confirmation that an account exists.
+    /// </summary>
+    Task ResendVerificationEmailAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Asks the server to send a password-reset link. Same rule about the answer as
+    /// <see cref="ResendVerificationEmailAsync"/>; the link is finished in a browser, on a
+    /// page the server serves, so nothing comes back here.
+    /// </summary>
+    Task RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Revokes the session server-side and forgets it locally. The local half happens even if
     /// the server cannot be reached — a user who asks to sign out is signed out.
     /// </summary>

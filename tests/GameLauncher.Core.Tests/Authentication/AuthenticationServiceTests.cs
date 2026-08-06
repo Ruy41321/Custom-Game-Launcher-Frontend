@@ -172,6 +172,50 @@ public sealed class AuthenticationServiceTests
         await _store.Received(1).ClearAsync(Arg.Any<CancellationToken>());
     }
 
+    // --- asking for a link ----------------------------------------------------------------
+
+    // Both of these ride here for the same reason `RegisterAsync` does: the routes are on the
+    // tokenless client and touch no session, and a service of their own would be a third
+    // interface for two pass-throughs. What matters is that they touch nothing stored.
+    [Fact]
+    public async Task AskingForAResetLinkGoesStraightToTheServer()
+    {
+        using AuthenticationService service = CreateService();
+
+        await service.RequestPasswordResetAsync("a@b.c", TestContext.Current.CancellationToken);
+
+        await _api.Received(1).RequestPasswordResetAsync("a@b.c", Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().SaveAsync(Arg.Any<AuthSession>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().ClearAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AskingForAnotherVerificationLinkGoesStraightToTheServer()
+    {
+        using AuthenticationService service = CreateService();
+
+        await service.ResendVerificationEmailAsync("a@b.c", TestContext.Current.CancellationToken);
+
+        await _api.Received(1).ResendVerificationEmailAsync("a@b.c", Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().SaveAsync(Arg.Any<AuthSession>(), Arg.Any<CancellationToken>());
+        await _store.DidNotReceive().ClearAsync(Arg.Any<CancellationToken>());
+    }
+
+    // A signed-in session is left exactly as it was: neither route says anything about it.
+    [Fact]
+    public async Task AskingForALinkLeavesAnEstablishedSessionAlone()
+    {
+        _api.LoginAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(SessionExpiring(Now.AddMinutes(15)));
+
+        using AuthenticationService service = CreateService();
+        await service.SignInAsync("a@b.c", "pw", TestContext.Current.CancellationToken);
+
+        await service.RequestPasswordResetAsync("a@b.c", TestContext.Current.CancellationToken);
+
+        Assert.True(service.IsAuthenticated);
+    }
+
     // --- handing out access tokens -------------------------------------------------------
 
     [Fact]

@@ -44,6 +44,10 @@ public sealed class AuthApiClient(HttpClient httpClient, TimeProvider timeProvid
     public Task VerifyEmailAsync(string token, CancellationToken cancellationToken = default) =>
         _transport.PostAsync("auth/verify-email", new { token }, cancellationToken);
 
+    public Task ResendVerificationEmailAsync(
+        string email, CancellationToken cancellationToken = default) =>
+        _transport.PostAsync("auth/verify-email/resend", new { email }, cancellationToken);
+
     public Task RequestPasswordResetAsync(
         string email, CancellationToken cancellationToken = default) =>
         _transport.PostAsync("auth/password-reset/request", new { email }, cancellationToken);

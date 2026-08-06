@@ -23,6 +23,15 @@
     <Style Selector="Button.link:pointerover">
       <Setter Property="Opacity" Value="1" />
     </Style>
+    <!-- The theme paints a disabled button's background regardless of the setter above, which
+         turns a link waiting on an empty field into a grey box that reads as broken. It stays
+         a piece of text, dimmed. -->
+    <Style Selector="Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.link:disabled">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
 
     <!-- Cards: one game in Explore or the library, one version on the detail page. -->
     <Style Selector="Border.card">

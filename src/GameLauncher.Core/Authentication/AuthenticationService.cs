@@ -103,6 +103,14 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
         string email, string password, string displayName, CancellationToken cancellationToken = default) =>
         _api.RegisterAsync(email, password, displayName, cancellationToken);
 
+    public Task ResendVerificationEmailAsync(
+        string email, CancellationToken cancellationToken = default) =>
+        _api.ResendVerificationEmailAsync(email, cancellationToken);
+
+    public Task RequestPasswordResetAsync(
+        string email, CancellationToken cancellationToken = default) =>
+        _api.RequestPasswordResetAsync(email, cancellationToken);
+
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
         string? refreshToken = CurrentSession?.RefreshToken;

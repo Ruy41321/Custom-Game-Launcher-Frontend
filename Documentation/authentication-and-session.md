@@ -227,12 +227,60 @@ default.
 nothing at all. The server refuses to be an account-enumeration oracle, and the client must not
 undo that by presenting the answer as confirmation that an account was found.
 
-**Neither flow is finished inside the launcher.** The links in both messages open pages the
-server serves, and this client has no screen for confirming an address or choosing a new
-password: `VerifyEmailAsync` and `ConfirmPasswordResetAsync` exist on `IAuthApi` and nothing
-calls them. `POST /auth/verify-email/resend` has no client method either, so the sign-in screen
-can report that a message did not go out and cannot yet offer a button that asks for another.
-That is open debt 23 of `HANDOFF.md`, not an oversight.
+## Asking for a link (D53)
+
+The sign-in screen can ask the server to send either of the two messages. Both requests go
+through `IAuthenticationService` — `RequestPasswordResetAsync` and
+`ResendVerificationEmailAsync` — for the same reason `RegisterAsync` does: the routes are on
+the tokenless client, they touch no session, and a service of their own would be a third
+interface for two pass-throughs. There is no cycle to compose around here as there was for
+erasure (D47), because nothing in this path needs a bearer token.
+
+**The launcher triggers; the browser finishes.** There is still no screen for choosing a new
+password or confirming an address, and that is a decision rather than a gap — see
+[What is not implemented](#what-is-not-implemented).
+
+Where the two affordances appear:
+
+- **"Forgotten your password?"** sits under the password box in sign-in mode only, and asks
+  for whatever address is in the email field. In registration mode it is noise.
+- **"Send the confirmation link again"** appears only in the state where it means something,
+  which has three entrances: a registration that required verification *whether or not the
+  message went out* — one that left and was filtered leaves a person exactly where one that
+  never left does — and **a sign-in refused with 403**.
+
+That last one carries a fact worth stating plainly: `/auth/login` answers **403 for an
+unconfirmed address and 403 for a disabled account**, with the same code and no way to tell
+them apart. The client says the one that can be acted on (`Auth.ConfirmAddressFirst`) and
+offers the resend; for a disabled account that button is harmless, because the resend route
+answers identically and sends nothing. Before this, both cases read *"Your account is not
+allowed to do that"*, which named neither.
+
+### What the user is told, and what is deliberately not said
+
+Every success sentence is **conditional** — "if that address belongs to an account…", "if that
+address still needs confirming…". The server pays for identical answers so that the endpoint
+cannot be used to discover who has an account here; a client that answered "we have sent you a
+link" would give that away from the other side. A test asserts that the sentence for an address
+that does not exist is the same as the one for an address that does.
+
+Two refusals are not shown as ordinary errors:
+
+- **429** goes on the **info** line, not the red one, with the wait named when `Retry-After`
+  says something worth naming — two minutes or more, so no resx has to decline "1 minutes" in
+  three languages. Three messages in fifteen minutes is deliberately tight, and the person most
+  likely to reach that limit is the one whose message genuinely never arrived.
+- **404**, which is what a deployment configured with `mail.transport: "none"` answers on both
+  routes, says *this server does not send email* rather than "that is not available".
+
+### The button guards itself, and no clock is involved
+
+A successful request disarms its own button until the address in the field changes; a
+**refused** one does not, because after a 429 pressing again once the wait is over is exactly
+the right thing to do. There is no countdown and no timer. `Retry-After` is per **IP**, not per
+address, so a disabled button would lock out a second person on the same network who never
+pressed anything — and a restart would clear it anyway, which makes it a promise the launcher
+cannot keep.
 
 ---
 
@@ -260,9 +308,16 @@ they are easiest to break:
 - **No "remember me" / "stay signed out" distinction.** A restored session is restored; there
   is one behaviour.
 - **No second factor.** The server has none, so the client has none.
-- **No screen for confirming an address or resetting a password**, and no way to ask for the
-  verification link again. Both flows end in a browser, on a page the server serves; the two
-  `IAuthApi` methods that would drive them from here have no caller. See above.
+- **No screen for confirming an address or choosing a new password.** Both flows end in a
+  browser, on a page the server serves, and `VerifyEmailAsync` / `ConfirmPasswordResetAsync`
+  keep no caller. This is a decision, not a gap: the reset page is where the password rules
+  are written, and a second set of fields here would be a second place for a product rule to
+  live and drift — the reasoning of D40, on a surface where the client protects nothing by
+  duplicating. It would also mean asking somebody to copy a token out of a mail client and
+  paste it into a desktop application, which is a habit worth not teaching. The two methods
+  stay on `IAuthApi` as the surface such a screen would use.
+- **No countdown on a throttled request**, for the reasons above: `Retry-After` is per IP and
+  a restart clears any local guard.
 
 ## Related documents
 

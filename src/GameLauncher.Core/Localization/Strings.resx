@@ -188,6 +188,30 @@
   <data name="Auth.VerifyEmailNotSent" xml:space="preserve">
     <value>Account created, but the verification message could not be sent to {0} just now. Ask for the link again in a moment.</value>
   </data>
+  <data name="Auth.ForgotPassword" xml:space="preserve">
+    <value>Forgotten your password?</value>
+  </data>
+  <data name="Auth.ResendVerification" xml:space="preserve">
+    <value>Send the confirmation link again</value>
+  </data>
+  <data name="Auth.PasswordResetRequested" xml:space="preserve">
+    <value>If {0} belongs to an account, a reset link is on its way. Open it from your inbox.</value>
+  </data>
+  <data name="Auth.VerificationLinkRequested" xml:space="preserve">
+    <value>If {0} still needs confirming, a new link is on its way. Open it from your inbox.</value>
+  </data>
+  <data name="Auth.MailThrottled" xml:space="preserve">
+    <value>A link was already requested a moment ago. Wait about {0} minutes, then ask again.</value>
+  </data>
+  <data name="Auth.MailThrottledSoon" xml:space="preserve">
+    <value>A link was already requested a moment ago. Wait a little, then ask again.</value>
+  </data>
+  <data name="Auth.MailUnavailable" xml:space="preserve">
+    <value>This server does not send email, so a link cannot be requested here.</value>
+  </data>
+  <data name="Auth.ConfirmAddressFirst" xml:space="preserve">
+    <value>Confirm your email address before signing in.</value>
+  </data>
   <data name="Explore.SearchPlaceholder" xml:space="preserve">
     <value>Search by title</value>
   </data>

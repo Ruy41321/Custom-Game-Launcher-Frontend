@@ -31,6 +31,10 @@
         <TextBox Text="{Binding Password}" PasswordChar="•" />
       </StackPanel>
 
+      <Button Command="{Binding RequestPasswordResetCommand}" Classes="link"
+              HorizontalAlignment="Right" IsVisible="{Binding !IsRegistering}"
+              Content="{loc:Tr Auth.ForgotPassword}" />
+
       <TextBlock Classes="error" Text="{Binding ErrorMessage}"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
@@ -44,6 +48,10 @@
           <TextBlock Text="{loc:Tr Auth.Register}" IsVisible="{Binding IsRegistering}" />
         </Panel>
       </Button>
+
+      <Button Command="{Binding ResendVerificationEmailCommand}" Classes="link"
+              HorizontalAlignment="Center" IsVisible="{Binding CanResendVerification}"
+              Content="{loc:Tr Auth.ResendVerification}" />
 
       <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
 
