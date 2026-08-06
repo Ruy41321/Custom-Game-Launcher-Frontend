@@ -10,11 +10,14 @@ Fork it, edit one JSON file, point it at your own server.
 The server side lives in
 [Custom-Game-Launcher-Backend](https://github.com/Ruy41321/Custom-Game-Launcher-Backend).
 
-> **Status:** in development. Authentication, Explore, the library, delta downloads and
-> installs, launching, offline mode, artwork and the devlog, and publishing a build from the
-> client all work. Self-update is a stub, and the developer dashboard cannot yet upload
-> artwork or write devlog entries. See [CLAUDE.md](CLAUDE.md#10-progress) for the current
-> state and `Documentation/` for what each module does and does not do.
+> **Status:** in development. Authentication, Explore with infinite scrolling, the library,
+> delta downloads and installs, launching, offline mode, artwork and the devlog, settings,
+> account deletion, opt-in crash reports, and a developer dashboard that publishes builds,
+> uploads artwork, writes the devlog and deletes what it created all work. Self-update is a
+> stub. Confirming an address and resetting a password are finished **in a browser**, on
+> pages the server serves — the launcher has no screen for either. See
+> [CLAUDE.md](CLAUDE.md#10-progress) for the current state and `Documentation/` for what each
+> module does and does not do.
 
 ## Features
 
@@ -23,8 +26,11 @@ The server side lives in
 - **Explore** — discover games not in your library yet
 - **Delta updates** — only changed files are downloaded, resumable after an interruption
   without ever corrupting an installation, with post-update integrity verification
-- **Offline mode** — installed games launch with no network at all
+- **Offline mode** — installed games launch with no network at all, covers included
 - **Per-game launch options** — pick the executable and pass command-line arguments
+- **A developer dashboard** — create a game, publish a build from a directory, upload covers
+  and screenshots, write the devlog, and delete any of it
+- **Crash reports** — off until you turn them on, redacted before they are written to disk
 - **Self-updating** — *planned.* The separate updater process exists as a stub; it needs a
   launcher-release surface on the server before it can be finished
 - **Dark theme by default**, configurable, with Italian / English / French from day one
