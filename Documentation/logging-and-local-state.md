@@ -1,6 +1,6 @@
 # Logging and local state
 
-Everything the launcher writes to disk: where each thing lives on the three operating systems,
+Everything the launcher writes to disk: where each thing lives on Windows and Linux,
 what happens to it when the process dies mid-write, and what is safe to delete.
 
 Implemented in `Core/Platform/IPathProvider.cs`, `Infrastructure/Platform/PathProvider.cs`,
@@ -15,7 +15,7 @@ and `Infrastructure/Media/CachingImageLoader.cs`.
 **Nothing anywhere in the codebase builds a path from a literal or calls
 `Environment.GetFolderPath` at the use site.** Every location comes from `IPathProvider`.
 
-That is a hard rule rather than a convention, and the reason is that Windows, Linux and macOS
+That is a hard rule rather than a convention, and the reason is that Windows and Linux
 disagree about all of them. A single `Path.Combine` with a literal is a bug that only shows up
 on the two platforms the maintainer does not run.
 

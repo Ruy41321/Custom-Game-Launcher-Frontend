@@ -226,7 +226,7 @@ Two convention tests exist and must keep passing:
 - one fails when any language is missing a key English has;
 - one scans every `.axaml` and fails on a literal user-visible attribute value.
 
-There are no UI-automation tests. On three operating systems the fragility would cost more than
+There are no UI-automation tests. On two operating systems the fragility would cost more than
 the coverage is worth, and the layering above is what makes that an acceptable trade rather
 than a gap.
 

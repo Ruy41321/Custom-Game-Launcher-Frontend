@@ -2,8 +2,8 @@ name: CI
 
 # Runs on `main`, which is where work arrives once the maintainer has merged it. `dev` is
 # checked locally instead — `dotnet test GameLauncher.sln` and `dotnet format --verify-no-changes`
-# before every push — so a run here is a second opinion about the three operating systems and
-# the four publish RIDs rather than the first time anybody has seen the suite.
+# before every push — so a run here is a second opinion about Linux and the two publish RIDs
+# rather than the first time anybody has seen the suite.
 on:
   push:
     branches: [main]
@@ -45,9 +45,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # The client ships for all three desktop platforms, so all three are built here.
-        # macOS in particular is not verifiable on the maintainer's machine.
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # The client ships for Windows and Linux (D59). macOS was dropped as a target on
+        # 2026-08-07: nobody could run it, so every claim about it was a claim from a green
+        # runner and nothing else.
+        os: [windows-latest, ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v7
@@ -78,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        rid: [win-x64, linux-x64, osx-x64, osx-arm64]
+        rid: [win-x64, linux-x64]
 
     steps:
       - uses: actions/checkout@v7
