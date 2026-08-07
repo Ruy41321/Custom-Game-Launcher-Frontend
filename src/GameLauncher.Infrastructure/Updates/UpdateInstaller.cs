@@ -45,6 +45,9 @@ public sealed class UpdateInstaller(
         string staged = Path.Combine(versionDirectory, StagedDirectoryName);
         await ExtractAsync(archivePath, staged, cancellationToken).ConfigureAwait(false);
 
+        string relaunch = paths.ExecutablePath;
+        EnsureRelaunchable(staged, relaunch);
+
         string helper = CopyHelperOut(versionDirectory);
 
         UpdateSwapRequest request = new()
@@ -52,7 +55,7 @@ public sealed class UpdateInstaller(
             SourceDirectory = staged,
             TargetDirectory = paths.ApplicationDirectory,
             WaitForProcessId = Environment.ProcessId,
-            RelaunchExecutable = Environment.ProcessPath,
+            RelaunchExecutable = relaunch,
         };
 
         return Start(helper, request);
@@ -87,11 +90,74 @@ public sealed class UpdateInstaller(
             string path = UpdateArchiveRules.ResolveInside(destination, entry.FullName);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
-            await using Stream source = entry.Open();
-            await using FileStream file = new(
-                path, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, useAsync: true);
+            await using (Stream source = entry.Open())
+            await using (FileStream file = new(
+                path, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, useAsync: true))
+            {
+                await source.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            }
 
-            await source.CopyToAsync(file, cancellationToken).ConfigureAwait(false);
+            ApplyUnixMode(entry, path);
+        }
+    }
+
+    /// <summary>
+    /// A zip written on Unix carries the file mode in the high half of the entry's external
+    /// attributes, and a launcher that arrives without its executable bit is a launcher that
+    /// cannot be started — which this design would then read as a new version that failed and
+    /// roll back, on every release, for a reason nothing reports.
+    /// </summary>
+    private static void ApplyUnixMode(ZipArchiveEntry entry, string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        UnixFileMode mode = (UnixFileMode)((entry.ExternalAttributes >> 16) & 0xFFF);
+        if (mode != UnixFileMode.None)
+        {
+            File.SetUnixFileMode(path, mode);
+        }
+    }
+
+    /// <summary>
+    /// The backstop for the case above: an archive built on Windows for a Linux runtime
+    /// identifier carries no mode at all, which is an ordinary way to cut a release and would
+    /// otherwise leave nothing in the tree executable. This forces the one file whose
+    /// executability the swap actually depends on — the launcher it is about to start — the way
+    /// <c>ProcessGameLauncher</c> already does for a game's entrypoint.
+    /// </summary>
+    private void EnsureRelaunchable(string staged, string relaunchExecutable)
+    {
+        string name = Path.GetFileName(relaunchExecutable);
+        string path = Path.Combine(staged, name);
+
+        if (!File.Exists(path))
+        {
+            // The archive does not carry a launcher under the name this one runs as, so the
+            // relaunch would fail and the swap would roll itself back. Refusing here costs
+            // nothing: the installation has not been touched.
+            throw new ApiException(
+                ApiErrorCode.Integrity, $"The update does not contain {name}.");
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        UnixFileMode mode = File.GetUnixFileMode(path);
+        if (!mode.HasFlag(UnixFileMode.UserExecute))
+        {
+            logger.LogInformation(
+                "The update archive carries no executable bit for {File}; setting it.",
+                Path.GetFileName(path));
+
+            File.SetUnixFileMode(
+                path,
+                mode | UnixFileMode.UserExecute | UnixFileMode.GroupExecute
+                    | UnixFileMode.OtherExecute);
         }
     }
 

@@ -106,8 +106,8 @@ configured. An algorithm taken from the key would let a deployment be given an R
 server verifies happily and the launcher cannot read at all: a launcher that stops updating for a
 reason nothing reports. `System.Security.Cryptography.ECDsa` does all of it with **no new
 package**, which is why the server chose P-256 over the otherwise-better Ed25519: .NET 9 has no
-Ed25519 in its base class library, so it would have cost this repository a native binding across
-four runtime identifiers.
+Ed25519 in its base class library, so it would have cost this repository a native binding on
+every runtime identifier it ships.
 
 ### 2. Refuse anything not strictly newer
 
@@ -240,6 +240,20 @@ It is published **self-contained** with the launcher, trimmed and with invariant
 because a machine running a self-contained launcher may have no .NET at all — an updater that
 needed one would be missing at exactly the moment it is needed. That costs about 19 MB inside
 every installation, and the trade is not close.
+
+### The executable bit, which is the difference between an update and a rollback
+
+On Linux a launcher extracted without `+x` cannot be started, and from the updater that is
+indistinguishable from a new version that crashed — so the swap would roll itself back on
+**every** release, for a reason nothing reports. Two rules cover it. The mode a zip written on
+Unix carries in its entry attributes is restored on extraction; and the launcher named by
+`--relaunch` is forced executable regardless, because an archive built on Windows for a Linux
+runtime identifier carries no mode at all and that is an ordinary way to cut a release.
+
+`IPathProvider.ExecutablePath` is what says which file that is, rather than
+`Environment.ProcessPath` at the use site — the same reason every other path lives there. An
+archive that does not contain a launcher under that name is refused **before the installation is
+touched**, which is what a release built for the wrong platform looks like from here.
 
 ### The declared hole
 

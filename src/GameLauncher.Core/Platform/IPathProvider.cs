@@ -10,6 +10,14 @@ public interface IPathProvider
     /// <summary>Directory the application was started from (read-only after install).</summary>
     string ApplicationDirectory { get; }
 
+    /// <summary>
+    /// The launcher's own executable. It is here rather than read from
+    /// <see cref="Environment.ProcessPath"/> at the use site for the reason every other path is:
+    /// the file name differs per platform, and a caller that guessed would be a caller no test
+    /// can put somewhere else. The self-update needs it to know what to restart.
+    /// </summary>
+    string ExecutablePath { get; }
+
     /// <summary>Writable per-user directory for settings and the local database.</summary>
     string UserDataDirectory { get; }
 

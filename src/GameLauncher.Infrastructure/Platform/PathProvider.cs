@@ -13,9 +13,20 @@ public sealed class PathProvider : IPathProvider
 
     private const string DatabaseFileName = "launcher.db";
 
-    public PathProvider(string? applicationDirectory = null, string? userDataDirectory = null)
+    public PathProvider(
+        string? applicationDirectory = null,
+        string? userDataDirectory = null,
+        string? executablePath = null)
     {
         ApplicationDirectory = applicationDirectory ?? AppContext.BaseDirectory;
+
+        // Null only for a runtime that was started some other way than by its own apphost,
+        // which the shipped launcher never is; the fallback keeps the property non-null rather
+        // than pushing the question onto every caller.
+        ExecutablePath = executablePath
+            ?? Environment.ProcessPath
+            ?? Path.Combine(ApplicationDirectory, "GameLauncher");
+
         UserDataDirectory = userDataDirectory
             ?? Path.Combine(ResolveUserDataRoot(), ApplicationFolderName);
         LogDirectory = Path.Combine(UserDataDirectory, "logs");
@@ -27,6 +38,8 @@ public sealed class PathProvider : IPathProvider
     }
 
     public string ApplicationDirectory { get; }
+
+    public string ExecutablePath { get; }
 
     public string UserDataDirectory { get; }
 
