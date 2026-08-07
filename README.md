@@ -4,24 +4,25 @@ An open-source, self-hostable game launcher in the style of the Epic Games Store
 and hobbyist developers who need to get demos and in-development builds to a handful of
 testers — without zip files on Discord or hand-managed Drive links.
 
-Built with [Avalonia](https://avaloniaui.net/) and .NET 9. **Windows, Linux and macOS.**
+Built with [Avalonia](https://avaloniaui.net/) and .NET 9. **Windows and Linux.**
 Fork it, edit one JSON file, point it at your own server.
 
 The server side lives in
 [Custom-Game-Launcher-Backend](https://github.com/Ruy41321/Custom-Game-Launcher-Backend).
 
-> **Status:** in development. Authentication, Explore with infinite scrolling, the library,
-> delta downloads and installs, launching, offline mode, artwork and the devlog, settings,
-> account deletion, opt-in crash reports, and a developer dashboard that publishes builds,
-> uploads artwork, writes the devlog and deletes what it created all work. **Self-update
-> checks but does not yet install**: the launcher verifies the signature on a published
-> release, refuses anything that is not strictly newer, and downloads an artifact only if its
-> bytes hash to what was signed — but the swap that replaces the installation is still a stub.
-> Confirming an address and resetting a
-> password are finished **in a browser**, on pages the server serves — the launcher has no
-> screen for either. See
-> [CLAUDE.md](CLAUDE.md#10-progress) for the current state and `Documentation/` for what each
-> module does and does not do.
+> **Status:** everything this repository declares is implemented. Authentication, Explore with
+> infinite scrolling, the library, delta downloads and installs, launching, offline mode,
+> artwork and the devlog, settings, account deletion, opt-in crash reports, a developer
+> dashboard that publishes builds and uploads artwork and writes the devlog, and **self-update**
+> — verified signature, refusal of anything not strictly newer, a hash-checked download, and a
+> swap that replaces the installation and rolls back a version that will not start.
+>
+> Two things are finished **in a browser**, on pages the server serves, and deliberately have no
+> screen here: confirming an address and resetting a password.
+>
+> [CLAUDE.md](CLAUDE.md#10-progress) has the current state, `Documentation/` says what each
+> module does *and does not* do, and [CONTRIBUTING.md](CONTRIBUTING.md) is where to start if you
+> intend to change something.
 
 ## Features
 
@@ -95,14 +96,26 @@ No UI code changes. A test fails if any language is missing a key that English h
 dotnet publish src/GameLauncher.App -c Release -r win-x64 --self-contained
 ```
 
-Replace the runtime identifier with `linux-x64`, `osx-x64` or `osx-arm64` as needed. CI
-builds all four on every push.
+Replace the runtime identifier with `linux-x64` as needed; those two are the targets (D59). The
+output carries `updater/` beside the executable — the helper that performs a self-update — and
+CI publishes both RIDs on every run.
+
+**If you are distributing your own launcher rather than developing this one**, read
+[DISTRIBUTING.md](DISTRIBUTING.md): it walks the whole cycle, from editing one JSON file to
+running a server and cutting a signed release.
 
 ## Documentation
 
-One document per module, in `Documentation/`. Together they describe what the launcher does
+Two entry points, depending on what you are here for:
+
+| | For |
+|---|---|
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Changing the launcher: the system in five minutes, the layout, the testing policy, the traps |
+| [DISTRIBUTING.md](DISTRIBUTING.md) | Shipping **your own** launcher: branding, a server, a signing key, releases |
+
+Then one document per module, in `Documentation/`. Together they describe what the launcher does
 and, more usefully, why each part works the way it does — including what breaks if you change
-it, and what is deliberately not implemented yet.
+it, and what is deliberately not implemented.
 
 | Document | What it covers |
 |---|---|
@@ -113,7 +126,7 @@ it, and what is deliberately not implemented yet.
 | [launching-games.md](Documentation/launching-games.md) | Starting a game, the four refusals, per-game launch options |
 | [publishing.md](Documentation/publishing.md) | Packaging, resumable upload, server capabilities, the developer dashboard |
 | [configuration-and-localization.md](Documentation/configuration-and-localization.md) | `launcher.config.json`, user settings, `.resx`, forking and rebranding |
-| [logging-and-local-state.md](Documentation/logging-and-local-state.md) | What the launcher writes to disk, on all three platforms |
+| [logging-and-local-state.md](Documentation/logging-and-local-state.md) | What the launcher writes to disk, on Windows and Linux |
 | [self-update.md](Documentation/self-update.md) | Checking for a newer launcher, the five rules it holds, and the swap that replaces it |
 
 ## Project layout
@@ -132,11 +145,15 @@ Architecture, conventions and the running list of technical decisions live in
 
 ## Contributing
 
+Start with [CONTRIBUTING.md](CONTRIBUTING.md): what the whole system is, how to get both halves
+running, how the client is laid out, and the rules that would otherwise cost you an afternoon
+each.
+
 Development happens on `dev`; `main` is merged by the maintainer once work is validated.
 Commits are atomic and use conventional prefixes (`feat:`, `fix:`, `test:`, `docs:`, …).
 Code, comments and commit messages are in English — only the translation resources are not.
-CI runs formatting, the full test suite on all three operating systems, and a publish check
-for every runtime identifier.
+**CI runs on `main`**, so the gate before a push is the local one: `dotnet test` and
+`dotnet format --verify-no-changes`, every time.
 
 ## Licence
 
