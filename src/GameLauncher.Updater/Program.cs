@@ -68,7 +68,10 @@ internal static class Program
               --relaunch      Executable to start once the new version is in place. It is then
                               watched for about thirty seconds: a non-zero exit inside that
                               window restores <target>.previous and starts it again
-              --rollback      Put <target>.previous back and change nothing else
+              --rollback      Put <target>.previous back and change nothing else. Run this
+                              from a copy of the helper outside <target>: restoring deletes
+                              <target> first, which cannot be done while an executable inside
+                              it is running
 
             Exit codes:
               0  the new version is in place

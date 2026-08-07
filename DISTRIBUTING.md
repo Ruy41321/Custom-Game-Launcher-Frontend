@@ -448,11 +448,18 @@ intended outcome. Rolling a fleet backwards is a bigger action than withdrawing,
 taken on your behalf. Fix the bug and publish 1.1.1.
 
 Somebody already stuck on the broken version can be talked through the manual way out, as long as
-the previous installation is still on their disk:
+the previous installation is still on their disk — it is there until the update after next, as
+`<install dir>.previous`.
+
+Run the helper **from the copy the last update left under the user's data directory**, not from
+the one inside the installation: restoring deletes the installation directory before putting the
+old one back, and that cannot be done while an executable inside it is running.
 
 ```bash
-updater/GameLauncher.Updater --rollback --target "C:\path\to\the\launcher"
+"%LOCALAPPDATA%\CustomGameLauncher\updates\1.1.0\updater\GameLauncher.Updater.exe" --rollback --target "C:\path\to\the\launcher" --relaunch "C:\path\to\the\launcher\GameLauncher.exe"
 ```
+
+On Linux the same file lives under `~/.local/share/CustomGameLauncher/updates/1.1.0/updater/`.
 
 ---
 

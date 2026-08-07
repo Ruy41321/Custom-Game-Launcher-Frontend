@@ -266,8 +266,15 @@ reports, which do work, and `--rollback`:
 GameLauncher.Updater --rollback --target <install dir> [--relaunch <exe>]
 ```
 
-It stays a documented manual flag for as long as `<install>.previous` is on disk, which is until
-the update after next.
+**Run it from a copy of `updater/`, not from the one inside the installation.** Restoring deletes
+the target directory before renaming `previous` back over it, and on Windows that cannot be done
+while an executable inside it is running — the same reason the launcher copies the helper out
+before a swap. The copy the last update left under
+`<user data>/updates/<version>/updater/` is exactly the right one to use, and it is there until
+the next update sweeps it.
+
+The flag stays available for as long as `<install>.previous` is on disk, which is until the
+update after next.
 
 There is a second consequence worth saying out loud: **nothing remembers that a release failed.**
 A launcher that was rolled back is offered the same release again at the next start, because the
