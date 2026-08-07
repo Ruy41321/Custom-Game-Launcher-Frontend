@@ -81,6 +81,7 @@ public partial class App : Application
         services.AddSingleton<IFolderPicker>(_ => new StorageProviderFolderPicker(this));
         services.AddSingleton<IFilePicker>(_ => new StorageProviderFilePicker(this));
         services.AddSingleton<IThemeSwitcher>(_ => new ApplicationThemeSwitcher(this));
+        services.AddSingleton<IApplicationShutdown>(_ => new ApplicationLifetimeShutdown(this));
 
         // Decoded artwork is shared by every page: a cover seen in Explore is the same bitmap
         // the library and the detail page show.

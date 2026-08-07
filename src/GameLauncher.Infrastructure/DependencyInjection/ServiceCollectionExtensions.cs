@@ -133,6 +133,11 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<IUpdateChecker, UpdateChecker>();
 
+        // Unpacking is the launcher's job rather than the updater's, so the rules that make it
+        // safe (D24, through UpdateArchiveRules) stay in one place and the helper that runs when
+        // nothing can be fixed any more stays small.
+        services.AddSingleton<IUpdateInstaller, UpdateInstaller>();
+
         services.AddSingleton<ICrashReportUploader, CrashReportUploader>();
         services.AddSingleton<IInstallationService, InstallationService>();
         services.AddSingleton<IGameLauncher, ProcessGameLauncher>();

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GameLauncher.App.Services;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
@@ -27,6 +28,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly ICrashReportUploader _crashReports;
     private readonly IUpdateChecker _updateChecker;
     private readonly ILauncherUpdateDownloader _updateDownloader;
+    private readonly IUpdateInstaller _updateInstaller;
+    private readonly IApplicationShutdown _shutdown;
     private readonly IApiErrorPresenter _errors;
 
     /// <summary>The verified release the banner is about; null when there is nothing to offer.</summary>
@@ -85,6 +88,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ICrashReportUploader crashReports,
         IUpdateChecker updateChecker,
         ILauncherUpdateDownloader updateDownloader,
+        IUpdateInstaller updateInstaller,
+        IApplicationShutdown shutdown,
         IApiErrorPresenter errors,
         LoginViewModel login,
         ExploreViewModel explore,
@@ -100,6 +105,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _crashReports = crashReports;
         _updateChecker = updateChecker;
         _updateDownloader = updateDownloader;
+        _updateInstaller = updateInstaller;
+        _shutdown = shutdown;
         _errors = errors;
 
         Login = login;
@@ -228,12 +235,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Fetches the archive and refuses bytes that are not the ones the signed document named.
+    /// Fetches the archive, refuses bytes that are not the ones the signed document named,
+    /// unpacks it, starts the updater and closes this launcher — which is the last of those
+    /// steps and the one the helper is waiting for.
     ///
-    /// It stops there, because <c>GameLauncher.Updater</c> still moves no files: what the user
-    /// is told when this succeeds is where the verified archive is, not that the launcher is
-    /// about to replace itself. Promising the second would be the one kind of lie this feature
-    /// cannot afford.
+    /// It is a button and never a timer. A swap requires this process to exit, so a silent
+    /// update is an application closing under the hands of somebody using it.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanDownloadUpdate))]
     private async Task DownloadUpdateAsync(CancellationToken cancellationToken)
@@ -256,15 +263,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                     cancellationToken)
                 .ConfigureAwait(true);
 
-            string directory = Path.GetDirectoryName(archive) ?? archive;
             SetUpdateStatus(() => _localization.Translate(
-                "Update.Ready", release.Version.ToString(), directory));
+                "Update.Restarting", release.Version.ToString(), AppName));
+
+            await _updateInstaller.StartAsync(release, archive, cancellationToken)
+                .ConfigureAwait(true);
+
+            // Nothing after this line runs for long: the updater is waiting for this process
+            // id to be gone before it touches a single file.
+            _shutdown.Shutdown();
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
-            // Offered again rather than disarmed: an interrupted transfer and a host serving
-            // the wrong bytes are both worth one more press, and the hash refuses the second
-            // one exactly as it refused the first.
+            // Offered again rather than disarmed: an interrupted transfer, a host serving the
+            // wrong bytes and an archive refused for the names inside it are all worth one more
+            // press, and every one of those refusals happens again identically.
             SetUpdateStatus(() => _errors.Describe(exception));
             CanDownloadUpdate = true;
         }

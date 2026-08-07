@@ -4,8 +4,9 @@ How the launcher finds out that a newer launcher exists, what it checks before b
 what it deliberately does not do with the answer.
 
 Implemented in `Core/Updates/*`, `Core/Api/ILauncherReleaseApi.cs`,
-`Infrastructure/Api/LauncherReleaseApiClient.cs`, `Infrastructure/Updates/LauncherUpdateDownloader.cs`
-and the update line in `App/ViewModels/MainWindowViewModel.cs`.
+`Infrastructure/Api/LauncherReleaseApiClient.cs`, `Infrastructure/Updates/LauncherUpdateDownloader.cs`,
+`Infrastructure/Updates/UpdateInstaller.cs`, the whole of `GameLauncher.Updater`, and the update
+line in `App/ViewModels/MainWindowViewModel.cs`.
 
 The server half — the signed release surface this talks to — is described in the backend's
 [launcher-releases.md](../../Custom-Game-Launcher-Backend/Documentation/launcher-releases.md),
@@ -14,21 +15,21 @@ section.
 
 ---
 
-## What is implemented, and what is not
+## What is implemented
 
-**Implemented:** the check. The launcher asks the server for the newest release on its channel,
-verifies the signature over the document as it arrived, refuses anything that is not strictly
-newer, tells the person, and — on a press — fetches the archive and refuses bytes that do not
-hash to the content address inside the signed document.
+**All of it, since 2026-08-07.** The launcher asks the server for the newest release on its
+channel, verifies the signature over the document as it arrived, refuses anything that is not
+strictly newer, and tells the person. On a press it fetches the archive, refuses bytes that do
+not hash to the content address inside the signed document, unpacks it, starts
+`GameLauncher.Updater` and exits — and the updater replaces the installation and starts the new
+launcher, putting the old one back if it fails.
 
-**Not implemented:** the swap. `GameLauncher.Updater` still moves no files. So what the launcher
-says when the download succeeds is *where the verified archive is*, and nothing more. Replacing
-the installation and restarting is the next piece of work; until it lands, installing the
-downloaded version is something a person does by hand.
+**It is a button and never a timer.** A swap requires this process to exit, so a silent update
+is an application closing under the hands of somebody using it. Nothing here happens on its own.
 
-That split is deliberate rather than an accident of running out of time: the download is what
-makes the content-address check real, and promising a restart the launcher cannot perform would
-be the one kind of lie this feature cannot afford.
+The one thing that is deliberately not covered is stated in [The declared
+hole](#the-declared-hole) below, and it is not a gap in the implementation but a limit of what
+a watching process can know.
 
 ---
 
@@ -61,7 +62,7 @@ The private key is not in either repository. It never was.
    · refuse a url that is not http or https
                                          -> Available(document, url)
 
- a person presses "Download the update"
+ a person presses "Update and restart"
  ────────────────────────────────────────────────────────────────
  ILauncherUpdateDownloader.DownloadAsync()
    · stream to <user data>/updates/<version>/<sha256>.zip.part
@@ -69,7 +70,19 @@ The private key is not in either repository. It never was.
    · hash it; refuse bytes that are not the ones the document named
    · rename into place — nothing takes that name until it verifies
 
- GameLauncher.Updater  ->  not implemented
+ IUpdateInstaller.StartAsync()
+   · unpack into <user data>/updates/<version>/staged/
+   · refuse an entry name that would land outside it
+   · copy <install>/updater/ to <user data>/updates/<version>/updater/
+   · start it, then Shutdown() — the exit is what it is waiting for
+
+ GameLauncher.Updater
+   · wait for --wait-for-pid to be gone (refuse to touch anything if it is not)
+   · rename <target> to <target>.previous          (atomic, same filesystem)
+   · move <source> into <target>
+   · start --relaunch, and watch it for ~30 seconds
+   ·   non-zero exit inside the window -> restore .previous and start it
+   ·   still alive, or exit 0          -> success, .previous goes away
 ```
 
 ---
@@ -174,12 +187,99 @@ with 422, so passing the typo on would also spend one request per start to be to
 
 ---
 
+## The swap
+
+### The decision is a pure function of (exit code, elapsed time)
+
+That sentence is the design, and everything else follows from it. There is no marker file, no
+IPC and no watchdog outliving its purpose, because any of those would need two processes to
+agree on a protocol while one of them is the thing under suspicion — and none of it could be
+exercised without really replacing somebody's installation. `RelaunchWatch.Judge` takes an exit
+code and an elapsed time and answers `Succeeded` or `Restore`, and the tests substitute the one
+interface that produces those two numbers.
+
+### The old installation is renamed, never deleted
+
+`<install>` becomes `<install>.previous`, a sibling on the same filesystem, so putting it out of
+the way is one atomic operation that needs no second copy of a self-contained build — the same
+reasoning that keeps the download's staging tree inside its own root. And it is a rename rather
+than a delete because a rollback with nothing to roll back to is not a rollback.
+
+A `previous` left by an attempt that never resolved is **discarded** rather than kept, and that
+is safe by proof rather than by assumption: the updater only runs because a launcher asked it
+to, so whatever is in the installation directory right now works. Keeping the older copy would
+only make the *next* rollback restore a version two updates behind.
+
+### The launcher unpacks, and the updater stays small
+
+`--source` wants a directory, and what is on disk is a zip. The launcher unpacks it, for two
+reasons and the second is the real one:
+
+- the updater is the only thing running when nothing can fix anything any more, so a bug in it
+  has no other program to save it;
+- **a zip can carry names that escape the directory it is opened into** — `../..`, an absolute
+  path. The hash already proved the archive is the bytes somebody signed; it says nothing at all
+  about the names inside. An archive that is correctly signed and hostile in its entry names is
+  a real and different case, and the rules that refuse it — `ManifestPathRules` and `PathSafety`,
+  behind `UpdateArchiveRules` — already live in Core for D24's reason and are already applied to
+  every file of every build. A second implementation of a security rule in the updater would be
+  a rule that eventually disagrees with itself.
+
+### The updater is copied out of the directory it is about to replace
+
+`GameLauncher.Updater` is published **inside** the installation, in `updater/`. On Windows a
+running executable can be neither renamed nor deleted, so a helper left there makes the rename
+fail for a reason nothing reports — an afternoon lost by whoever meets it first. **The launcher
+copies it out**, into `<user data>/updates/<version>/updater/`, before starting it. Not the
+system temporary directory: the user's data directory is known to be writable because everything
+else the launcher keeps is already there, and the sweep that keeps one downloaded version at a
+time removes this copy along with it. The helper cannot delete its own running image, so
+somebody else has to, and that somebody already exists.
+
+It is published **self-contained** with the launcher, trimmed and with invariant globalization,
+because a machine running a self-contained launcher may have no .NET at all — an updater that
+needed one would be missing at exactly the moment it is needed. That costs about 19 MB inside
+every installation, and the trade is not close.
+
+### The declared hole
+
+**A launcher that starts, survives thirty seconds and then crashes is not rolled back.** From
+inside the updater that is indistinguishable from somebody opening the new version and closing
+it, and rolling *that* back would undo working updates. What covers it instead is the crash
+reports, which do work, and `--rollback`:
+
+```
+GameLauncher.Updater --rollback --target <install dir> [--relaunch <exe>]
+```
+
+It stays a documented manual flag for as long as `<install>.previous` is on disk, which is until
+the update after next.
+
+There is a second consequence worth saying out loud: **nothing remembers that a release failed.**
+A launcher that was rolled back is offered the same release again at the next start, because the
+only state involved is which version is running. That is the honest shape of a design with no
+memory, and giving it one would mean a file the update process writes about itself.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | The new version is in place |
+| 2 | Refused: the command line, or what it named. **Nothing was changed** |
+| 4 | The new launcher failed and the previous installation was restored |
+| 5 | The swap failed and the previous installation could not be put back |
+
+Four and five are separate because they mean two different things to somebody reading a log
+afterwards, and only one of them leaves anybody with work to do.
+
+---
+
 ## Nothing happens on its own
 
 A swap requires this process to exit, so a silent update is an application closing under the
 hands of somebody using it. The launcher shows one line — "Version 0.4.0 of *AppName* is
-available." — with the release notes, a button, and a way to put the line away for this run. The
-next start asks again.
+available." — with the release notes, an **Update and restart** button, and a way to put the
+line away for this run. The next start asks again.
 
 The check runs **once**, at start-up, after the crash-report sweep and the session restore. There
 is no timer and no re-check: a release changes a few times a year, and a launcher that polls is a
@@ -189,11 +289,12 @@ launcher that has to decide what to do when the answer changes while somebody is
 
 ## What is deliberately absent
 
-- **The swap.** Stated first because it is what somebody will look for. `GameLauncher.Updater`
-  has its command line designed (`--source`, `--target`, `--wait-for-pid`, `--relaunch`) and
-  moves no files. The plan it will implement — rename the old installation to `previous/` rather
-  than deleting it, put the new one in place, relaunch, watch that process for about thirty
-  seconds, and restore on a non-zero exit inside that window — is recorded in `HANDOFF.md`.
+- **Any memory of a failed release.** A rolled-back launcher is offered the same release again
+  at the next start. Remembering would mean the update process writing a file about itself, and
+  then deciding when that file stops applying — a server can publish a fixed artifact under the
+  same version only by not doing so, since a version is only ever offered once.
+- **Rolling back a launcher that fails later than thirty seconds**, which is the declared hole
+  above. `--rollback` is the manual answer while the previous installation is on disk.
 - **No minimum-version enforcement, and no field reserved for one.** A server that can tell a
   launcher it is too old to talk to is a remote kill switch, and a one-way door: one row would
   brick every installation. It belongs to the moment a wire contract actually breaks, with its
@@ -213,10 +314,17 @@ launcher that has to decide what to do when the answer changes while somebody is
 
 ## Where a downloaded update waits
 
-`<user data>/updates/<version>/<sha256>.zip` — under the user's own directory, never beside the
-executable, because the application directory is read-only after install and is the very thing an
-update replaces. One version at a time: fetching a newer one sweeps the older directory away,
-since three self-contained builds under somebody's data directory are two too many.
+`<user data>/updates/<version>/` — under the user's own directory, never beside the executable,
+because the application directory is read-only after install and is the very thing an update
+replaces. It holds three things:
+
+- `<sha256>.zip`, the verified archive;
+- `staged/`, where it is unpacked, which becomes the updater's `--source`;
+- `updater/`, the copy of the helper that has to outlive the directory it is replacing.
+
+One version at a time: fetching a newer one sweeps the older directory away, which is also what
+eventually removes the helper's copy, since it cannot delete its own running image. Three
+self-contained builds under somebody's data directory are two too many.
 
 See [logging-and-local-state.md](logging-and-local-state.md) for everything else on disk.
 
@@ -237,6 +345,20 @@ The rejection path is the point, and all of it is exercised without a network:
   document and signature untouched;
 - an unreachable server, a 404, a 422 and a body that is not JSON all leave the launcher running;
 - an absent embedded key checks nothing and says nothing.
+
+The swap is tested the same way, and the rejection path is again the point. `GameLauncher.Core.Tests`
+covers the verdict (an exit of zero, a non-zero exit inside the window, one after it, and a
+process still running), the command line round-tripping between the launcher that builds it and
+the updater that parses it, and every archive entry name that is refused.
+`GameLauncher.Updater.Tests` drives a **real installation directory** with the launcher
+substituted: the happy path, the rollback with the old launcher started again, the declared
+hole, a `--target` that does not exist, a launcher that is still running, a `previous` left by
+an earlier attempt, and `--rollback` with nothing to roll back to. None of it needs a network or
+a real launcher.
+
+What no test reaches, and what was therefore driven by hand on Windows, is the thing itself: a
+real self-contained publish replacing another one while the process that asked for it exits.
+That is written up in `CLAUDE.md` §10.
 
 `tests/GameLauncher.Core.Tests/Updates/ReleaseSigningFixture.cs` holds two throwaway P-256 key
 pairs and the golden `openssl` signature. Neither private key signs anything outside the test

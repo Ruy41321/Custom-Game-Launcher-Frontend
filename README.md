@@ -35,9 +35,10 @@ The server side lives in
 - **A developer dashboard** — create a game, publish a build from a directory, upload covers
   and screenshots, write the devlog, and delete any of it
 - **Crash reports** — off until you turn them on, redacted before they are written to disk
-- **Self-updating** — *half done.* The launcher tells you when a newer signed release exists
-  and fetches it, refusing anything not strictly newer and any bytes that are not the ones the
-  signature covered. Installing it is still the updater's stub
+- **Self-updating** — the launcher tells you when a newer signed release exists, fetches it
+  (refusing anything not strictly newer and any bytes the signature did not cover), replaces
+  itself and restarts. A new version that fails to start is rolled back to the old one. It is
+  always a button and never a timer
 - **Dark theme by default**, configurable, with Italian / English / French from day one
 
 ## Requirements
@@ -113,7 +114,7 @@ it, and what is deliberately not implemented yet.
 | [publishing.md](Documentation/publishing.md) | Packaging, resumable upload, server capabilities, the developer dashboard |
 | [configuration-and-localization.md](Documentation/configuration-and-localization.md) | `launcher.config.json`, user settings, `.resx`, forking and rebranding |
 | [logging-and-local-state.md](Documentation/logging-and-local-state.md) | What the launcher writes to disk, on all three platforms |
-| [self-update.md](Documentation/self-update.md) | Checking for a newer launcher, the five rules it holds, and the swap that is not implemented |
+| [self-update.md](Documentation/self-update.md) | Checking for a newer launcher, the five rules it holds, and the swap that replaces it |
 
 ## Project layout
 
@@ -122,7 +123,7 @@ it, and what is deliberately not implemented yet.
 | `src/GameLauncher.Core` | Domain models, service interfaces, configuration, localization. No UI, no I/O. |
 | `src/GameLauncher.Infrastructure` | API client, download engine, local storage, logging |
 | `src/GameLauncher.App` | Avalonia views, view models, composition root |
-| `src/GameLauncher.Updater` | Standalone self-update helper |
+| `src/GameLauncher.Updater` | Standalone self-update helper: replaces the installation and rolls it back |
 | `tests/` | xUnit test projects |
 | `Documentation/` | One document per module — see the table above |
 

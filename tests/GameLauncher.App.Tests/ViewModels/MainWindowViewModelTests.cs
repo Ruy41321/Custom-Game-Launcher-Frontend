@@ -43,6 +43,10 @@ public sealed class MainWindowViewModelTests
     private readonly ILauncherUpdateDownloader _updateDownloader =
         Substitute.For<ILauncherUpdateDownloader>();
 
+    private readonly IUpdateInstaller _updateInstaller = Substitute.For<IUpdateInstaller>();
+
+    private readonly IApplicationShutdown _shutdown = Substitute.For<IApplicationShutdown>();
+
     /// <summary>
     /// Every start asks about updates, so the answer is arranged here rather than in the
     /// factory: an unconfigured substitute hands back a null result, and the failure would show
@@ -78,6 +82,8 @@ public sealed class MainWindowViewModelTests
             _crashReports,
             _updates,
             _updateDownloader,
+            _updateInstaller,
+            _shutdown,
             errors,
             new LoginViewModel(_authentication, errors, _localization),
             new ExploreViewModel(
@@ -407,9 +413,9 @@ public sealed class MainWindowViewModelTests
     // What the person is told when the download succeeds is where the verified archive is —
     // not that the launcher is about to replace itself, which it cannot do yet.
     [Fact]
-    public async Task AVerifiedDownloadSaysWhereTheFileIsAndPromisesNothingMore()
+    public async Task AVerifiedDownloadStartsTheUpdaterAndThenClosesTheLauncher()
     {
-        string directory = Path.Combine(Path.GetTempPath(), "updates", "0.2.0");
+        string archive = Path.Combine(Path.GetTempPath(), "updates", "0.2.0", "launcher.zip");
         _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
             UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
         _updateDownloader
@@ -418,15 +424,48 @@ public sealed class MainWindowViewModelTests
                 Arg.Any<string>(),
                 Arg.Any<IProgress<long>>(),
                 Arg.Any<CancellationToken>())
-            .Returns(Path.Combine(directory, "launcher.zip"));
+            .Returns(archive);
 
         MainWindowViewModel shell = CreateShell();
         await shell.InitializeAsync(TestContext.Current.CancellationToken);
         await shell.DownloadUpdateCommand.ExecuteAsync(null);
 
-        Assert.Contains(directory, shell.UpdateStatus, StringComparison.Ordinal);
-        Assert.Contains("not available yet", shell.UpdateStatus, StringComparison.Ordinal);
+        await _updateInstaller.Received(1).StartAsync(
+            Arg.Any<ReleaseDocument>(), archive, Arg.Any<CancellationToken>());
+
+        // The order is the substance: the helper is waiting for this process id to be gone
+        // before it touches a single file, so the exit is the last step and not the first.
+        _shutdown.Received(1).Shutdown();
+        Assert.Contains("start again", shell.UpdateStatus, StringComparison.Ordinal);
         Assert.False(shell.CanDownloadUpdate);
+    }
+
+    // An archive that is correctly signed and hostile in its entry names is the one thing the
+    // hash cannot catch, and the launcher refuses it before writing anything. From here that is
+    // an ordinary refusal: the line says so, nothing closes, and the offer stands.
+    [Fact]
+    public async Task AnArchiveRefusedForWhatItNamesClosesNothing()
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
+        _updateDownloader
+            .DownloadAsync(
+                Arg.Any<ReleaseDocument>(),
+                Arg.Any<string>(),
+                Arg.Any<IProgress<long>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Path.Combine(Path.GetTempPath(), "updates", "0.2.0", "launcher.zip"));
+        _updateInstaller
+            .StartAsync(Arg.Any<ReleaseDocument>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Integrity, "names a file outside"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+        await shell.DownloadUpdateCommand.ExecuteAsync(null);
+
+        _shutdown.DidNotReceive().Shutdown();
+        Assert.Equal(_localization.Translate("Error.Integrity"), shell.UpdateStatus);
+        Assert.True(shell.CanDownloadUpdate);
     }
 
     // Bytes that are not the ones the signed document named are refused, and the offer stands:
@@ -479,7 +518,7 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(
             _localization.Translate("Update.Available", "0.2.0", "Test Launcher"),
             shell.UpdateHeadline);
-        Assert.Contains("non è ancora possibile", shell.UpdateStatus, StringComparison.Ordinal);
+        Assert.Contains("si chiude e riparte", shell.UpdateStatus, StringComparison.Ordinal);
     }
 
     [Fact]

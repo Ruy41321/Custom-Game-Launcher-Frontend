@@ -777,13 +777,13 @@
     <value>La version {0} de {1} est disponible.</value>
   </data>
   <data name="Update.Download" xml:space="preserve">
-    <value>Télécharger la mise à jour</value>
+    <value>Mettre à jour et redémarrer</value>
   </data>
   <data name="Update.Downloading" xml:space="preserve">
     <value>Téléchargement… {0} %</value>
   </data>
-  <data name="Update.Ready" xml:space="preserve">
-    <value>La version {0} a été téléchargée et vérifiée. L'installer automatiquement n'est pas encore possible : le fichier se trouve dans {1}.</value>
+  <data name="Update.Restarting" xml:space="preserve">
+    <value>La version {0} est prête. {1} va se fermer et redémarrer pour terminer la mise à jour.</value>
   </data>
   <data name="Update.Dismiss" xml:space="preserve">
     <value>Pas maintenant</value>

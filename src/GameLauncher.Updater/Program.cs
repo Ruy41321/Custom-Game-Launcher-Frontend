@@ -1,49 +1,52 @@
+using GameLauncher.Core.Updates;
+
 namespace GameLauncher.Updater;
 
 /// <summary>
 /// Standalone helper that replaces the launcher's own files.
 ///
-/// It has to be a separate process: on Windows a running executable cannot overwrite its
-/// own binaries. The launcher downloads and verifies the new version, starts this helper,
-/// and exits; the helper waits for that exit, swaps the files and starts the launcher again.
+/// It has to be a separate process: on Windows a running executable cannot overwrite its own
+/// binaries (D7). The launcher downloads and verifies the new version, unpacks it, copies this
+/// helper out of the directory it is about to replace, starts it and exits; this waits for that
+/// exit, moves the old installation aside, puts the new one in place, starts it, and watches it
+/// for about thirty seconds.
 ///
-/// The swap is <b>not implemented</b>. This entry point exists so the process boundary is part
-/// of the architecture from the start rather than retrofitted later, and the command line below
-/// is the one the launcher will call — but nothing here moves a file yet.
+/// <b>The decision is a pure function of (exit code, elapsed time)</b> — see
+/// <see cref="RelaunchWatch"/>. A non-zero exit inside the window puts the old installation
+/// back and starts it again; still running at the end of the window, or an exit with zero, is a
+/// success and the old installation goes. There is no marker file and no IPC, because the one
+/// thing that must work when nothing else can be fixed is the thing least able to afford a
+/// protocol.
 ///
-/// The other two thirds are done. The server publishes signed releases, and as of 2026-08-07
-/// the launcher checks for them: it verifies the signature over the document as it arrived,
-/// refuses anything that is not strictly newer, and downloads an artifact only if its bytes hash
-/// to the content address inside that document. See <c>Documentation/self-update.md</c> in this
-/// repository, and <c>Documentation/launcher-releases.md</c> in the backend's.
-///
-/// What is missing is the swap below. Until it exists, a verified archive waits under
-/// <c>&lt;user data&gt;/updates/&lt;version&gt;/</c> and the launcher says so rather than
-/// claiming it is about to install it.
+/// The declared hole: a launcher that starts, survives thirty seconds and then crashes is not
+/// rolled back. That is what the crash reports are for, and <c>--rollback</c> below is the
+/// manual way out for as long as the old installation is still on disk.
 /// </summary>
 internal static class Program
 {
-    private const int ExitOk = 0;
-    private const int ExitUsage = 2;
-    private const int ExitNotImplemented = 3;
-
     public static int Main(string[] args)
     {
         if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
         {
             PrintUsage();
-            return args.Length == 0 ? ExitUsage : ExitOk;
+            return args.Length == 0 ? ExitCodes.Usage : ExitCodes.Ok;
         }
 
-        // Says what is true. Until 2026-08-07 this line claimed the swap was "planned for
-        // milestone 8" — a milestone that had been closed for days with nothing implemented,
-        // which is the kind of comment that costs somebody an afternoon before they believe the
-        // code over it.
-        Console.Error.WriteLine(
-            "The self-update swap is not implemented: this helper does not move any files yet. "
-            + "The launcher already checks for a signed release and downloads a verified "
-            + "archive; replacing the installation with it is what is missing.");
-        return ExitNotImplemented;
+        UpdateSwapRequest? request = UpdateSwapRequest.TryParse(args, out string? error);
+        if (request is null)
+        {
+            Console.Error.WriteLine(error);
+            PrintUsage();
+            return ExitCodes.Usage;
+        }
+
+        SwapRunner runner = new(
+            new SystemProcessStarter(),
+            new SystemProcessWaiter(),
+            TimeProvider.System,
+            Console.Out);
+
+        return runner.Run(request);
     }
 
     private static void PrintUsage() =>
@@ -52,14 +55,25 @@ internal static class Program
             GameLauncher.Updater
 
             Usage:
-              GameLauncher.Updater --source <dir> --target <dir> --wait-for-pid <pid> [--relaunch <exe>]
+              GameLauncher.Updater --source <dir> --target <dir> [--wait-for-pid <pid>] [--relaunch <exe>]
+              GameLauncher.Updater --rollback --target <dir> [--wait-for-pid <pid>] [--relaunch <exe>]
 
             Options:
-              --source        Directory holding the already downloaded and verified new version
-              --target        Installation directory to update in place
-              --wait-for-pid  Process id of the launcher to wait for before swapping files
-              --relaunch      Executable to start once the swap has completed
+              --source        Directory holding the already downloaded, verified and unpacked
+                              new version
+              --target        Installation directory to replace in place. Its previous contents
+                              are renamed to <target>.previous rather than deleted, and only go
+                              away once the new launcher has started
+              --wait-for-pid  Process id of the launcher to outlive before touching any file
+              --relaunch      Executable to start once the new version is in place. It is then
+                              watched for about thirty seconds: a non-zero exit inside that
+                              window restores <target>.previous and starts it again
+              --rollback      Put <target>.previous back and change nothing else
 
-            Not implemented: this helper currently swaps nothing and exits with code 3.
+            Exit codes:
+              0  the new version is in place
+              2  refused: the command line, or what it named. Nothing was changed
+              4  the new launcher failed and the previous installation was restored
+              5  the swap failed and the previous installation could not be put back
             """);
 }

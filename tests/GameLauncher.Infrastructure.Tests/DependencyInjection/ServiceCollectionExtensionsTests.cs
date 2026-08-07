@@ -59,6 +59,7 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(ILauncherReleaseApi))]
     [InlineData(typeof(ILauncherUpdateDownloader))]
     [InlineData(typeof(IUpdateChecker))]
+    [InlineData(typeof(IUpdateInstaller))]
     [InlineData(typeof(UpdateSettings))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {

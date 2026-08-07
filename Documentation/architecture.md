@@ -24,7 +24,7 @@ GameLauncher.Updater  ──►  GameLauncher.Core
 | `GameLauncher.Core` | Domain models, service interfaces, configuration contracts, localization contracts, the pure logic — `LaunchPlanner`, `ManifestPathRules`, `PathSafety`, `TransferRateEstimator`, `ByteSize` | nothing |
 | `GameLauncher.Infrastructure` | The implementations: API clients, download engine, SQLite store, token store, image cache, platform paths, logging | Core |
 | `GameLauncher.App` | Avalonia views, view models, `App.axaml.cs` — the composition root | Core and Infrastructure |
-| `GameLauncher.Updater` | A standalone executable that swaps launcher files while the launcher is closed | Core |
+| `GameLauncher.Updater` | A standalone executable that replaces the installation while the launcher is closed, and puts the old one back if the new one does not start | Core |
 
 **Core references nothing.** No Avalonia, no `HttpClient`, no `System.Data.Sqlite`, no file
 system. That is not tidiness: it is what makes the interesting logic testable in milliseconds
@@ -254,15 +254,6 @@ Two things make it safe and repeatable:
 
 Stated explicitly, because the alternative is a reader inferring it from silence:
 
-- **The self-update swap.** The **check** is implemented as of 2026-08-07 and has a page of its
-  own: [self-update.md](self-update.md). The launcher reads
-  `GET /api/v1/launcher/releases/latest`, verifies the ECDSA P-256 signature over the document's
-  bytes as they arrived, refuses anything not strictly newer, and fetches an artifact only if its
-  bytes hash to the content address inside the signed document.
-  What is **not** implemented is the swap: `GameLauncher.Updater` still moves no files, so a
-  verified download is announced with where it is rather than installed. Its command line is
-  designed and its process boundary is real — a running executable cannot overwrite its own
-  binaries on Windows (D7). Self-update is still **not** a numbered milestone.
 - **`UserSettings.LaunchMinimized`** exists in the model and is read by nothing, which is why
   the Settings page does not show it: an inert checkbox is worse than an absent one.
   `SendCrashReports` used to be in this position and no longer is.
@@ -276,4 +267,4 @@ Stated explicitly, because the alternative is a reader inferring it from silence
 - [publishing.md](publishing.md) — packaging, resumable upload, capabilities
 - [configuration-and-localization.md](configuration-and-localization.md) — the fork-and-rebrand surface
 - [logging-and-local-state.md](logging-and-local-state.md) — what the launcher writes to disk
-- [self-update.md](self-update.md) — checking for a newer launcher, and what is not implemented
+- [self-update.md](self-update.md) — checking for a newer launcher, and the swap that replaces it

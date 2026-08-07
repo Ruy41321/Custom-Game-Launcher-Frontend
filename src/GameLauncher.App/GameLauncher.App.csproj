@@ -17,7 +17,35 @@
   <ItemGroup>
     <ProjectReference Include="..\GameLauncher.Core\GameLauncher.Core.csproj" />
     <ProjectReference Include="..\GameLauncher.Infrastructure\GameLauncher.Infrastructure.csproj" />
+
+    <!-- Built and shipped, never referenced: the updater is a separate process (D7) and this
+         assembly must not be able to call into it. -->
+    <ProjectReference Include="..\GameLauncher.Updater\GameLauncher.Updater.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <!-- The updater lands in `updater/` beside the launcher, and is copied out of there before it
+       runs: on Windows a running executable can be neither renamed nor deleted, so a helper left
+       inside the directory it is replacing makes that rename fail for a reason nothing reports.
+       It is published self-contained with the launcher because a machine running a
+       self-contained launcher may have no .NET at all, and an updater that needed one would be
+       missing at exactly the moment it is needed. -->
+  <Target Name="CopyUpdaterIntoOutput" AfterTargets="Build">
+    <MSBuild Projects="..\GameLauncher.Updater\GameLauncher.Updater.csproj" Targets="Build"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="UpdaterAssembly" />
+    </MSBuild>
+    <ItemGroup>
+      <UpdaterOutput Include="%(UpdaterAssembly.RootDir)%(UpdaterAssembly.Directory)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UpdaterOutput)" SkipUnchangedFiles="true"
+          DestinationFiles="@(UpdaterOutput->'$(OutDir)updater\%(RecursiveDir)%(Filename)%(Extension)')" />
+  </Target>
+
+  <Target Name="PublishUpdaterIntoPublishDir" AfterTargets="Publish">
+    <MSBuild Projects="..\GameLauncher.Updater\GameLauncher.Updater.csproj" Targets="Publish"
+             Properties="Configuration=$(Configuration);TargetFramework=$(TargetFramework);RuntimeIdentifier=$(RuntimeIdentifier);SelfContained=$(SelfContained);PublishDir=$([System.IO.Path]::GetFullPath('$(PublishDir)updater', '$(MSBuildProjectDirectory)'))\;PublishSingleFile=false;PublishReadyToRun=false;_IsPublishing=true" />
+  </Target>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />

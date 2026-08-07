@@ -17,9 +17,9 @@ friends and small tester groups without zip files on Discord or manual Drive lin
 This repository is the **client**: an Avalonia application for **Windows, Linux and macOS**.
 It handles authentication, library and store browsing, resumable delta downloads, install
 management, game launching, and publishing — builds, artwork and the devlog — from the
-developer dashboard. It also **checks** for a newer signed release of itself and downloads a
-verified one; replacing the installation with it is the one piece still unimplemented. See §10
-and `Documentation/self-update.md`.
+developer dashboard. It also **updates itself**: it checks for a newer signed release, downloads
+a verified one, replaces the installation and restarts — rolling back to the old one if the new
+one does not start. See §10 and `Documentation/self-update.md`.
 
 Anyone can fork it and rebrand it by editing a single `launcher.config.json`.
 
@@ -42,12 +42,16 @@ src/GameLauncher.App             Avalonia UI: App.axaml, Views/, ViewModels/, As
                                  Localization/. Composition root — the only project that
                                  knows about both Core and Infrastructure.
 
-src/GameLauncher.Updater         Small standalone executable that replaces launcher files
-                                 while the launcher is closed, then relaunches it.
+src/GameLauncher.Updater         Small standalone executable that replaces the installation
+                                 while the launcher is closed, relaunches it, and puts the
+                                 old one back if it does not start. References Core only,
+                                 and is published self-contained into `<install>/updater/`.
 
 tests/GameLauncher.Core.Tests
 tests/GameLauncher.Infrastructure.Tests
 tests/GameLauncher.App.Tests            View models, exercised as plain objects.
+tests/GameLauncher.Updater.Tests        The swap against real directories, with the
+                                        launcher substituted.
 ```
 
 Dependency direction is strictly `App → {Core, Infrastructure} → Core`. **Core never
@@ -126,7 +130,9 @@ belongs in Infrastructure behind an interface declared in Core.
 | D53 | **The launcher asks for the two links and never finishes either flow; the affordance appears only where it means something, and a refusal is not an error** | Three dead ends opened the moment the server started sending mail, and all three are on the sign-in screen: no way to ask for a password reset, no way to ask for the verification link again, and — the one nobody had written down — a sign-in refused for an unconfirmed address reading *"Your account is not allowed to do that"*, because the server answers 403 for that and for a disabled account with the same code. The launcher now **triggers** both messages and lets the browser finish on the server's own pages: putting the two password fields here would be a second place for a product rule that only the server enforces, which is D40's reasoning on a surface where the client protects nothing by copying, and it would mean teaching people to paste a token out of their mail client. The resend is offered after **any** registration that needs verifying — sent or not, because a message that was filtered leaves somebody exactly where one that never left does — and after a 403, where the client says the cause a person can act on and offers the button; for a disabled account that button is harmless, since the route answers identically and sends nothing. Every success sentence is **conditional**, so a client cannot become the enumeration oracle the server refuses to be. A 429 is shown on the info line rather than in red, with the wait named only at two minutes or more so that no resx has to decline "1 minutes"; and a **successful** request disarms its own button until the address changes, while a refused one does not, because waiting and pressing again is the answer to a 429. | A screen per flow inside the launcher (a second definition of the password rules, and a token pasted by hand); a custom URI scheme (an OS-level protocol registration on three platforms, for a project with no installer); the resend always visible (an invitation to spend a rate limit nobody needs); a countdown from `Retry-After` (it is per IP, so it locks out somebody who pressed nothing, and a restart clears it — a promise the launcher cannot keep); showing the 429 as an error (the person most likely to see it is the one whose message never arrived); leaving the 403 wording alone (a resend button under a sentence that explains neither cause) |
 | D54 | **The release signing key is a constant in the binary and empty by default; the channel is a shipped configuration field read leniently** | The two halves of "what a fork changes" pull in opposite directions and both answers are forced. The **key** cannot live in `launcher.config.json` because *the file the updater overwrites must not be the file that authorizes the update* — that file ships inside the directory a swap replaces, so a key kept there would be replaced by whatever the update brought with it, while a constant lives inside the artifact whose replacement the signature already protects. It is therefore the **one thing a fork changes in code**, and `configuration-and-localization.md` says so rather than keeping its "no code changes" promise by omission. Empty is the default and means the launcher **asks for nothing at all**, which is the honest state for a fork that has not set up signing and the same answer the server reaches from the other end. The **channel** is the opposite: it is configuration, because which stream a launcher follows is the distributor's choice — a player who could move themselves onto a stream nobody published for them could replace their launcher with a build that does not open, and the launcher is the program that has to start in order to fix anything. And an unrecognised channel is read as `stable` instead of failing `Validate()`: `apiBaseUrl` is worth a hard refusal because a launcher pointed at nothing is useless anyway, while a typo in a channel name would destroy a working launcher over a spelling mistake. | The key in `launcher.config.json` (an update can rewrite the thing that authorizes updates); a key fetched from the server (the server would be vouching for itself); no key at all being an error (a fork that does not sign releases could not run); the channel as a user setting (a one-way trip onto a stream nobody meant them to have); a channel typo failing validation (a launcher that will not open because of a spelling mistake) |
 | D55 | **The check verifies the arrived bytes before parsing, refuses a document that is not for this launcher, and is silent about every failure** | The order is the rule: `ReleaseSignature.Verify` runs on the UTF-8 bytes of the document string exactly as the route served them, and `ReleaseDocument.TryParse` only ever sees bytes that already verified — D19's manifest rule applied to the thing that replaces the launcher itself. Nothing rebuilds a canonical form to compare against, because that would be a second definition of a wire contract in a second language; the server does that check once, at publish time. Two refusals go beyond the five rules the backend states. The document must **say** it is for this channel, platform and architecture, which is where signing the document rather than the artifact pays off — a server holding genuine signed releases cannot hand a Windows launcher the Linux one — and the artifact URL must be `http` or `https`, the refusal `CachingImageLoader` already applies to a host the server named (D35). Everything else is `Undetermined` and a log line: an unreachable server, a 404, a body that is not JSON, a signature that does not verify. A **404 is read as up to date**, because no key on that server, nothing published, and nothing for this platform are one situation from here — which is why the server answers 404 to all three. `ECDsa` does the whole thing with no new package, and the algorithm is pinned rather than read from the key, so a deployment given an RSA key is a launcher that checks nothing instead of one verifying with an algorithm nobody chose. | Parsing before verifying (the wrong document is already described by then); re-canonicalising client-side (two definitions of one contract, which drift); trusting the query parameters instead of the signed document (a signed release served as one it is not); showing a failed check to the user (an error nobody can act on, on a launcher that works); treating a 404 as a failure (one red line per start on every deployment that publishes no releases); a managed Ed25519 or a native binding (a crypto dependency across four RIDs, in a repository that refused one over thirty lines of test code) |
-| D56 | **An update is announced and downloaded, never installed on its own — and the banner's sentences are rebuilt when the language changes** | A swap requires this process to exit, so a silent update is an application closing under the hands of somebody using it: one line, the release notes, a button, and a way to put it away until the next start. Because the swap does not exist yet, what a successful download says is **where the verified archive is** — promising a restart the launcher cannot perform would be the one kind of lie this feature cannot afford, and it is the same honesty the updater's own `Main` was corrected into. The download is in this piece rather than the next one because it is what makes the content-address refusal real: a rule nothing exercises is a rule nobody has checked. The second half was found by driving the real window: the banner's strings are built in code, like `WelcomeMessage`, so they do not re-evaluate the way a `{loc:Tr}` binding does — the headline stayed French under a line that had become Italian. `RefreshLocalizedText` now rebuilds both, with the status kept as a `Func<string>` so an outcome sentence and an error sentence re-render the same way. | Installing silently (an application that closes under somebody's hands); a button that says "Update and restart" before the updater moves files (a promise the launcher cannot keep); leaving the download to the swap commit (the hash refusal would ship untested against a real server); building the sentences once (a banner stuck in the language it first appeared in) |
+| D56 | **An update is announced and downloaded, never installed on its own — and the banner's sentences are rebuilt when the language changes** | A swap requires this process to exit, so a silent update is an application closing under the hands of somebody using it: one line, the release notes, a button, and a way to put it away until the next start. **The second half of this row is superseded by D57 as of 2026-08-07**: while the swap did not exist, what a successful download said was *where the verified archive is*, because promising a restart the launcher could not perform would have been the one kind of lie this feature cannot afford. The button now says "Update and restart" and means it. What survives unchanged is the first half, which is the decision: it is a button and never a timer. The download is in this piece rather than the next one because it is what makes the content-address refusal real: a rule nothing exercises is a rule nobody has checked. The second half was found by driving the real window: the banner's strings are built in code, like `WelcomeMessage`, so they do not re-evaluate the way a `{loc:Tr}` binding does — the headline stayed French under a line that had become Italian. `RefreshLocalizedText` now rebuilds both, with the status kept as a `Func<string>` so an outcome sentence and an error sentence re-render the same way. | Installing silently (an application that closes under somebody's hands); a button that says "Update and restart" before the updater moves files (a promise the launcher cannot keep); leaving the download to the swap commit (the hash refusal would ship untested against a real server); building the sentences once (a banner stuck in the language it first appeared in) |
+| D57 | **The swap's decision is a pure function of (exit code, elapsed time), and the old installation is renamed rather than deleted** | The hardest thing in this repository to test is a process replacing the files of the process that started it, and every design that would have made it *observable* — a marker file, an IPC channel, a watchdog outliving its purpose — needs two processes to agree on a protocol while one of them is the thing under suspicion. Reduced to two numbers it is `RelaunchWatch.Judge`, and a test substitutes the one interface that produces them. The rename is the other half: a sibling directory is on the same filesystem, so putting a self-contained build aside is one atomic operation needing no second copy — the reasoning the download's staging tree already follows — and it is a rename rather than a delete because *a rollback with nothing to roll back to is not a rollback*. A `previous` left by an attempt that never resolved is discarded, and that is safe by proof rather than assumption: the updater only runs because a launcher asked it to, so what is installed right now works, and keeping the older copy would make the *next* rollback restore a version two updates behind. **The hole is declared**: a launcher that starts, survives thirty seconds and then crashes is not rolled back, because from here that is indistinguishable from somebody opening the new version and closing it. Nothing remembers a failed release either — the same one is offered again next start. | A marker file or IPC (a protocol between a process and the one it suspects, and untestable); deleting the old installation (nothing to roll back to); keeping a stale `previous` (the next rollback goes two versions back); watching until the launcher exits however long that takes (a helper that lives as long as the application it started); remembering failed releases (state the update process writes about itself, and then a rule for when it stops applying) |
+| D58 | **The launcher unpacks the archive and copies the updater out of the installation; the updater is published self-contained inside it** | Three forced answers to one question — what has to happen between a verified zip and a running helper. **The launcher unpacks**, because a zip can carry names that escape the directory it is opened into and the hash proves nothing about names: an archive *correctly signed and hostile in its entry names* is a real and separate case, and the rules that refuse it (`ManifestPathRules`, `PathSafety`, behind `UpdateArchiveRules`) already live in Core for D24's reason and already cover every file of every build. A second copy of a security rule in the updater is a rule that eventually disagrees with itself — and the updater is the one program with nothing behind it to fix its bugs, so it stays small. **The copy out is not a convenience**: on Windows a running executable can be neither renamed nor deleted, so a helper left inside the directory it is about to rename makes that rename fail for a reason nothing reports. It goes to `<user data>/updates/<version>/updater/` rather than the system temp directory, because that directory is known writable and the existing one-version-at-a-time sweep is what eventually removes it — the helper cannot delete its own running image. **Self-contained** because a machine running a self-contained launcher may have no .NET at all; trimmed and invariant-globalized, it costs about 19 MB inside every installation. | Unpacking in the updater (a second implementation of a path rule, in the program that cannot afford bugs); running the updater from the installation (the rename fails, invisibly); the system temp directory (a path outside `IPathProvider`, and nothing sweeps it); a framework-dependent updater (missing exactly when the launcher is self-contained, which is always); the updater deleting its own copy (impossible while it is running) |
 ---
 
 ## 4. Download and install model
@@ -345,6 +351,8 @@ a different key and one holding none.
 | **An indexer binding is invalidated by `PropertyChanged("Item")` — not by WPF's `"Item[]"`, and not by `null`** | This is what kept every `{loc:Tr}` label in the language it first rendered in from milestone 1 until 2026-08-07, while `WelcomeMessage` and the update banner followed, because a view model rebuilds those in code. `"Item[]"` is `Binding.IndexerName` in WPF and Avalonia's indexer node ignores it; so, surprisingly, does `null`, which almost every other binding system reads as "every property changed". Only the indexer's own CLR property name works. Measured rather than guessed, against Avalonia 12.1.1: `"Item[]"` STUCK, `"Item"` FOLLOWS, `null` STUCK, `""` STUCK. `TrExtensionTests` pins it by driving a real Avalonia binding — a test asserting only *which* name is raised would have passed against the broken code just as happily |
 | **A binding on a plain `AvaloniaObject` needs no initialised Avalonia** | Which is what makes the language switch testable at all: `AvaloniaProperty.Register` + `Bind(property, binding)` + `GetValue` exercises the real binding machinery with no toolkit start-up, no window and no dispatcher. Contrast `Bitmap` two rows up, which cannot be constructed without one. Anything expressible as "does this binding re-evaluate?" belongs in a test rather than in a session driving the window |
 | **A sentence a view model builds itself is not a binding and never follows a language change** | `WelcomeMessage` and the update banner's three lines are `Translate` calls with arguments, so they are ordinary properties: fixing the `{loc:Tr}` half above does nothing for them, and `RefreshLocalizedText` in `MainWindowViewModel` stays exactly as necessary as it was. The rule to keep: **anything built with `Translate(key, args)` must be rebuilt on `LanguageChanged`** |
+| **An `AfterTargets="Publish"` MSBuild target gets an *absolute* `PublishDir` when `-o` is used** | `GameLauncher.App.csproj` publishes the updater into `$(PublishDir)updater\`, and combining that with `$(MSBuildProjectDirectory)` produced `…\src\GameLauncher.App\C:\Users\…\dist\new\updater\` and an MSB3191 that reads like a broken path in the SDK. `$([System.IO.Path]::GetFullPath('$(PublishDir)updater', '$(MSBuildProjectDirectory)'))` is right for both shapes, because that overload leaves a rooted path alone. Plain `dotnet publish` with no `-o` never shows it |
+| **`Compress-Archive` in Windows PowerShell 5.1 can write `\` in zip entry names** | The launcher refuses those — `ManifestPathRules` bans a backslash, which is the same rule that stops `..\` — so an archive built that way is a release nobody can install, refused for a reason that sounds like an attack. It runs on .NET Framework, where `ZipFile` predates the fix. Build a release archive with Python's `zipfile` (or .NET Core's `ZipFile`), and normalise the entry names to `/` yourself |
 | **`Graphics.CopyFromScreen` photographs whatever is on top of that rectangle** | It captured an unrelated window sitting over the launcher, so the screenshot showed something else entirely. `PrintWindow($hwnd, $hdc, 2)` renders the target window itself, works when it is occluded, and does **not** steal focus from whatever the maintainer is doing. Also: `Add-Type -MemberDefinition` already emits `using System.Runtime.InteropServices;`, so passing `-UsingNamespace` for it fails the compile as a warning-as-error |
 
 ---
@@ -800,22 +808,63 @@ after some labels have rendered, and those labels now re-read. Then the same swi
 the outcome sentence naming the archive's directory, and both banner buttons all changed once
 and stayed changed.
 
+### Self-update, the swap — verified on 2026-08-07
+
+Open debt 24, and with it **the last declared-and-unimplemented feature in either repository**.
+`GameLauncher.Updater` exited with 3 and moved no files; it now replaces the installation and
+puts the old one back when the new one does not start.
+
+- ✅ `Core/Updates`: `RelaunchWatch` (the verdict as a pure function of exit code and elapsed
+  time), `UpdateSwapRequest` (one definition of a command line two processes share, round-tripped
+  by a test), `UpdateSwapPaths` (`<install>.previous`, a sibling so the rename stays atomic) and
+  `UpdateArchiveRules` — which is `ManifestPathRules` + `PathSafety`, not a second copy (D57, D58)
+- ✅ `IUpdateInstaller` / `UpdateInstaller`: unpack into `updates/<version>/staged/` refusing an
+  entry that would land outside it, copy `<install>/updater/` out of the directory about to be
+  renamed, start the helper. Core stays free of file I/O, which it has always been
+- ✅ `GameLauncher.Updater`: `SwapRunner` plus two substituted interfaces and `Main`. `--rollback`
+  is a real flag now, and the exit codes distinguish *nothing happened* (2) from *the old one is
+  back* (4) from *this needs a hand* (5)
+- ✅ The updater is published **self-contained** into `<install>/updater/` by a target in
+  `GameLauncher.App.csproj`, trimmed and invariant-globalized: 19 MB rather than 75
+- ✅ `IApplicationShutdown` in the App layer, so a test can press the button without ending the
+  test host — the budget D32 spends on the file picker, spent on the one other untestable step
+- ✅ The banner's button is **"Update and restart"**; `Update.Ready` is retired and
+  `Update.Restarting` replaces it, in English, Italian and French
+- ✅ `tests/GameLauncher.Updater.Tests`, new and in the solution: the swap against real
+  directories with the launcher substituted — the happy path, the rollback with the old launcher
+  started again, the declared hole, a `--target` that does not exist, a launcher still running,
+  a `previous` left by an earlier attempt, and `--rollback` with nothing to roll back to
+- ✅ 831 tests green on Windows (296 Core, 282 Infrastructure, 11 Updater, 242 App),
+  `dotnet format` clean
+
+**Verified on real Windows**, which is the platform that executable exists for and the one thing
+no test reaches. Two self-contained publishes: 0.6.0 signed, hashed and published through
+`--publish-release`, and 0.1.0 installed. The 0.1.0 launcher offered 0.6.0, the button was
+pressed, and **1.5 seconds later** the log reads `Updater 1772 started; this launcher must now
+exit` and then `Launcher starting` — the installation directory now holds 0.6.0, `previous` is
+gone, and the window is up. Then the case that matters more: a **0.7.0 whose artifact is a
+launcher that returns 1 on start-up**, signed exactly like a real one. The updater put it in
+place, watched it fail, restored the installation to 0.6.0 and started it again; the window came
+back offering 0.7.0 once more, which is the honest consequence of a design that remembers
+nothing about a failed release.
+
+**No bug found in the swap.** Two things cost time and are in §7: an `AfterTargets="Publish"`
+target that mis-joins an absolute `PublishDir`, and PowerShell 5.1's `Compress-Archive`, whose
+backslash entry names the launcher correctly refuses.
+
 ### Next up
 
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —
 it was part of M8 in the original plan and came out of it because it cannot be built here alone.
 
-- ⬜ **The self-update swap.** `GameLauncher.Updater` still moves no files; its command line is
-  already designed (`--source`, `--target`, `--wait-for-pid`, `--relaunch`). The agreed plan:
-  rename the old installation to `previous/` rather than deleting it (a rename, not a copy —
-  same filesystem, atomic), put the new one in place, `--relaunch`, and **wait on that process
-  for about thirty seconds**; a non-zero exit inside the window restores `previous/` and starts
-  the old one again, still alive at thirty seconds or an exit with zero is a success and
-  `previous/` goes. No marker file and no IPC: the decision is a pure function of (exit code,
-  elapsed time), which is the only shape in which the hardest-to-test piece in the repository
-  becomes testable. The declared hole: a launcher that starts, survives thirty seconds and then
-  crashes is not rolled back — that is what the crash reports are for — and `--rollback` stays a
-  documented manual flag while `previous/` exists. It has to be verified **on real Windows**
+**Nothing.** As of 2026-08-07 there is no feature this repository declares and does not
+implement, and the same is true of the backend. What is left is written down as debts and
+deliberate absences rather than as work in progress: no virtualisation in Explore (open debt 21),
+`UserSettings.LaunchMinimized` still inert (open debt 13), no data export (17), the detail page
+still needing a server (11), and no automated test that touches nginx or a real swap (8, 22).
+Each of those is a choice with its reasons recorded, not a gap somebody forgot.
+
+- ✅ ~~**The self-update swap**~~ — done on 2026-08-07, above
 - ✅ ~~**The language switch that does not switch**~~ — done on 2026-08-07, above
 
 ---
