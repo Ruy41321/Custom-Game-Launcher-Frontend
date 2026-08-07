@@ -13,7 +13,7 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen">
 
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
 
     <!-- Top bar: navigation, the account and the language picker. -->
     <Border Grid.Row="0" Padding="20,14" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
@@ -52,10 +52,32 @@
       </Grid>
     </Border>
 
-    <!-- The ViewLocator turns whichever view model is current into its view. -->
-    <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" />
+    <!-- A newer launcher, announced and never applied on its own: a swap needs this process to
+         exit, so a silent update is an application closing under somebody's hands. -->
+    <Border Grid.Row="1" Padding="20,10" IsVisible="{Binding UpdateAvailable}"
+            Background="{DynamicResource SystemControlBackgroundListLowBrush}">
+      <Grid ColumnDefinitions="*,Auto,Auto">
 
-    <Border Grid.Row="2" Padding="20,10" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
+        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+          <TextBlock Text="{Binding UpdateHeadline}" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding UpdateNotes}" Opacity="0.75" TextWrapping="Wrap"
+                     IsVisible="{Binding UpdateNotes, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <TextBlock Text="{Binding UpdateStatus}" Opacity="0.75" TextWrapping="Wrap"
+                     IsVisible="{Binding UpdateStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <Button Grid.Column="1" Content="{loc:Tr Update.Download}" Margin="12,0,0,0"
+                Command="{Binding DownloadUpdateCommand}" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Content="{loc:Tr Update.Dismiss}" Margin="12,0,0,0"
+                Command="{Binding DismissUpdateCommand}" Classes="link" VerticalAlignment="Center" />
+
+      </Grid>
+    </Border>
+
+    <!-- The ViewLocator turns whichever view model is current into its view. -->
+    <ContentControl Grid.Row="2" Content="{Binding CurrentPage}" />
+
+    <Border Grid.Row="3" Padding="20,10" Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
       <TextBlock Text="{Binding WelcomeMessage}" FontSize="12" Opacity="0.6" />
     </Border>
 

@@ -17,5 +17,9 @@
     "supportedLanguages": ["en", "it", "fr"]
   },
 
+  "updates": {
+    "channel": "stable"
+  },
+
   "defaultInstallDirectory": null
 }

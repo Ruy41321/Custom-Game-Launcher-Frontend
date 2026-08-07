@@ -38,6 +38,7 @@ requiring each component to be told separately.
   logs/                             launcher-YYYYMMDD.log, crash-*.log
   staging/                          in-flight downloads, content-addressed
   images/                           the artwork cache
+  updates/                          a downloaded launcher release, one version at a time
 
 <install root>/CustomGameLauncher/Games/<slug>/     the games themselves
 ```
@@ -55,6 +56,7 @@ Two choices in there are deliberate:
 |---|---|
 | `images/` | a few thumbnails on the next launch — everything in it is re-fetchable |
 | `staging/` | an interrupted download restarts from zero instead of resuming |
+| `updates/` | nothing — a downloaded launcher release is offered again on the next start |
 | `logs/` | the record of what happened |
 | `session.json` | signing in again |
 | `launcher.settings.json` | the user's preferences reset to the shipped defaults |
@@ -140,6 +142,22 @@ interrupted transfer be found again by name instead of by remembering it.
 
 Swept by **age** (seven days) at start-up, never emptied. See
 [downloads-and-installs.md](downloads-and-installs.md).
+
+---
+
+## The update directory
+
+`updates/<version>/<sha256>.zip` — a launcher release that has been fetched and whose bytes hash
+to the content address inside its signed document. Nothing takes that name until it verifies, and
+a partial transfer is a `.part` file that is deleted rather than resumed.
+
+It is under the user's data directory and **never beside the executable**, because the
+application directory is read-only after install and is the very thing an update replaces. One
+version at a time: fetching a newer release sweeps the older directory away.
+
+The directory is created when a download starts rather than at start-up, so a build with no
+signing key compiled in — which checks for nothing — never creates it. See
+[self-update.md](self-update.md).
 
 ---
 
@@ -241,8 +259,10 @@ inert checkbox would have been a promise the launcher did not keep.
 - **No way to review a pending crash report before it is sent.** The files are readable JSON in
   the log directory, which is the honest version of that — but nothing in the UI shows them.
 - **No log attachment.** A crash report is one exception, not a session.
-- **No self-update, so nothing writes to the application directory.** Everything above is under
-  the user's data directory, and the application directory is read-only after install.
+- **Nothing writes to the application directory.** Everything above is under the user's data
+  directory, and the application directory is read-only after install — including a downloaded
+  launcher release, which waits in `updates/` because replacing an installation is the updater's
+  job and the updater does not do it yet ([self-update.md](self-update.md)).
 
 ## Related documents
 
@@ -250,3 +270,4 @@ inert checkbox would have been a promise the launcher did not keep.
 - [authentication-and-session.md](authentication-and-session.md) — why `session.json` is in clear
 - [downloads-and-installs.md](downloads-and-installs.md) — the install rows and the staging tree
 - [configuration-and-localization.md](configuration-and-localization.md) — the two configuration files
+- [self-update.md](self-update.md) — what lands in `updates/`, and why it stays there

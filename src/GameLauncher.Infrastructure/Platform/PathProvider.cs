@@ -21,6 +21,7 @@ public sealed class PathProvider : IPathProvider
         LogDirectory = Path.Combine(UserDataDirectory, "logs");
         DownloadStagingDirectory = Path.Combine(UserDataDirectory, "staging");
         ImageCacheDirectory = Path.Combine(UserDataDirectory, "images");
+        UpdateDirectory = Path.Combine(UserDataDirectory, "updates");
         DefaultInstallDirectory = Path.Combine(ResolveInstallRoot(), ApplicationFolderName, "Games");
         LocalDatabasePath = Path.Combine(UserDataDirectory, DatabaseFileName);
     }
@@ -34,6 +35,8 @@ public sealed class PathProvider : IPathProvider
     public string DownloadStagingDirectory { get; }
 
     public string ImageCacheDirectory { get; }
+
+    public string UpdateDirectory { get; }
 
     public string DefaultInstallDirectory { get; }
 

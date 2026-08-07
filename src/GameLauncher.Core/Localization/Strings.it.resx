@@ -773,4 +773,19 @@
   <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
     <value>Quando il launcher va in crash scrive un rapporto accanto ai suoi log. Con questa opzione attiva, il rapporto viene inviato al successivo avvio. Contiene l’errore e dove è successo, mai il tuo nome, il tuo account o i tuoi percorsi — e con l’opzione disattivata non viene inviato nulla.</value>
   </data>
+  <data name="Update.Available" xml:space="preserve">
+    <value>È disponibile la versione {0} di {1}.</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>Scarica l'aggiornamento</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>Scaricamento… {0}%</value>
+  </data>
+  <data name="Update.Ready" xml:space="preserve">
+    <value>La versione {0} è stata scaricata e verificata. Installarla da sola non è ancora possibile: il file si trova in {1}.</value>
+  </data>
+  <data name="Update.Dismiss" xml:space="preserve">
+    <value>Non ora</value>
+  </data>
 </root>

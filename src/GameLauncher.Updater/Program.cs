@@ -11,11 +11,15 @@ namespace GameLauncher.Updater;
 /// of the architecture from the start rather than retrofitted later, and the command line below
 /// is the one the launcher will call — but nothing here moves a file yet.
 ///
-/// The server half arrived first, because it had to: a launcher cannot update itself against a
-/// server with no releases to offer. That surface exists now — a signed release document, a
-/// content-addressed artifact, and <c>GET /api/v1/launcher/releases/latest</c> — and is
-/// described in the backend's <c>Documentation/launcher-releases.md</c>. What is still missing
-/// is this side: the check, the download, and the swap below.
+/// The other two thirds are done. The server publishes signed releases, and as of 2026-08-07
+/// the launcher checks for them: it verifies the signature over the document as it arrived,
+/// refuses anything that is not strictly newer, and downloads an artifact only if its bytes hash
+/// to the content address inside that document. See <c>Documentation/self-update.md</c> in this
+/// repository, and <c>Documentation/launcher-releases.md</c> in the backend's.
+///
+/// What is missing is the swap below. Until it exists, a verified archive waits under
+/// <c>&lt;user data&gt;/updates/&lt;version&gt;/</c> and the launcher says so rather than
+/// claiming it is about to install it.
 /// </summary>
 internal static class Program
 {
@@ -37,8 +41,8 @@ internal static class Program
         // code over it.
         Console.Error.WriteLine(
             "The self-update swap is not implemented: this helper does not move any files yet. "
-            + "The server side of self-update exists (signed launcher releases); the client "
-            + "side does not.");
+            + "The launcher already checks for a signed release and downloads a verified "
+            + "archive; replacing the installation with it is what is missing.");
         return ExitNotImplemented;
     }
 

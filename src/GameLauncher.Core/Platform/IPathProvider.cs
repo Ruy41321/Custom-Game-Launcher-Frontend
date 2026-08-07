@@ -25,6 +25,13 @@ public interface IPathProvider
     /// </summary>
     string ImageCacheDirectory { get; }
 
+    /// <summary>
+    /// Where a downloaded launcher release waits. Under the user's data directory rather than
+    /// beside the executable, because the application directory is read-only after install and
+    /// is the very thing an update replaces.
+    /// </summary>
+    string UpdateDirectory { get; }
+
     /// <summary>Default root under which games are installed.</summary>
     string DefaultInstallDirectory { get; }
 

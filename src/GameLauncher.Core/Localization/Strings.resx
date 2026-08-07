@@ -773,4 +773,19 @@
   <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
     <value>When the launcher crashes it writes a report next to its logs. With this on, the report is sent the next time the launcher starts. It carries the error and where it happened, never your name, your account or your file paths — and nothing is sent while this is off.</value>
   </data>
+  <data name="Update.Available" xml:space="preserve">
+    <value>Version {0} of {1} is available.</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>Download the update</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>Downloading… {0}%</value>
+  </data>
+  <data name="Update.Ready" xml:space="preserve">
+    <value>Version {0} has been downloaded and checked. Installing it automatically is not available yet — the file is in {1}.</value>
+  </data>
+  <data name="Update.Dismiss" xml:space="preserve">
+    <value>Not now</value>
+  </data>
 </root>

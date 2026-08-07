@@ -773,4 +773,19 @@
   <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
     <value>Quand le lanceur plante, il écrit un rapport à côté de ses journaux. Avec cette option activée, le rapport est envoyé au démarrage suivant. Il contient l'erreur et l'endroit où elle s'est produite, jamais votre nom, votre compte ni vos chemins de fichiers — et rien n'est envoyé tant qu'elle est désactivée.</value>
   </data>
+  <data name="Update.Available" xml:space="preserve">
+    <value>La version {0} de {1} est disponible.</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>Télécharger la mise à jour</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>Téléchargement… {0} %</value>
+  </data>
+  <data name="Update.Ready" xml:space="preserve">
+    <value>La version {0} a été téléchargée et vérifiée. L'installer automatiquement n'est pas encore possible : le fichier se trouve dans {1}.</value>
+  </data>
+  <data name="Update.Dismiss" xml:space="preserve">
+    <value>Pas maintenant</value>
+  </data>
 </root>

@@ -124,12 +124,16 @@ table.
 |---|---|---|---|---|
 | auth | **no** | the API | 30 s | `IAuthApi` |
 | capabilities | **no** | the API | 30 s | `ICapabilitiesApi` |
-| API | yes | the API | 30 s | `ICatalogApi`, `ILibraryApi`, `IDownloadApi`, `IPublishingApi` |
+| crash reports | **no** | the API | 30 s | `ICrashReportApi` |
+| launcher releases | **no** | the API | 30 s | `ILauncherReleaseApi` |
+| API | yes | the API | 30 s | `ICatalogApi`, `ILibraryApi`, `IDownloadApi`, `IPublishingApi`, `IAccountApi` |
 | file server | **no** | none (absolute signed URLs) | infinite | `IBlobFetcher` |
 | artwork | **no** | none (absolute public URLs) | 30 s | `IImageLoader` |
+| launcher artifact | **no** | none (absolute public URLs) | infinite | `ILauncherUpdateDownloader` |
 
-Four registrations, five rows — the auth and capabilities clients are separate registrations of
-the same tokenless shape.
+Every row is its own registration; the tokenless ones against the API differ only in which
+client they belong to, which is the point — the separation lives in the DI graph rather than in a
+condition inside a handler.
 
 - **The auth client carries no token (D14)** because refreshing a session has to work
   *precisely* when the access token has expired. One client whose handler obtained a token
@@ -147,6 +151,12 @@ the same tokenless shape.
 - **The artwork client carries no token (D35)** for the same reason as the file server, and
   keeps the ordinary timeout for the opposite one: a cover is small, and one taking thirty
   seconds is one the page is better off without.
+- **The launcher-release client carries no token** for the sharpest reason of the four: *the
+  launcher that most needs an update is the one that cannot sign in* — pointed at a server it has
+  never reached, holding an address nobody confirmed, or carrying the very bug the update fixes.
+  The artifact it then fetches rides on a client shaped like the file server's, since a
+  self-contained launcher is tens of megabytes served from a public URL. See
+  [self-update.md](self-update.md).
 
 **What breaks if you merge them:** the token leaves the API's origin. Not in a way any test
 would catch — every request still succeeds — which is exactly why the separation lives in the
@@ -244,20 +254,15 @@ Two things make it safe and repeatable:
 
 Stated explicitly, because the alternative is a reader inferring it from silence:
 
-- **Self-update.** `GameLauncher.Updater` is a stub: its command line is designed and its
-  process boundary is real — a running executable cannot overwrite its own binaries on Windows
-  (D7) — but **it moves no files**, and nothing here checks for a new version either.
-  What has changed as of 2026-08-07 is that the other half now exists. The server publishes
-  signed launcher releases, so the thing this repository has to talk to is no longer missing:
-  `GET /api/v1/launcher/releases/latest` returns a canonical release document, a detached
-  ECDSA P-256 signature over its exact bytes, and a URL for the artifact. The contract, and the
-  five rules a client has to hold for any of it to be worth anything, are in the backend's
-  [launcher-releases.md](../../Custom-Game-Launcher-Backend/Documentation/launcher-releases.md).
-  Two of those rules decide things about *this* repository and are worth stating here: the
-  public key belongs **in the binary, not in `launcher.config.json`**, because the file the
-  updater overwrites must not be the file that authorizes the update; and a failed check must
-  never stop the launcher from starting, which is D50's reasoning about the crash uploader.
-  It is still **not** a numbered milestone.
+- **The self-update swap.** The **check** is implemented as of 2026-08-07 and has a page of its
+  own: [self-update.md](self-update.md). The launcher reads
+  `GET /api/v1/launcher/releases/latest`, verifies the ECDSA P-256 signature over the document's
+  bytes as they arrived, refuses anything not strictly newer, and fetches an artifact only if its
+  bytes hash to the content address inside the signed document.
+  What is **not** implemented is the swap: `GameLauncher.Updater` still moves no files, so a
+  verified download is announced with where it is rather than installed. Its command line is
+  designed and its process boundary is real — a running executable cannot overwrite its own
+  binaries on Windows (D7). Self-update is still **not** a numbered milestone.
 - **`UserSettings.LaunchMinimized`** exists in the model and is read by nothing, which is why
   the Settings page does not show it: an inert checkbox is worse than an absent one.
   `SendCrashReports` used to be in this position and no longer is.
@@ -271,3 +276,4 @@ Stated explicitly, because the alternative is a reader inferring it from silence
 - [publishing.md](publishing.md) — packaging, resumable upload, capabilities
 - [configuration-and-localization.md](configuration-and-localization.md) — the fork-and-rebrand surface
 - [logging-and-local-state.md](logging-and-local-state.md) — what the launcher writes to disk
+- [self-update.md](self-update.md) — checking for a newer launcher, and what is not implemented

@@ -18,12 +18,15 @@ Implemented in `Core/Configuration/{LauncherConfiguration,UserSettings}.cs`,
 
 Precedence is **user setting → shipped configuration → built-in default**.
 
-They are never merged into one file, and the reason is the self-update that does not exist yet:
-a launcher that replaces its own shipped configuration during an update must not touch anything
-the user chose. One writable config makes every update a chance to clobber somebody's language.
+They are never merged into one file, and the reason is the self-update: a launcher that replaces
+its own shipped configuration during an update must not touch anything the user chose. One
+writable config makes every update a chance to clobber somebody's language.
 
-That is a design constraint accepted **now**, before the update mechanism exists, because
-retrofitting it afterwards would mean migrating a file that already carries both.
+That constraint was accepted from the start, before any of the update mechanism existed, and it
+is the reason none of this has to be retrofitted now that the check does — see
+[self-update.md](self-update.md). It also decides where the **signing key** does *not* go: the
+file the updater overwrites cannot be the file that authorizes the update, so the key is a
+constant in the binary rather than a field here.
 
 ---
 
@@ -36,6 +39,7 @@ retrofitting it afterwards would mean migrating a file that already carries both
   "theme": { "variant": "dark", "accentColor": "#7C5CFF" },
   "branding": { "logoPath": "assets/logo.png", "windowIconPath": null },
   "localization": { "defaultLanguage": null, "supportedLanguages": ["en", "it", "fr"] },
+  "updates": { "channel": "stable" },
   "defaultInstallDirectory": null
 }
 ```
@@ -47,7 +51,20 @@ retrofitting it afterwards would mean migrating a file that already carries both
 | `theme.variant` | `dark` — the product default. `light` and `system` are the alternatives |
 | `branding.logoPath` | the built-in asset; the path is relative to the application directory |
 | `localization.defaultLanguage` | **follow the operating system's UI language** |
+| `updates.channel` | `stable`. `beta` is the other one, and anything unrecognised is read as `stable` |
 | `defaultInstallDirectory` | decide from the platform — the right answer on a machine the packager knows nothing about |
+
+### Why the channel is here and not in the user's settings
+
+Which release stream a launcher follows is the choice of **whoever distributes it**. A player who
+could move themselves onto a stream their distributor never published to would be a player who
+can replace their own launcher with a build nobody meant them to have, and the launcher is the
+program that has to still start in order to fix anything.
+
+It is also the one field whose invalid value does **not** fail validation: an unrecognised
+channel is read as `stable`. `apiBaseUrl` is refused because a launcher pointed at nothing is
+useless anyway, while a launcher that will not open because of a spelling mistake in a channel
+name is a working launcher destroyed by a typo.
 
 ### Validation reports everything, and fails hard
 
@@ -89,11 +106,15 @@ somebody's gigabytes because a preference changed is a different action from cho
 next install lands. A configured directory that cannot be created falls back to the platform
 default rather than refusing to install.
 
-**`SendCrashReports` and `LaunchMinimized` are not shown in the Settings page**, deliberately.
-Nothing reads them: crash-report upload is not implemented, and neither is starting minimised.
-An inert checkbox is worse than an absent one, because it makes a promise the launcher does not
-keep. They stay in the model because removing them would mean a settings-file migration for a
-field that is coming back.
+**`LaunchMinimized` is not shown in the Settings page**, deliberately: nothing reads it, and an
+inert checkbox is worse than an absent one because it makes a promise the launcher does not keep.
+It stays in the model because removing it would mean a settings-file migration for a field that
+is coming back. `SendCrashReports` used to be in the same position and is now on the page,
+because the uploader that reads it exists — see
+[logging-and-local-state.md](logging-and-local-state.md).
+
+There is deliberately **no update setting here at all**: the channel belongs to the packager
+(above), and whether to install an offered update is a button rather than a preference.
 
 ---
 
@@ -158,13 +179,24 @@ product default; `light` and `system` are supported. The accent colour is a `#RR
 
 ## What a fork actually has to do
 
-1. Edit `launcher.config.json`: name, `apiBaseUrl`, accent colour, logo.
+1. Edit `launcher.config.json`: name, `apiBaseUrl`, accent colour, logo, release channel.
 2. Drop in the logo and window icon assets.
 3. Optionally add or remove languages.
-4. `dotnet publish -c Release -r <rid> --self-contained` for each runtime identifier.
+4. **If the fork publishes launcher releases**, put its signing key's public half in
+   `LauncherReleaseKey.PublicKeyBase64` — one line in
+   `src/GameLauncher.Core/Updates/LauncherReleaseKey.cs`.
+5. `dotnet publish -c Release -r <rid> --self-contained` for each runtime identifier.
 
-No code changes, no rebuild of the resource assembly, no search-and-replace across the tree.
-That is the property this whole document exists to keep true.
+**Step 4 is the only code change a fork makes, and it is deliberate.** Everything else is
+configuration; the key is not, because *the file the updater overwrites must not be the file that
+authorizes the update* — `launcher.config.json` ships inside the directory a swap replaces. The
+reasoning in full is in [self-update.md](self-update.md).
+
+A fork that does not sign releases skips it: the key is empty by default, and an empty key means
+the launcher checks for no updates at all rather than checking and trusting whoever answers.
+
+Apart from that one line: no rebuild of the resource assembly, no search-and-replace across the
+tree. That is the property this whole document exists to keep true.
 
 ---
 
@@ -182,3 +214,4 @@ That is the property this whole document exists to keep true.
 - [architecture.md](architecture.md) — the start-up sequence that reads both files synchronously
 - [logging-and-local-state.md](logging-and-local-state.md) — where the user's file actually lives
 - [downloads-and-installs.md](downloads-and-installs.md) — what `InstallDirectory` changes and what it does not
+- [self-update.md](self-update.md) — the signing key, the channel, and why they live where they do

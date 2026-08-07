@@ -11,6 +11,7 @@ using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
+using GameLauncher.Core.Updates;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -37,6 +38,20 @@ public sealed class MainWindowViewModelTests
 
     private readonly IImageProvider _images = Substitute.For<IImageProvider>();
 
+    private readonly IUpdateChecker _updates = Substitute.For<IUpdateChecker>();
+
+    private readonly ILauncherUpdateDownloader _updateDownloader =
+        Substitute.For<ILauncherUpdateDownloader>();
+
+    /// <summary>
+    /// Every start asks about updates, so the answer is arranged here rather than in the
+    /// factory: an unconfigured substitute hands back a null result, and the failure would show
+    /// up inside the banner instead of in whatever the test was actually about.
+    /// </summary>
+    public MainWindowViewModelTests() =>
+        _updates.CheckAsync(Arg.Any<CancellationToken>())
+            .Returns(UpdateCheckResult.NotConfigured);
+
     private MainWindowViewModel CreateShell()
     {
         _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new UserSettings());
@@ -61,6 +76,9 @@ public sealed class MainWindowViewModelTests
             _authentication,
             _installations,
             _crashReports,
+            _updates,
+            _updateDownloader,
+            errors,
             new LoginViewModel(_authentication, errors, _localization),
             new ExploreViewModel(
                 _catalog,
@@ -333,6 +351,149 @@ public sealed class MainWindowViewModelTests
         shell.GameDetail.BackCommand.Execute(null);
 
         Assert.Same(shell.Library, shell.CurrentPage);
+    }
+
+    private static ReleaseDocument Release(int major, int minor, int patch, string notes = "") =>
+        new()
+        {
+            Version = new ReleaseVersion(major, minor, patch),
+            Platform = "windows",
+            Arch = "x64",
+            Sha256 = new string('a', 64),
+            Size = 400,
+            ReleasedAt = "2026-08-07T10:00:00Z",
+            Notes = notes,
+        };
+
+    // Announced, never applied on its own: a swap needs this process to exit, so a silent
+    // update is an application closing under the hands of somebody using it.
+    [Fact]
+    public async Task AnAvailableUpdateIsAnnouncedAndNothingIsFetchedYet()
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(
+                Release(0, 2, 0, "Self-update, at last."), "https://files.example.test/l.zip"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(shell.UpdateAvailable);
+        Assert.Contains("0.2.0", shell.UpdateHeadline, StringComparison.Ordinal);
+        Assert.Contains("Test Launcher", shell.UpdateHeadline, StringComparison.Ordinal);
+        Assert.Equal("Self-update, at last.", shell.UpdateNotes);
+        Assert.Empty(shell.UpdateStatus);
+
+        await _updateDownloader.DidNotReceiveWithAnyArgs().DownloadAsync(
+            default!, default!, default, TestContext.Current.CancellationToken);
+    }
+
+    [Theory]
+    [InlineData(UpdateAvailability.NotConfigured)]
+    [InlineData(UpdateAvailability.UpToDate)]
+    [InlineData(UpdateAvailability.Undetermined)]
+    public async Task AnythingButAnAvailableUpdateIsSilence(UpdateAvailability availability)
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>())
+            .Returns(new UpdateCheckResult { Availability = availability });
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(shell.UpdateAvailable);
+        Assert.Empty(shell.UpdateStatus);
+        Assert.Same(shell.Login, shell.CurrentPage);
+    }
+
+    // What the person is told when the download succeeds is where the verified archive is —
+    // not that the launcher is about to replace itself, which it cannot do yet.
+    [Fact]
+    public async Task AVerifiedDownloadSaysWhereTheFileIsAndPromisesNothingMore()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), "updates", "0.2.0");
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
+        _updateDownloader
+            .DownloadAsync(
+                Arg.Any<ReleaseDocument>(),
+                Arg.Any<string>(),
+                Arg.Any<IProgress<long>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Path.Combine(directory, "launcher.zip"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+        await shell.DownloadUpdateCommand.ExecuteAsync(null);
+
+        Assert.Contains(directory, shell.UpdateStatus, StringComparison.Ordinal);
+        Assert.Contains("not available yet", shell.UpdateStatus, StringComparison.Ordinal);
+        Assert.False(shell.CanDownloadUpdate);
+    }
+
+    // Bytes that are not the ones the signed document named are refused, and the offer stands:
+    // an interrupted transfer and a host serving the wrong file are both worth one more press.
+    [Fact]
+    public async Task ARefusedDownloadIsSaidAndTheOfferStands()
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
+        _updateDownloader
+            .DownloadAsync(
+                Arg.Any<ReleaseDocument>(),
+                Arg.Any<string>(),
+                Arg.Any<IProgress<long>>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Integrity, "hashes to something else"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+        await shell.DownloadUpdateCommand.ExecuteAsync(null);
+
+        Assert.Equal(_localization.Translate("Error.Integrity"), shell.UpdateStatus);
+        Assert.True(shell.CanDownloadUpdate);
+        Assert.True(shell.UpdateAvailable);
+    }
+
+    // The banner's sentences are built in code rather than bound through {loc:Tr}, so without
+    // this they would stay in the language they were first written in. Found by looking at the
+    // window, where the headline was French and the line under it Italian.
+    [Fact]
+    public async Task TheUpdateLineFollowsALanguageChange()
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
+        _updateDownloader
+            .DownloadAsync(
+                Arg.Any<ReleaseDocument>(),
+                Arg.Any<string>(),
+                Arg.Any<IProgress<long>>(),
+                Arg.Any<CancellationToken>())
+            .Returns(Path.Combine(Path.GetTempPath(), "updates", "0.2.0", "launcher.zip"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+        await shell.DownloadUpdateCommand.ExecuteAsync(null);
+
+        await shell.ChangeLanguageCommand.ExecuteAsync(
+            shell.Languages.Single(language => language.CultureName == "it"));
+
+        Assert.Equal(
+            _localization.Translate("Update.Available", "0.2.0", "Test Launcher"),
+            shell.UpdateHeadline);
+        Assert.Contains("non è ancora possibile", shell.UpdateStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheUpdateLineCanBePutAwayForThisRun()
+    {
+        _updates.CheckAsync(Arg.Any<CancellationToken>()).Returns(
+            UpdateCheckResult.Available(Release(0, 2, 0), "https://files.example.test/l.zip"));
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        shell.DismissUpdateCommand.Execute(null);
+
+        Assert.False(shell.UpdateAvailable);
     }
 
     [Fact]

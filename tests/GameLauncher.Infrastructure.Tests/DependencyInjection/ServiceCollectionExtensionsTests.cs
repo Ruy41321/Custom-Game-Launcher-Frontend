@@ -9,6 +9,7 @@ using GameLauncher.Core.Localization;
 using GameLauncher.Core.Media;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
+using GameLauncher.Core.Updates;
 using GameLauncher.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -55,6 +56,10 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(ICrashReportApi))]
     [InlineData(typeof(ICrashReportUploader))]
     [InlineData(typeof(IServerCapabilityProvider))]
+    [InlineData(typeof(ILauncherReleaseApi))]
+    [InlineData(typeof(ILauncherUpdateDownloader))]
+    [InlineData(typeof(IUpdateChecker))]
+    [InlineData(typeof(UpdateSettings))]
     public void EveryRegisteredServiceCanActuallyBeBuilt(Type serviceType)
     {
         using ServiceProvider provider = BuildProvider();
@@ -87,6 +92,23 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.NotNull(provider.GetRequiredService<IAccountService>());
         Assert.NotNull(provider.GetRequiredService<IAuthenticationService>());
+    }
+
+    /// <summary>
+    /// The key is compiled in and the shipped repository carries none, so an unmodified build
+    /// of this launcher checks for no updates at all — which is the correct state for a fork
+    /// that has not set up signing, and the one a test should notice changing.
+    /// </summary>
+    [Fact]
+    public void TheUpdateSettingsComeFromTheAssemblyTheConfigurationAndTheBinary()
+    {
+        using ServiceProvider provider = BuildProvider();
+
+        UpdateSettings settings = provider.GetRequiredService<UpdateSettings>();
+
+        Assert.Equal(ReleaseTargets.StableChannel, settings.Channel);
+        Assert.Empty(settings.PublicKeyBase64);
+        Assert.True(ReleaseVersion.TryParse(settings.CurrentVersion, out _));
     }
 
     [Fact]

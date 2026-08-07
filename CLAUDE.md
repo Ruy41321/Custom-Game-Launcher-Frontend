@@ -17,7 +17,9 @@ friends and small tester groups without zip files on Discord or manual Drive lin
 This repository is the **client**: an Avalonia application for **Windows, Linux and macOS**.
 It handles authentication, library and store browsing, resumable delta downloads, install
 management, game launching, and publishing — builds, artwork and the devlog — from the
-developer dashboard. Updating *itself* is designed and not implemented; see §10.
+developer dashboard. It also **checks** for a newer signed release of itself and downloads a
+verified one; replacing the installation with it is the one piece still unimplemented. See §10
+and `Documentation/self-update.md`.
 
 Anyone can fork it and rebrand it by editing a single `launcher.config.json`.
 
@@ -122,6 +124,9 @@ belongs in Infrastructure behind an interface declared in Core.
 | D51 | **Explore grows by scrolling, and the two entry points are separate: one replaces the list, the other appends to it** | A scroll handler fires on every scroll event, so a single "load" that decided for itself whether it was replacing or appending would be one flag away from clearing the grid under somebody's cursor. `LoadAsync` and `LoadMoreAsync` say which they are at the call site instead. Three rules hang off that: only one request is ever in flight, because one flick of a wheel would otherwise be several requests for the same page and several copies of it in the list; the page number advances only on an answer that arrived, so a failure or a superseded search leaves the next scroll retrying the page nobody saw rather than stepping over it; and the end of the list is a state read from the server's own count — asking until an empty page comes back means one wasted request every time anybody reaches the bottom. The scroll gesture itself is an attached behaviour holding no policy, because a rule in a code-behind is a rule no test can press (D32, D46), and the scroll offset returns to the top on a *replacement* only, which is what makes an append not jump. | One `LoadAsync` with a boolean (the clear-under-the-cursor bug is one wrong argument away); no in-flight guard (duplicate pages, and duplicate cards); inferring the end from an empty response (a wasted round trip at the bottom of every list, every time); a `ScrollChanged` handler in the code-behind (untestable, and the policy ends up next to the geometry); virtualisation now (a bigger change, and the catalogs this targets fit) |
 | D52 | **The registration answer says whether the message went out, and the screen says two different things** | The server does not undo a registration because its relay was down, so "the account exists" and "the link is on its way" stopped being the same fact. The client reads `verificationEmailSent` and tells the person either to check their inbox or to ask for the link again — because watching an inbox nothing was sent to is a wait with no end, and it looks exactly like the launcher having lost the message. The field defaults to **false**, which is how a server too old to send it is read: "ask again" is harmless against a server that did send, and "wait" is not. The `dev*` token fields are gone from `RegistrationResult` and `RequestPasswordResetAsync` returns nothing at all — the link is delivered by mail and the page it lands on is the server's, so there is nothing left for a client to hold. | One sentence for both outcomes (the failure case reads as a broken launcher); defaulting the field to true (an older server silently tells everybody to wait); keeping the dev fields for "development convenience" (the affordance the server just removed, re-implemented here) |
 | D53 | **The launcher asks for the two links and never finishes either flow; the affordance appears only where it means something, and a refusal is not an error** | Three dead ends opened the moment the server started sending mail, and all three are on the sign-in screen: no way to ask for a password reset, no way to ask for the verification link again, and — the one nobody had written down — a sign-in refused for an unconfirmed address reading *"Your account is not allowed to do that"*, because the server answers 403 for that and for a disabled account with the same code. The launcher now **triggers** both messages and lets the browser finish on the server's own pages: putting the two password fields here would be a second place for a product rule that only the server enforces, which is D40's reasoning on a surface where the client protects nothing by copying, and it would mean teaching people to paste a token out of their mail client. The resend is offered after **any** registration that needs verifying — sent or not, because a message that was filtered leaves somebody exactly where one that never left does — and after a 403, where the client says the cause a person can act on and offers the button; for a disabled account that button is harmless, since the route answers identically and sends nothing. Every success sentence is **conditional**, so a client cannot become the enumeration oracle the server refuses to be. A 429 is shown on the info line rather than in red, with the wait named only at two minutes or more so that no resx has to decline "1 minutes"; and a **successful** request disarms its own button until the address changes, while a refused one does not, because waiting and pressing again is the answer to a 429. | A screen per flow inside the launcher (a second definition of the password rules, and a token pasted by hand); a custom URI scheme (an OS-level protocol registration on three platforms, for a project with no installer); the resend always visible (an invitation to spend a rate limit nobody needs); a countdown from `Retry-After` (it is per IP, so it locks out somebody who pressed nothing, and a restart clears it — a promise the launcher cannot keep); showing the 429 as an error (the person most likely to see it is the one whose message never arrived); leaving the 403 wording alone (a resend button under a sentence that explains neither cause) |
+| D54 | **The release signing key is a constant in the binary and empty by default; the channel is a shipped configuration field read leniently** | The two halves of "what a fork changes" pull in opposite directions and both answers are forced. The **key** cannot live in `launcher.config.json` because *the file the updater overwrites must not be the file that authorizes the update* — that file ships inside the directory a swap replaces, so a key kept there would be replaced by whatever the update brought with it, while a constant lives inside the artifact whose replacement the signature already protects. It is therefore the **one thing a fork changes in code**, and `configuration-and-localization.md` says so rather than keeping its "no code changes" promise by omission. Empty is the default and means the launcher **asks for nothing at all**, which is the honest state for a fork that has not set up signing and the same answer the server reaches from the other end. The **channel** is the opposite: it is configuration, because which stream a launcher follows is the distributor's choice — a player who could move themselves onto a stream nobody published for them could replace their launcher with a build that does not open, and the launcher is the program that has to start in order to fix anything. And an unrecognised channel is read as `stable` instead of failing `Validate()`: `apiBaseUrl` is worth a hard refusal because a launcher pointed at nothing is useless anyway, while a typo in a channel name would destroy a working launcher over a spelling mistake. | The key in `launcher.config.json` (an update can rewrite the thing that authorizes updates); a key fetched from the server (the server would be vouching for itself); no key at all being an error (a fork that does not sign releases could not run); the channel as a user setting (a one-way trip onto a stream nobody meant them to have); a channel typo failing validation (a launcher that will not open because of a spelling mistake) |
+| D55 | **The check verifies the arrived bytes before parsing, refuses a document that is not for this launcher, and is silent about every failure** | The order is the rule: `ReleaseSignature.Verify` runs on the UTF-8 bytes of the document string exactly as the route served them, and `ReleaseDocument.TryParse` only ever sees bytes that already verified — D19's manifest rule applied to the thing that replaces the launcher itself. Nothing rebuilds a canonical form to compare against, because that would be a second definition of a wire contract in a second language; the server does that check once, at publish time. Two refusals go beyond the five rules the backend states. The document must **say** it is for this channel, platform and architecture, which is where signing the document rather than the artifact pays off — a server holding genuine signed releases cannot hand a Windows launcher the Linux one — and the artifact URL must be `http` or `https`, the refusal `CachingImageLoader` already applies to a host the server named (D35). Everything else is `Undetermined` and a log line: an unreachable server, a 404, a body that is not JSON, a signature that does not verify. A **404 is read as up to date**, because no key on that server, nothing published, and nothing for this platform are one situation from here — which is why the server answers 404 to all three. `ECDsa` does the whole thing with no new package, and the algorithm is pinned rather than read from the key, so a deployment given an RSA key is a launcher that checks nothing instead of one verifying with an algorithm nobody chose. | Parsing before verifying (the wrong document is already described by then); re-canonicalising client-side (two definitions of one contract, which drift); trusting the query parameters instead of the signed document (a signed release served as one it is not); showing a failed check to the user (an error nobody can act on, on a launcher that works); treating a 404 as a failure (one red line per start on every deployment that publishes no releases); a managed Ed25519 or a native binding (a crypto dependency across four RIDs, in a repository that refused one over thirty lines of test code) |
+| D56 | **An update is announced and downloaded, never installed on its own — and the banner's sentences are rebuilt when the language changes** | A swap requires this process to exit, so a silent update is an application closing under the hands of somebody using it: one line, the release notes, a button, and a way to put it away until the next start. Because the swap does not exist yet, what a successful download says is **where the verified archive is** — promising a restart the launcher cannot perform would be the one kind of lie this feature cannot afford, and it is the same honesty the updater's own `Main` was corrected into. The download is in this piece rather than the next one because it is what makes the content-address refusal real: a rule nothing exercises is a rule nobody has checked. The second half was found by driving the real window: the banner's strings are built in code, like `WelcomeMessage`, so they do not re-evaluate the way a `{loc:Tr}` binding does — the headline stayed French under a line that had become Italian. `RefreshLocalizedText` now rebuilds both, with the status kept as a `Func<string>` so an outcome sentence and an error sentence re-render the same way. | Installing silently (an application that closes under somebody's hands); a button that says "Update and restart" before the updater moves files (a promise the launcher cannot keep); leaving the download to the swap commit (the hash refusal would ship untested against a real server); building the sentences once (a banner stuck in the language it first appeared in) |
 ---
 
 ## 4. Download and install model
@@ -260,6 +265,35 @@ Two things make it safe and repeatable:
 Seeding the server needs a publisher account, a public game and a `ready` build — the sequence
 is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
 
+### Exercising the update check against a real release
+
+The same harness reaches this with no account at all, since the route takes no token. What it
+needs is a key pair and one published release; `openssl` is on this machine through Git Bash
+(§7), so none of it has to happen inside a container:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out release-signing.key
+openssl ec -in release-signing.key -pubout -outform DER | openssl base64 -A
+#   -> LAUNCHER_RELEASE_PUBLIC_KEY in the backend's .env, then restart the api
+#   -> and the same string in LauncherReleaseKey.PublicKeyBase64 to exercise the shipped path
+
+# The document must have NO trailing newline: use printf, never echo.
+printf '%s' '{"schema":1,"channel":"stable","version":"0.4.0","platform":"windows","arch":"x64","sha256":"<64 hex>","size":<bytes>,"releasedAt":"2026-08-07T14:00:00Z","notes":"..."}' > release.json
+openssl dgst -sha256 -sign release-signing.key release.json | openssl base64 -A > release.json.sig
+```
+
+Then `docker compose cp` the three files and `--publish-release` them (backend `CLAUDE.md` §7).
+To see the artifact refusal, change the stored bytes **after** publishing, which leaves the
+document and its signature intact:
+
+```bash
+docker compose exec api sh -c "printf 'Z' | dd of=/data/launcher/ab/cd/<sha>.zip bs=1 seek=100 conv=notrunc"
+```
+
+A `UpdateChecker` can be constructed directly with an `UpdateSettings` of the harness's choosing,
+which is how one run covers a launcher on 0.1.0, one already on 0.4.0, one on 0.9.0, one holding
+a different key and one holding none.
+
 ---
 
 ## 7. Environment gotchas (verified on the maintainer's machine)
@@ -304,6 +338,11 @@ is in `HANDOFF.md`, and the backend's `CLAUDE.md` §7 has the devlist grant.
 | **`Progress<T>` posts its callback to a captured context** | With no `SynchronizationContext` — which is every test — that means the thread pool, so a test that asserts on what a progress callback recorded is asserting on whether the pool has caught up. Both test projects have a synchronous `IProgress<T>` for this; the view model funnels every report through one property so the same path is exercised either way |
 | **The Fluent theme paints a disabled button's background whatever the class says** | `Button.link` sets `Background=Transparent`, and a *disabled* link still came out as a grey box, because the theme styles the templated `ContentPresenter` and that wins. A link waiting on an empty field therefore looked like a broken button. The fix is a selector that reaches into the template — `Button.link:disabled /template/ ContentPresenter#PART_ContentPresenter` — and nothing in the suite could have caught it: it was found by looking at the window |
 | **The real window can be driven from PowerShell with UI Automation, and a button's name is its `Content`** | `[AutomationElement]::FromHandle($p.MainWindowHandle)` plus `ValuePattern` and `InvokePattern` types text into the boxes and presses the buttons of the running launcher — which is the only way to press a real button, since there are no UI tests. One trap: the automation name comes from `Content`, so `Content="{loc:Tr Auth.ForgotPassword}"` is findable by its text, while a button whose content is a `Panel` of two `TextBlock`s is named **`Avalonia.Controls.Panel`**. Searching for the visible text then finds the *TextBlock*, and invoking it fails with "Pattern non supportato" — which reads like UIA being broken rather than the wrong element |
+| **`openssl` *is* on this machine, through Git for Windows** | `/mingw64/bin/openssl` (3.2.4), on `PATH` inside Git Bash. The backend's notes say it is absent and to run it inside the toolchain image, which is one more container round trip than generating a key pair or signing a document needs. It is not on PowerShell's `PATH`, which is presumably where that note came from |
+| **A named EC curve comes back in different halves of an `Oid` on different platforms** | `ECDsa.ExportParameters(false).Curve.Oid` populates `Value` on some runtimes and only `FriendlyName` (`nistP256`, `ECDSA_P256`, …) on others, so a P-256 check written against one of them passes locally and rejects every key on another platform — with the launcher then silently checking for no updates. `ReleaseSignature.IsP256` accepts either, and the suite covers it by importing keys it generated itself |
+| **A `TryParse` with an `out T?` fails the build at its *caller*** | `if (TryParse(bytes, out ReleaseDocument? doc, out _)) { doc.Version … }` is CS8602 under `TreatWarningsAsErrors` unless the parameter carries `[NotNullWhen(true)]`. The error points at the caller, so it reads like the caller being wrong rather than the signature being under-annotated |
+| **A running launcher locks `GameLauncher.exe`, and `dotnet test` then fails as MSB3027** | Driving the window by hand and running the suite in the same session do not mix: the App project's post-build copy cannot replace a running executable, and the failure ("il file è bloccato da: GameLauncher (pid)") reads like a corrupted build. Stop the process first |
+| **`{loc:Tr}` bindings do not follow a language change, and strings built in code do** | Verified in the running window on 2026-08-07: switching from Italian to English updated `WelcomeMessage` and the update banner — both rebuilt in code on `LanguageChanged` — while every `Text="{loc:Tr …}"` label stayed Italian, which contradicts D3's promise that switching needs no restart. Two consequences: any sentence a view model builds itself **must** be rebuilt in `RefreshLocalizedText`, and the binding half is a real open bug (see `HANDOFF.md`). The likely cause is that Avalonia does not treat `PropertyChanged("Item[]")` as invalidating an indexer binding; `LocalizationSource` raises exactly that |
 | **`Graphics.CopyFromScreen` photographs whatever is on top of that rectangle** | It captured an unrelated window sitting over the launcher, so the screenshot showed something else entirely. `PrintWindow($hwnd, $hdc, 2)` renders the target window itself, works when it is occluded, and does **not** steal focus from whatever the maintainer is doing. Also: `Add-Type -MemberDefinition` already emits `using System.Runtime.InteropServices;`, so passing `-UsingNamespace` for it fails the compile as a warning-as-error |
 
 ---
@@ -680,25 +719,63 @@ Both flows still **end in a browser**, and `VerifyEmailAsync` / `ConfirmPassword
 still have no caller — now as a decision with its reasons written down (D53) rather than as the
 thing nobody got to.
 
+### Self-update, the check — verified on 2026-08-07
+
+The first of the two client pieces the server's release surface was waiting for. The launcher
+now finds out that a newer launcher exists, proves it, and says so; installing it is the second
+piece and is still a stub.
+
+- ✅ `Core/Updates`: `ReleaseDocument` (parsed only after its signature verifies),
+  `ReleaseVersion` (numeric, strictly newer), `ReleaseSignature` (ECDsa P-256/SHA-256, pinned,
+  never throwing), `ReleaseTargets`, and `UpdateChecker` — which holds the backend's five rules
+  and two refusals beyond them (D55)
+- ✅ `LauncherReleaseKey.PublicKeyBase64`, empty in this repository: **the one thing a fork
+  changes in code**, and an empty key means the launcher asks for nothing (D54)
+- ✅ `updates.channel` in `launcher.config.json`, `stable` or `beta`, with anything else read as
+  `stable` rather than failing validation (D54)
+- ✅ `ILauncherReleaseApi` on the tokenless client — a fourth one, beside `/auth`,
+  `/capabilities` and the crash reports — and `ILauncherUpdateDownloader` on a client shaped
+  like the file server's, which refuses bytes that are not the ones the signed document named
+- ✅ One line in the shell: the version, the notes, a button that downloads and verifies, and a
+  way to put it away for this run. Nothing installs itself (D56)
+- ✅ [Documentation/self-update.md](Documentation/self-update.md), the ninth page, which states
+  what is **not** implemented as plainly as what is
+- ✅ 5 new resource keys in English, Italian and French
+- ✅ 785 tests green on Windows (271 Core, 276 Infrastructure, 238 App), `dotnet format` clean
+
+**Verified by hand against the real stack**, because the suite has no file server and cannot
+hold a private key the way a person does: a key pair generated offline, a release published with
+`--publish-release`, and the client's own DI graph asking the route with **no token**. A launcher
+declaring 0.1.0 was offered 0.4.0 and fetched an artifact that hashed to what was signed; the
+same live release was refused by a launcher already on 0.4.0, by one on 0.9.0 (the replay), by
+one holding another key, and asked for nothing at all by one with no key. Then the artifact was
+**edited on the file server** with the document and signature untouched, twice — one byte longer,
+and one byte changed — and both were refused, the second at the hash with a log line naming the
+release. Finally the real window, driven by UI Automation: the banner appeared on the sign-in
+screen, the button downloaded and verified, and the line said where the archive is rather than
+claiming a restart.
+
+**One bug found and fixed by looking at the window** (D56), and one found and *not* fixed: the
+`{loc:Tr}` bindings do not follow a language change at all. See §7 and `HANDOFF.md`.
+
 ### Next up
 
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —
 it was part of M8 in the original plan and came out of it because it cannot be built here alone.
 
-- ⬜ **Self-update.** The server half landed on 2026-08-07 and is described in the backend's
-  `Documentation/launcher-releases.md`; two pieces are left, and both are here.
-  **The check**: read `GET /api/v1/launcher/releases/latest?channel=&platform=&arch=` — no
-  token, and it must never be able to stop the launcher from starting (D50's reasoning about
-  the crash uploader, which holds identically) — then verify the ECDSA P-256 signature over
-  the document's bytes *as they arrived*, refuse any version that is not strictly newer than
-  this one, and refuse an artifact whose bytes do not hash to the content address inside the
-  signed document. The public key goes **in the binary**, not in `launcher.config.json`: the
-  file the updater overwrites must not be the file that authorizes the update, and that makes
-  it the one thing a fork has to change in code. The channel *is* a `launcher.config.json`
-  field, because which stream a launcher is on is the distributor's choice and not the
-  player's. `System.Security.Cryptography.ECDsa` does all of it with no new package.
-  **The swap**: `GameLauncher.Updater` still moves no files. Its `Main` now says so instead of
-  naming a milestone that closed without it
+- ⬜ **The self-update swap.** `GameLauncher.Updater` still moves no files; its command line is
+  already designed (`--source`, `--target`, `--wait-for-pid`, `--relaunch`). The agreed plan:
+  rename the old installation to `previous/` rather than deleting it (a rename, not a copy —
+  same filesystem, atomic), put the new one in place, `--relaunch`, and **wait on that process
+  for about thirty seconds**; a non-zero exit inside the window restores `previous/` and starts
+  the old one again, still alive at thirty seconds or an exit with zero is a success and
+  `previous/` goes. No marker file and no IPC: the decision is a pure function of (exit code,
+  elapsed time), which is the only shape in which the hardest-to-test piece in the repository
+  becomes testable. The declared hole: a launcher that starts, survives thirty seconds and then
+  crashes is not rolled back — that is what the crash reports are for — and `--rollback` stays a
+  documented manual flag while `previous/` exists. It has to be verified **on real Windows**
+- ⬜ **The language switch that does not switch** (§7). Every `{loc:Tr}` label keeps the language
+  it was first rendered in, which is the feature D3 exists to provide
 
 ---
 

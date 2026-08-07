@@ -14,8 +14,21 @@ public sealed class PathProviderTests
         Assert.True(Path.IsPathRooted(paths.LogDirectory));
         Assert.True(Path.IsPathRooted(paths.DownloadStagingDirectory));
         Assert.True(Path.IsPathRooted(paths.ImageCacheDirectory));
+        Assert.True(Path.IsPathRooted(paths.UpdateDirectory));
         Assert.True(Path.IsPathRooted(paths.DefaultInstallDirectory));
         Assert.True(Path.IsPathRooted(paths.LocalDatabasePath));
+    }
+
+    // A downloaded launcher release goes under the user's data directory and never beside the
+    // executable: the application directory is read-only after install, and is the very thing
+    // an update replaces.
+    [Fact]
+    public void ADownloadedUpdateWaitsUnderTheUserDataDirectory()
+    {
+        var paths = new PathProvider();
+
+        Assert.StartsWith(paths.UserDataDirectory, paths.UpdateDirectory, StringComparison.Ordinal);
+        Assert.NotEqual(paths.ApplicationDirectory, paths.UpdateDirectory);
     }
 
     // The database holds what is installed, which has to outlive a cleared staging directory
@@ -52,6 +65,7 @@ public sealed class PathProviderTests
             paths.LogDirectory,
             paths.DownloadStagingDirectory,
             paths.ImageCacheDirectory,
+            paths.UpdateDirectory,
             paths.DefaultInstallDirectory,
         ];
 

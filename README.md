@@ -13,9 +13,11 @@ The server side lives in
 > **Status:** in development. Authentication, Explore with infinite scrolling, the library,
 > delta downloads and installs, launching, offline mode, artwork and the devlog, settings,
 > account deletion, opt-in crash reports, and a developer dashboard that publishes builds,
-> uploads artwork, writes the devlog and deletes what it created all work. **Self-update is
-> still a stub**: the server publishes signed launcher releases as of 2026-08-07, and
-> nothing here checks for one or swaps a file yet. Confirming an address and resetting a
+> uploads artwork, writes the devlog and deletes what it created all work. **Self-update
+> checks but does not yet install**: the launcher verifies the signature on a published
+> release, refuses anything that is not strictly newer, and downloads an artifact only if its
+> bytes hash to what was signed — but the swap that replaces the installation is still a stub.
+> Confirming an address and resetting a
 > password are finished **in a browser**, on pages the server serves — the launcher has no
 > screen for either. See
 > [CLAUDE.md](CLAUDE.md#10-progress) for the current state and `Documentation/` for what each
@@ -33,8 +35,9 @@ The server side lives in
 - **A developer dashboard** — create a game, publish a build from a directory, upload covers
   and screenshots, write the devlog, and delete any of it
 - **Crash reports** — off until you turn them on, redacted before they are written to disk
-- **Self-updating** — *planned.* The separate updater process exists as a stub; it needs a
-  launcher-release surface on the server before it can be finished
+- **Self-updating** — *half done.* The launcher tells you when a newer signed release exists
+  and fetches it, refusing anything not strictly newer and any bytes that are not the ones the
+  signature covered. Installing it is still the updater's stub
 - **Dark theme by default**, configurable, with Italian / English / French from day one
 
 ## Requirements
@@ -102,7 +105,7 @@ it, and what is deliberately not implemented yet.
 
 | Document | What it covers |
 |---|---|
-| [architecture.md](Documentation/architecture.md) | The three projects, the dependency rule, MVVM, start-up, the four HTTP clients |
+| [architecture.md](Documentation/architecture.md) | The three projects, the dependency rule, MVVM, start-up, the HTTP clients |
 | [authentication-and-session.md](Documentation/authentication-and-session.md) | Sign-in, token rotation, where the session is stored, working offline |
 | [catalog-and-artwork.md](Documentation/catalog-and-artwork.md) | Explore, the library, the game page, covers, the image cache, the devlog |
 | [downloads-and-installs.md](Documentation/downloads-and-installs.md) | Plan, staging, apply, verification, install states, startup recovery |
@@ -110,6 +113,7 @@ it, and what is deliberately not implemented yet.
 | [publishing.md](Documentation/publishing.md) | Packaging, resumable upload, server capabilities, the developer dashboard |
 | [configuration-and-localization.md](Documentation/configuration-and-localization.md) | `launcher.config.json`, user settings, `.resx`, forking and rebranding |
 | [logging-and-local-state.md](Documentation/logging-and-local-state.md) | What the launcher writes to disk, on all three platforms |
+| [self-update.md](Documentation/self-update.md) | Checking for a newer launcher, the five rules it holds, and the swap that is not implemented |
 
 ## Project layout
 

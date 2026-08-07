@@ -33,6 +33,7 @@ public sealed class LauncherConfigurationProviderTests
               "apiBaseUrl": "https://games.example.com/api/v1/",
               "theme": { "variant": "light", "accentColor": "#FF8800" },
               "localization": { "defaultLanguage": "it", "supportedLanguages": ["en", "it", "fr"] },
+              "updates": { "channel": "beta" },
               "defaultInstallDirectory": "D:/Games"
             }
             """);
@@ -45,6 +46,10 @@ public sealed class LauncherConfigurationProviderTests
         Assert.Equal("light", configuration.Theme.Variant);
         Assert.Equal("#FF8800", configuration.Theme.AccentColor);
         Assert.Equal("it", configuration.Localization.DefaultLanguage);
+
+        // Which release stream a launcher follows is the packager's choice, not the player's,
+        // so it lives in the shipped file rather than in the user's settings.
+        Assert.Equal("beta", configuration.Updates.Channel);
         Assert.Equal("D:/Games", configuration.DefaultInstallDirectory);
     }
 
@@ -60,6 +65,7 @@ public sealed class LauncherConfigurationProviderTests
         Assert.Equal("Minimal", configuration.AppName);
         Assert.Equal("dark", configuration.Theme.Variant);
         Assert.Equal(["en", "it", "fr"], configuration.Localization.SupportedLanguages);
+        Assert.Equal("stable", configuration.Updates.Channel);
     }
 
     [Fact]

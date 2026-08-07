@@ -1,10 +1,12 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Diagnostics;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Updates;
 
 namespace GameLauncher.App.ViewModels;
 
@@ -23,6 +25,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IAuthenticationService _authentication;
     private readonly IInstallationService _installations;
     private readonly ICrashReportUploader _crashReports;
+    private readonly IUpdateChecker _updateChecker;
+    private readonly ILauncherUpdateDownloader _updateDownloader;
+    private readonly IApiErrorPresenter _errors;
+
+    /// <summary>The verified release the banner is about; null when there is nothing to offer.</summary>
+    private UpdateCheckResult? _availableUpdate;
+
+    /// <summary>
+    /// How to say the update line again. The banner's sentences are built in code rather than
+    /// bound through <c>{loc:Tr}</c>, so — like <see cref="WelcomeMessage"/> — they would
+    /// otherwise stay in the language they were first written in when somebody switches.
+    /// </summary>
+    private Func<string>? _updateStatusText;
 
     [ObservableProperty]
     private string _welcomeMessage = string.Empty;
@@ -38,6 +53,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     private string _accountName = string.Empty;
 
+    /// <summary>
+    /// Whether the update line is showing. An update is never applied silently: a swap needs
+    /// the launcher to exit, so a silent update is an application closing under the hands of
+    /// somebody using it.
+    /// </summary>
+    [ObservableProperty]
+    private bool _updateAvailable;
+
+    [ObservableProperty]
+    private string _updateHeadline = string.Empty;
+
+    /// <summary>The release notes, which are a paragraph and not a changelog.</summary>
+    [ObservableProperty]
+    private string _updateNotes = string.Empty;
+
+    /// <summary>Empty until the download starts; then progress, then the outcome.</summary>
+    [ObservableProperty]
+    private string _updateStatus = string.Empty;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(DownloadUpdateCommand))]
+    private bool _canDownloadUpdate;
+
     public MainWindowViewModel(
         ILocalizationService localization,
         IUserSettingsStore settingsStore,
@@ -45,6 +83,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         IAuthenticationService authentication,
         IInstallationService installations,
         ICrashReportUploader crashReports,
+        IUpdateChecker updateChecker,
+        ILauncherUpdateDownloader updateDownloader,
+        IApiErrorPresenter errors,
         LoginViewModel login,
         ExploreViewModel explore,
         LibraryViewModel library,
@@ -57,6 +98,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         _authentication = authentication;
         _installations = installations;
         _crashReports = crashReports;
+        _updateChecker = updateChecker;
+        _updateDownloader = updateDownloader;
+        _errors = errors;
 
         Login = login;
         Explore = explore;
@@ -153,6 +197,99 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             await ShowLibraryAsync(cancellationToken).ConfigureAwait(true);
         }
+
+        // Last, and for the same reason the crash uploader can never throw: a launcher that
+        // would not open because it could not reach the update route would be the worst
+        // possible outcome of this feature. The checker swallows everything itself.
+        await CheckForUpdatesAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Announces a newer launcher, and announces nothing else. A check that found nothing, one
+    /// this build never made because no signing key is compiled in, and one that failed are all
+    /// silence: none of the three is something the person in front of the window can act on.
+    /// </summary>
+    private async Task CheckForUpdatesAsync(CancellationToken cancellationToken)
+    {
+        UpdateCheckResult result = await _updateChecker.CheckAsync(cancellationToken)
+            .ConfigureAwait(true);
+
+        if (!result.IsAvailable)
+        {
+            return;
+        }
+
+        _availableUpdate = result;
+        UpdateNotes = result.Release!.Notes;
+        _updateStatusText = null;
+        CanDownloadUpdate = true;
+        UpdateAvailable = true;
+        RefreshLocalizedText();
+    }
+
+    /// <summary>
+    /// Fetches the archive and refuses bytes that are not the ones the signed document named.
+    ///
+    /// It stops there, because <c>GameLauncher.Updater</c> still moves no files: what the user
+    /// is told when this succeeds is where the verified archive is, not that the launcher is
+    /// about to replace itself. Promising the second would be the one kind of lie this feature
+    /// cannot afford.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanDownloadUpdate))]
+    private async Task DownloadUpdateAsync(CancellationToken cancellationToken)
+    {
+        if (_availableUpdate is not { Release: { } release })
+        {
+            return;
+        }
+
+        CanDownloadUpdate = false;
+        SetUpdateStatus(() => _localization.Translate("Update.Downloading", 0));
+
+        try
+        {
+            string archive = await _updateDownloader
+                .DownloadAsync(
+                    release,
+                    _availableUpdate.ArtifactUrl,
+                    new Progress<long>(OnUpdateTransferred),
+                    cancellationToken)
+                .ConfigureAwait(true);
+
+            string directory = Path.GetDirectoryName(archive) ?? archive;
+            SetUpdateStatus(() => _localization.Translate(
+                "Update.Ready", release.Version.ToString(), directory));
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            // Offered again rather than disarmed: an interrupted transfer and a host serving
+            // the wrong bytes are both worth one more press, and the hash refuses the second
+            // one exactly as it refused the first.
+            SetUpdateStatus(() => _errors.Describe(exception));
+            CanDownloadUpdate = true;
+        }
+    }
+
+    private void SetUpdateStatus(Func<string> render)
+    {
+        _updateStatusText = render;
+        UpdateStatus = render();
+    }
+
+    /// <summary>Puts the line away for this run. The next start asks again.</summary>
+    [RelayCommand]
+    private void DismissUpdate() => UpdateAvailable = false;
+
+    private void OnUpdateTransferred(long transferred)
+    {
+        if (_availableUpdate?.Release is not { Size: > 0 } release)
+        {
+            return;
+        }
+
+        int percent = (int)Math.Clamp(transferred * 100 / release.Size, 0, 100);
+        OnUiThread(() => SetUpdateStatus(
+            () => _localization.Translate("Update.Downloading", percent)));
     }
 
     [RelayCommand]
@@ -240,6 +377,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
     }
 
-    private void RefreshLocalizedText() =>
+    private void RefreshLocalizedText()
+    {
         WelcomeMessage = _localization.Translate("Shell.Welcome", AppName);
+
+        if (_availableUpdate?.Release is { } release)
+        {
+            UpdateHeadline = _localization.Translate(
+                "Update.Available", release.Version.ToString(), AppName);
+            UpdateStatus = _updateStatusText?.Invoke() ?? string.Empty;
+        }
+    }
 }

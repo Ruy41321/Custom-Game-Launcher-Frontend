@@ -10,6 +10,7 @@ using GameLauncher.Core.Localization;
 using GameLauncher.Core.Media;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
+using GameLauncher.Core.Updates;
 using GameLauncher.Infrastructure.Api;
 using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
@@ -20,6 +21,7 @@ using GameLauncher.Infrastructure.Logging;
 using GameLauncher.Infrastructure.Media;
 using GameLauncher.Infrastructure.Platform;
 using GameLauncher.Infrastructure.Publishing;
+using GameLauncher.Infrastructure.Updates;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GameLauncher.Infrastructure.DependencyInjection;
@@ -73,6 +75,11 @@ public static class ServiceCollectionExtensions
         // Tokenless for a third reason, and the sharpest of them: the crashes worth having are
         // often the ones that happen before anybody has signed in.
         services.AddHttpClient<ICrashReportApi, CrashReportApiClient>(ConfigureClient);
+
+        // And tokenless for the sharpest reason of the four: the launcher that most needs an
+        // update is the one that cannot sign in — pointed at a server it has never reached, or
+        // carrying the very bug the update fixes.
+        services.AddHttpClient<ILauncherReleaseApi, LauncherReleaseApiClient>(ConfigureClient);
         services.AddSingleton<IServerCapabilityProvider, CachedServerCapabilityProvider>();
 
         // Authenticated, unlike the auth client beside it: erasing an account is something a
@@ -106,6 +113,25 @@ public static class ServiceCollectionExtensions
         // Unlike that one it keeps an ordinary timeout: a cover is small, and a picture that
         // is taking thirty seconds is a picture the page is better off without.
         services.AddHttpClient<IImageLoader, CachingImageLoader>(ConfigureMediaClient);
+
+        // A fifth, and the same shape as the file server's: a launcher archive is tens of
+        // megabytes served from a public URL on a host the API named, so no token and no clock
+        // that starts at the first byte.
+        services.AddHttpClient<ILauncherUpdateDownloader, LauncherUpdateDownloader>(
+            ConfigureFileServerClient);
+
+        // The three things a check needs from outside its own code path. The version is this
+        // assembly's; the channel is the packager's; the key is compiled in, because the file
+        // an update overwrites must not be the file that authorizes it.
+        services.AddSingleton(provider => new UpdateSettings
+        {
+            CurrentVersion = ThisAssemblyVersion(),
+            Channel = ReleaseTargets.Channel(
+                provider.GetRequiredService<LauncherConfiguration>().Updates.Channel),
+            PublicKeyBase64 = LauncherReleaseKey.PublicKeyBase64,
+        });
+
+        services.AddSingleton<IUpdateChecker, UpdateChecker>();
 
         services.AddSingleton<ICrashReportUploader, CrashReportUploader>();
         services.AddSingleton<IInstallationService, InstallationService>();

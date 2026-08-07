@@ -18,6 +18,8 @@ public sealed record LauncherConfiguration
 
     public LocalizationConfiguration Localization { get; init; } = new();
 
+    public UpdateConfiguration Updates { get; init; } = new();
+
     /// <summary>
     /// Where games are installed by default. Null means "decide from the platform", which is
     /// the right answer on a machine the packager knows nothing about.
@@ -73,6 +75,24 @@ public sealed record BrandingConfiguration
     public string? LogoPath { get; init; }
 
     public string? WindowIconPath { get; init; }
+}
+
+public sealed record UpdateConfiguration
+{
+    /// <summary>
+    /// Which release stream this launcher is on: <c>stable</c> or <c>beta</c>.
+    ///
+    /// It is a <i>shipped</i> setting and deliberately not a user preference. Which stream a
+    /// launcher follows is the choice of whoever distributes it: a player who could move
+    /// themselves onto a stream their distributor never published to would be a player who can
+    /// replace their own launcher with a build nobody meant them to have, and the launcher is
+    /// the program that has to still start in order to fix anything.
+    ///
+    /// Anything unrecognised is read as <c>stable</c> rather than failing validation — see
+    /// <c>ReleaseTargets.Channel</c> for why a typo here must not be what stops a launcher from
+    /// opening.
+    /// </summary>
+    public string Channel { get; init; } = "stable";
 }
 
 public sealed record LocalizationConfiguration
