@@ -106,6 +106,80 @@ design, so a stopped backend produces a sign-in screen that refuses every passwo
 an error — and `-Reset` clears the per-user state, which is the only way back to a first-run
 launcher. On Linux, `dotnet run --project src/GameLauncher.App`.
 
+### Setting up on a machine that has never seen this project
+
+Cloning the two repositories does **not** give you a working environment, and what is missing is
+missing on purpose. Here is the whole list, so nothing is discovered by hitting it.
+
+**Not in version control, and what to do with each:**
+
+| Missing | What it is | What to do |
+|---|---|---|
+| The backend's `.env` | Secrets and per-machine settings | `cp .env.example .env`. Development runs on the placeholders; only a deployment needs real ones |
+| Docker volumes | The database, blobs, artwork, releases | Recreated empty on first `docker compose up`. Migrations run at start-up |
+| Accounts, games, builds | Everything you seeded by hand | Register again, `--grant-role` again |
+| A release signing key | Signs launcher updates | **Regenerate it** — see below |
+| `HANDOFF.md` | A briefing between working sessions, kept outside both repositories so it never lands in a commit | Carry it yourself: a private repository, a gist, a USB stick. It is one file and nothing depends on it |
+
+**Regenerate the development signing key rather than carrying it.** It only ever signs releases
+for a `docker compose` stack on your own machine, and that stack is being rebuilt from nothing
+anyway. Two commands, and the public half goes into the new `.env`:
+
+```bash
+openssl ecparam -name prime256v1 -genkey -noout -out release-signing.key
+```
+
+```bash
+openssl ec -in release-signing.key -pubout -outform DER | openssl base64 -A
+```
+
+The **only** case where a key has to travel is one where launchers are already in somebody
+else's hands: every one of them carries the matching public half compiled in, so a new key signs
+releases none of them will accept. That is a distribution key, not a development one, and
+[DISTRIBUTING.md](DISTRIBUTING.md) treats it accordingly.
+
+### Working on Linux
+
+Both halves are developed on Linux as readily as on Windows — the server more so, since it *is*
+Linux. Four things to know.
+
+**The SDK band is pinned.** `global.json` asks for 9.0.310 with `rollForward: latestPatch`, which
+accepts any **9.0.3xx** and refuses 9.0.1xx or 9.0.4xx with "compatible SDK version not found".
+That pin exists because a newer SDK ships new analyzer rules and `TreatWarningsAsErrors` turns
+those into a red build that cannot be reproduced locally (D13). Install a matching one rather
+than editing the pin:
+
+```bash
+curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version 9.0.310
+```
+
+**Install PowerShell 7 for the scripts.** All three of `scripts/*.ps1` carry
+`#!/usr/bin/env pwsh` and the only one with a platform branch already handles Linux, so they run
+as documented once `pwsh` is on the machine. Without it, the underlying commands are in
+`CLAUDE.md` §6 here and §7 in the server repository — `dotnet run --project src/GameLauncher.App`
+and `docker compose up --build -d` cover the common cases.
+
+**Docker is Engine plus the compose plugin**, not Desktop, and your user needs to be in the
+`docker` group or every command needs `sudo`.
+
+**A whole class of traps disappears, and one capability goes with it.** Everything in `CLAUDE.md`
+§7 about Windows PowerShell 5.1 — the BOM from `Set-Content -Encoding utf8`, double quotes
+mangled on the way to `git commit`, `Compress-Archive` writing backslashes into zip entries — and
+everything in the server's §8 about `MSYS_NO_PATHCONV` simply does not apply. `openssl` is on the
+path natively.
+
+What you lose is the **UI Automation recipe**: driving the running launcher from a script to read
+its labels and press its buttons is Windows-only, and it is how the sign-in recovery buttons, the
+language switch and the whole self-update were verified. There is no set-up equivalent here.
+On Linux the window is verified by looking at it, which is slower and worth budgeting for —
+AT-SPI would be the equivalent and nothing in this repository uses it.
+
+> **One thing genuinely worth doing on a first Linux session**, because it has never been done:
+> the self-update swap has only ever been exercised on real Windows. The executable-bit handling
+> that makes it work on Linux is covered by tests that skip themselves on Windows, so the first
+> person with a Linux machine should publish a release to a local stack and watch a launcher
+> replace itself — and watch a deliberately broken one get rolled back.
+
 ### Becoming a publisher
 
 Register in the window, then grant yourself the role from the server:
