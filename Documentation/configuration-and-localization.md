@@ -136,6 +136,24 @@ localized element re-reads its value — so **switching language needs no restar
 
 `x:Static` on the generated resx class was rejected for exactly that: it resolves once, at load.
 
+**The name of that notification is the whole mechanism, and it is easy to get wrong.** Avalonia
+invalidates an indexer binding on `PropertyChanged("Item")` — the indexer's own CLR property
+name. It ignores `"Item[]"`, which is WPF's `Binding.IndexerName` and was what this class raised
+until 2026-08-07, and it ignores `null` and `""`, which almost every other binding system reads
+as "every property changed". The failure is silent and total: the strings resolve correctly the
+first time and then never change again, so the launcher renders whatever language start-up got
+to first. `TrExtensionTests` drives a real Avalonia binding rather than asserting the name, since
+a test on the name would have been satisfied by the broken value.
+
+### What a `{loc:Tr}` binding cannot do for you
+
+A string a view model **builds** — `Translate(key, argument)` with a version number or a
+directory in it — is an ordinary property and not a binding into the resources, so it does not
+re-evaluate. `MainWindowViewModel.RefreshLocalizedText` subscribes to `LanguageChanged` and
+rebuilds those by hand; the welcome line and the update banner's three sentences are the ones
+that exist today. Adding another composed sentence means adding it there too, and the way this
+is noticed is by looking at the window.
+
 `LocalizationSource.Instance` is the single global in the application. A markup extension is
 instantiated by the XAML loader and has no access to the DI container, so the instance is
 published during start-up. It is the one place a static is the honest answer rather than a

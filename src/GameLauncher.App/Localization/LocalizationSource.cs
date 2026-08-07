@@ -13,6 +13,14 @@ namespace GameLauncher.App.Localization;
 /// </summary>
 public sealed class LocalizationSource : INotifyPropertyChanged
 {
+    /// <summary>
+    /// The name Avalonia listens for on an indexer binding: the indexer's own CLR property
+    /// name, not WPF's <c>"Item[]"</c> convention and not the <c>null</c> that conventionally
+    /// means "everything changed" — Avalonia's indexer node honours neither, so both leave
+    /// every <c>{loc:Tr}</c> label in the language it first rendered in.
+    /// </summary>
+    private const string IndexerPropertyName = "Item";
+
     private static LocalizationSource? _instance;
 
     private readonly ILocalizationService _localization;
@@ -21,7 +29,7 @@ public sealed class LocalizationSource : INotifyPropertyChanged
     {
         _localization = localization;
         _localization.LanguageChanged += (_, _) =>
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(IndexerPropertyName));
     }
 
     /// <summary>

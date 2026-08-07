@@ -73,7 +73,7 @@ belongs in Infrastructure behind an interface declared in Core.
 |---|---|---|---|
 | D1 | **Avalonia 11 + CommunityToolkit.Mvvm** | One XAML codebase across Windows/Linux/macOS with a mature MVVM toolkit and source-generated boilerplate. | MAUI (weak Linux story); Electron (runtime weight) |
 | D2 | **Central package management** | `Directory.Packages.props` pins every version once, so projects cannot drift apart. | Per-project `PackageReference` versions |
-| D3 | **`.resx` + `{loc:Tr Key}` markup extension** | Localized strings resolve through `ILocalizationService`; the markup extension re-evaluates on language change, so switching language needs no restart. Adding a language = adding one `.resx`. | `x:Static` on resx (no runtime switch); hardcoded strings (untranslatable) |
+| D3 | **`.resx` + `{loc:Tr Key}` markup extension** | Localized strings resolve through `ILocalizationService`; the markup extension re-evaluates on language change, so switching language needs no restart. Adding a language = adding one `.resx`. **True since 2026-08-07 and not before**: the shape was always right — a binding to an indexer on `LocalizationSource` — but the invalidation was raised as `PropertyChanged("Item[]")`, which is WPF's `Binding.IndexerName` and means nothing to Avalonia, so every label kept the language it first rendered in. It is `"Item"` now, and `TrExtensionTests` drives a real Avalonia binding so the promise is a failing test away from being broken again. | `x:Static` on resx (no runtime switch); hardcoded strings (untranslatable); `PropertyChanged(null)` as the fix (conventionally "everything changed", and Avalonia's indexer node ignores it too — measured, see §7) |
 | D4 | **SQLite (+ Dapper) for local state** | Installed games, cached manifests and download progress need transactional, queryable, crash-safe storage. Plain JSON corrupts on a mid-write crash. | JSON files; LiteDB (extra dependency, less portable) |
 | D5 | **Two-file configuration** | `launcher.config.json` ships read-only with the app (branding, theme, API endpoint — the fork-and-rebrand surface); user settings live in a separate writable file under the platform app-data directory. Never mixed. | One writable config (an update would clobber user settings) |
 | D6 | **Serilog rolling file sink** | Structured local logs with automatic retention; global handlers on `AppDomain.UnhandledException` and `TaskScheduler.UnobservedTaskException` write a crash report for opt-in upload. | `Console.WriteLine`; no logging |
@@ -342,7 +342,9 @@ a different key and one holding none.
 | **A named EC curve comes back in different halves of an `Oid` on different platforms** | `ECDsa.ExportParameters(false).Curve.Oid` populates `Value` on some runtimes and only `FriendlyName` (`nistP256`, `ECDSA_P256`, …) on others, so a P-256 check written against one of them passes locally and rejects every key on another platform — with the launcher then silently checking for no updates. `ReleaseSignature.IsP256` accepts either, and the suite covers it by importing keys it generated itself |
 | **A `TryParse` with an `out T?` fails the build at its *caller*** | `if (TryParse(bytes, out ReleaseDocument? doc, out _)) { doc.Version … }` is CS8602 under `TreatWarningsAsErrors` unless the parameter carries `[NotNullWhen(true)]`. The error points at the caller, so it reads like the caller being wrong rather than the signature being under-annotated |
 | **A running launcher locks `GameLauncher.exe`, and `dotnet test` then fails as MSB3027** | Driving the window by hand and running the suite in the same session do not mix: the App project's post-build copy cannot replace a running executable, and the failure ("il file è bloccato da: GameLauncher (pid)") reads like a corrupted build. Stop the process first |
-| **`{loc:Tr}` bindings do not follow a language change, and strings built in code do** | Verified in the running window on 2026-08-07: switching from Italian to English updated `WelcomeMessage` and the update banner — both rebuilt in code on `LanguageChanged` — while every `Text="{loc:Tr …}"` label stayed Italian, which contradicts D3's promise that switching needs no restart. Two consequences: any sentence a view model builds itself **must** be rebuilt in `RefreshLocalizedText`, and the binding half is a real open bug (see `HANDOFF.md`). The likely cause is that Avalonia does not treat `PropertyChanged("Item[]")` as invalidating an indexer binding; `LocalizationSource` raises exactly that |
+| **An indexer binding is invalidated by `PropertyChanged("Item")` — not by WPF's `"Item[]"`, and not by `null`** | This is what kept every `{loc:Tr}` label in the language it first rendered in from milestone 1 until 2026-08-07, while `WelcomeMessage` and the update banner followed, because a view model rebuilds those in code. `"Item[]"` is `Binding.IndexerName` in WPF and Avalonia's indexer node ignores it; so, surprisingly, does `null`, which almost every other binding system reads as "every property changed". Only the indexer's own CLR property name works. Measured rather than guessed, against Avalonia 12.1.1: `"Item[]"` STUCK, `"Item"` FOLLOWS, `null` STUCK, `""` STUCK. `TrExtensionTests` pins it by driving a real Avalonia binding — a test asserting only *which* name is raised would have passed against the broken code just as happily |
+| **A binding on a plain `AvaloniaObject` needs no initialised Avalonia** | Which is what makes the language switch testable at all: `AvaloniaProperty.Register` + `Bind(property, binding)` + `GetValue` exercises the real binding machinery with no toolkit start-up, no window and no dispatcher. Contrast `Bitmap` two rows up, which cannot be constructed without one. Anything expressible as "does this binding re-evaluate?" belongs in a test rather than in a session driving the window |
+| **A sentence a view model builds itself is not a binding and never follows a language change** | `WelcomeMessage` and the update banner's three lines are `Translate` calls with arguments, so they are ordinary properties: fixing the `{loc:Tr}` half above does nothing for them, and `RefreshLocalizedText` in `MainWindowViewModel` stays exactly as necessary as it was. The rule to keep: **anything built with `Translate(key, args)` must be rebuilt on `LanguageChanged`** |
 | **`Graphics.CopyFromScreen` photographs whatever is on top of that rectangle** | It captured an unrelated window sitting over the launcher, so the screenshot showed something else entirely. `PrintWindow($hwnd, $hdc, 2)` renders the target window itself, works when it is occluded, and does **not** steal focus from whatever the maintainer is doing. Also: `Add-Type -MemberDefinition` already emits `using System.Runtime.InteropServices;`, so passing `-UsingNamespace` for it fails the compile as a warning-as-error |
 
 ---
@@ -769,6 +771,35 @@ claiming a restart.
 **One bug found and fixed by looking at the window** (D56), and one found and *not* fixed: the
 `{loc:Tr}` bindings do not follow a language change at all. See §7 and `HANDOFF.md`.
 
+### The language switch, which had never switched — verified on 2026-08-07
+
+Open debt 28, and the promise D3 has been making since milestone 1. Nothing in the suite could
+see it, and nothing in the window could miss it: the selector changed `WelcomeMessage` and the
+update banner and left "Accedi", "Indirizzo email" and every other label alone.
+
+- ✅ `LocalizationSource` raises `PropertyChanged("Item")`. `"Item[]"` is WPF's convention and
+  Avalonia's indexer node ignores it — as it also ignores `null`, which was the obvious first
+  fix and does not work either (§7 has the measurement)
+- ✅ `TrExtensionTests` binds a real `AvaloniaObject` property to what `TrExtension` produces and
+  asserts the value follows a language change. Two of its three tests fail against the old
+  notification name, so it is a regression test rather than a restatement of the code
+- ✅ `RefreshLocalizedText` is untouched and still necessary: the banner's lines are
+  `Translate(key, args)` calls, not bindings
+- ✅ 788 tests green on Windows (271 Core, 276 Infrastructure, 241 App), `dotnet format` clean
+- ✅ No new resource keys: nothing new is said to the user
+
+**Verified in the running window**, driven by UI Automation, because there are no UI tests. Every
+`ControlType.Text` and `ControlType.Button` was read before and after the switch: Italian →
+English turned "Accedi/Indirizzo email/Password dimenticata?/Non hai un account? Creane uno" into
+"Sign in/Email address/Forgotten your password?/No account yet? Create one", and English → French
+turned all of them again — **the whole window at the first attempt, not only the line at the
+bottom**. Restarting reopened it entirely in the saved language, which is also the end of a
+window that could come up half in one language and half in another: start-up sets the language
+after some labels have rendered, and those labels now re-read. Then the same switch with the
+**update banner** on screen and an artifact already downloaded: the headline, the release notes,
+the outcome sentence naming the archive's directory, and both banner buttons all changed once
+and stayed changed.
+
 ### Next up
 
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —
@@ -785,8 +816,7 @@ it was part of M8 in the original plan and came out of it because it cannot be b
   becomes testable. The declared hole: a launcher that starts, survives thirty seconds and then
   crashes is not rolled back — that is what the crash reports are for — and `--rollback` stays a
   documented manual flag while `previous/` exists. It has to be verified **on real Windows**
-- ⬜ **The language switch that does not switch** (§7). Every `{loc:Tr}` label keeps the language
-  it was first rendered in, which is the feature D3 exists to provide
+- ✅ ~~**The language switch that does not switch**~~ — done on 2026-08-07, above
 
 ---
 
