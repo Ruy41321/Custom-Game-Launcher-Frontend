@@ -13,9 +13,11 @@ The server side lives in
 > **Status:** in development. Authentication, Explore with infinite scrolling, the library,
 > delta downloads and installs, launching, offline mode, artwork and the devlog, settings,
 > account deletion, opt-in crash reports, and a developer dashboard that publishes builds,
-> uploads artwork, writes the devlog and deletes what it created all work. Self-update is a
-> stub. Confirming an address and resetting a password are finished **in a browser**, on
-> pages the server serves — the launcher has no screen for either. See
+> uploads artwork, writes the devlog and deletes what it created all work. **Self-update is
+> still a stub**: the server publishes signed launcher releases as of 2026-08-07, and
+> nothing here checks for one or swaps a file yet. Confirming an address and resetting a
+> password are finished **in a browser**, on pages the server serves — the launcher has no
+> screen for either. See
 > [CLAUDE.md](CLAUDE.md#10-progress) for the current state and `Documentation/` for what each
 > module does and does not do.
 

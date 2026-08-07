@@ -685,8 +685,20 @@ thing nobody got to.
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —
 it was part of M8 in the original plan and came out of it because it cannot be built here alone.
 
-- ⬜ **Self-update**, once there is a launcher-release surface on the server to talk to. The
-  client half is a stub with its command line already designed; the swap is unwritten
+- ⬜ **Self-update.** The server half landed on 2026-08-07 and is described in the backend's
+  `Documentation/launcher-releases.md`; two pieces are left, and both are here.
+  **The check**: read `GET /api/v1/launcher/releases/latest?channel=&platform=&arch=` — no
+  token, and it must never be able to stop the launcher from starting (D50's reasoning about
+  the crash uploader, which holds identically) — then verify the ECDSA P-256 signature over
+  the document's bytes *as they arrived*, refuse any version that is not strictly newer than
+  this one, and refuse an artifact whose bytes do not hash to the content address inside the
+  signed document. The public key goes **in the binary**, not in `launcher.config.json`: the
+  file the updater overwrites must not be the file that authorizes the update, and that makes
+  it the one thing a fork has to change in code. The channel *is* a `launcher.config.json`
+  field, because which stream a launcher is on is the distributor's choice and not the
+  player's. `System.Security.Cryptography.ECDsa` does all of it with no new package.
+  **The swap**: `GameLauncher.Updater` still moves no files. Its `Main` now says so instead of
+  naming a milestone that closed without it
 
 ---
 

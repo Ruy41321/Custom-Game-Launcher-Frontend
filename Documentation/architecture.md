@@ -244,18 +244,23 @@ Two things make it safe and repeatable:
 
 Stated explicitly, because the alternative is a reader inferring it from silence:
 
-- **Self-update.** `GameLauncher.Updater` is a stub. Its command line is designed and its
+- **Self-update.** `GameLauncher.Updater` is a stub: its command line is designed and its
   process boundary is real — a running executable cannot overwrite its own binaries on Windows
-  (D7) — but the swap is unwritten, and it cannot be finished in this repository alone: it
-  needs a launcher-release surface on the server (releases, channels, signature verification)
-  that does not exist yet. It is **not** a numbered milestone.
-- **Deleting a game.** Builds and versions can be deleted; a game cannot, on either side. It is
-  designed together with account erasure, because it is the same question: what survives whom.
-- **Crash-report upload.** Crash reports are written to disk and nothing transmits them; see
-  [logging-and-local-state.md](logging-and-local-state.md).
-- **`UserSettings.SendCrashReports` and `LaunchMinimized`** exist in the model and are read by
-  nothing, which is why the Settings page does not show them: an inert checkbox is worse than
-  an absent one.
+  (D7) — but **it moves no files**, and nothing here checks for a new version either.
+  What has changed as of 2026-08-07 is that the other half now exists. The server publishes
+  signed launcher releases, so the thing this repository has to talk to is no longer missing:
+  `GET /api/v1/launcher/releases/latest` returns a canonical release document, a detached
+  ECDSA P-256 signature over its exact bytes, and a URL for the artifact. The contract, and the
+  five rules a client has to hold for any of it to be worth anything, are in the backend's
+  [launcher-releases.md](../../Custom-Game-Launcher-Backend/Documentation/launcher-releases.md).
+  Two of those rules decide things about *this* repository and are worth stating here: the
+  public key belongs **in the binary, not in `launcher.config.json`**, because the file the
+  updater overwrites must not be the file that authorizes the update; and a failed check must
+  never stop the launcher from starting, which is D50's reasoning about the crash uploader.
+  It is still **not** a numbered milestone.
+- **`UserSettings.LaunchMinimized`** exists in the model and is read by nothing, which is why
+  the Settings page does not show it: an inert checkbox is worse than an absent one.
+  `SendCrashReports` used to be in this position and no longer is.
 
 ## Related documents
 
