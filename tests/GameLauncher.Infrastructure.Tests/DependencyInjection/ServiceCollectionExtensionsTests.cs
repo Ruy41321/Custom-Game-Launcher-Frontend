@@ -2,6 +2,7 @@ using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Diagnostics;
+using GameLauncher.Core.Discovery;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -58,6 +59,9 @@ public sealed class ServiceCollectionExtensionsTests
     [InlineData(typeof(ICrashReportUploader))]
     [InlineData(typeof(IServerCapabilityProvider))]
     [InlineData(typeof(IServerReachability))]
+    [InlineData(typeof(IEndpointCache))]
+    [InlineData(typeof(IServiceRegistryApi))]
+    [InlineData(typeof(IEndpointResolver))]
     [InlineData(typeof(ILibraryCache))]
     [InlineData(typeof(ILauncherReleaseApi))]
     [InlineData(typeof(ILauncherUpdateDownloader))]
@@ -96,6 +100,26 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.NotNull(provider.GetRequiredService<IAccountService>());
         Assert.NotNull(provider.GetRequiredService<IAuthenticationService>());
+    }
+
+    /// <summary>
+    /// The endpoint resolver sits in front of the configuration singleton, so a mistake in
+    /// that order is a container that cannot build itself rather than a launcher that quietly
+    /// keeps the shipped address. It also pins the shipped behaviour: with no registry
+    /// configured, the effective endpoint is exactly what <c>launcher.config.json</c> says.
+    /// </summary>
+    [Fact]
+    public async Task TheEffectiveEndpointIsTheShippedOneWithNoRegistryConfigured()
+    {
+        using ServiceProvider provider = BuildProvider();
+
+        LauncherConfiguration configuration = provider.GetRequiredService<LauncherConfiguration>();
+        LauncherConfiguration shipped = await provider
+            .GetRequiredService<ILauncherConfigurationProvider>()
+            .LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(configuration.ServiceRegistry.IsConfigured);
+        Assert.Equal(shipped.ApiBaseUrl, configuration.ApiBaseUrl);
     }
 
     /// <summary>

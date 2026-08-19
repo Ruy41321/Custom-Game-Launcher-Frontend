@@ -9,8 +9,17 @@ public sealed record LauncherConfiguration
 {
     public string AppName { get; init; } = "Custom Game Launcher";
 
-    /// <summary>Base address of the API, including the version segment.</summary>
+    /// <summary>
+    /// Base address of the API, including the version segment.
+    ///
+    /// This is the <i>fallback</i> when a service registry is configured: it is what a launcher
+    /// uses on a machine that has never reached the registry, and what it falls back to when the
+    /// registry cannot be reached and nothing is cached. See <see cref="ServiceRegistry"/>.
+    /// </summary>
     public string ApiBaseUrl { get; init; } = "http://localhost:8080/api/v1/";
+
+    /// <summary>Where the launcher asks for the API's current address. Off unless configured.</summary>
+    public ServiceRegistryConfiguration ServiceRegistry { get; init; } = new();
 
     public ThemeConfiguration Theme { get; init; } = new();
 
@@ -48,6 +57,8 @@ public sealed record LauncherConfiguration
             problems.Add($"{nameof(ApiBaseUrl)} must use http or https, not '{apiUri.Scheme}'.");
         }
 
+        problems.AddRange(ServiceRegistry.Validate());
+
         if (!string.IsNullOrWhiteSpace(Localization.DefaultLanguage) &&
             !Localization.IsSupported(Localization.DefaultLanguage))
         {
@@ -58,6 +69,75 @@ public sealed record LauncherConfiguration
 
         return problems;
     }
+}
+
+/// <summary>
+/// How to find the API's current address, instead of trusting the one baked into this file
+/// forever.
+///
+/// A launcher ships with an endpoint and stops working the day that endpoint moves. The
+/// registry breaks that coupling: the address here becomes the fallback, and the live answer
+/// comes from a service whose own address is the one thing that never changes.
+///
+/// The <b>verification key is deliberately not here</b>. It lives in
+/// <c>ServiceRegistryKey</c>, compiled into the binary, for the same reason the release key
+/// does: this file sits inside the directory a self-update replaces, so a key kept here would
+/// be replaced by whatever the update brought with it. The URL may live here safely — pointing
+/// a launcher at a hostile registry gains an attacker nothing, because the answer it returns
+/// will not carry a signature the compiled-in key accepts.
+/// </summary>
+public sealed record ServiceRegistryConfiguration
+{
+    /// <summary>
+    /// Absolute URL of the registry, for example <c>https://registry.example.com/</c>. Empty
+    /// means no registry, and the launcher uses <see cref="LauncherConfiguration.ApiBaseUrl"/>
+    /// exactly as it always has.
+    /// </summary>
+    public string? Url { get; init; }
+
+    /// <summary>Which record to ask for.</summary>
+    public string ServiceKey { get; init; } = "game-launcher-api";
+
+    /// <summary><c>production</c>, <c>staging</c> or <c>development</c>.</summary>
+    public string Environment { get; init; } = "production";
+
+    /// <summary>Whether a registry is configured at all.</summary>
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Url);
+
+    public IReadOnlyList<string> Validate()
+    {
+        List<string> problems = [];
+
+        if (!IsConfigured)
+        {
+            // Nothing else matters when the feature is off, and a fork that never touched
+            // this section must not be told its defaults are wrong.
+            return problems;
+        }
+
+        if (!Uri.TryCreate(Url, UriKind.Absolute, out Uri? uri))
+        {
+            problems.Add($"{Prefix}.{nameof(Url)} is not an absolute URL: '{Url}'.");
+        }
+        else if (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
+        {
+            problems.Add($"{Prefix}.{nameof(Url)} must use http or https, not '{uri.Scheme}'.");
+        }
+
+        if (string.IsNullOrWhiteSpace(ServiceKey))
+        {
+            problems.Add($"{Prefix}.{nameof(ServiceKey)} must not be empty.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Environment))
+        {
+            problems.Add($"{Prefix}.{nameof(Environment)} must not be empty.");
+        }
+
+        return problems;
+    }
+
+    private const string Prefix = nameof(LauncherConfiguration.ServiceRegistry);
 }
 
 public sealed record ThemeConfiguration

@@ -110,4 +110,76 @@ public sealed class LauncherConfigurationTests
 
         Assert.Equal(expected, localization.IsSupported(culture));
     }
+
+    /* ----------------------------------------------------- the service registry */
+
+    /// <summary>
+    /// A fork that never touched the section must not be told its defaults are wrong: with no
+    /// URL there is no registry, and nothing else in the section matters.
+    /// </summary>
+    [Fact]
+    public void AnUnconfiguredServiceRegistryIsNotAProblem()
+    {
+        LauncherConfiguration configuration = new();
+
+        Assert.False(configuration.ServiceRegistry.IsConfigured);
+        Assert.Empty(configuration.Validate());
+    }
+
+    [Theory]
+    [InlineData("nonsense")]
+    [InlineData("/relative")]
+    public void AServiceRegistryUrlThatIsNotAbsoluteIsRejected(string url)
+    {
+        IReadOnlyList<string> problems = new LauncherConfiguration
+        {
+            ServiceRegistry = new ServiceRegistryConfiguration { Url = url },
+        }.Validate();
+
+        Assert.Contains(problems, problem => problem.Contains("ServiceRegistry", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AServiceRegistryUrlMustUseHttpOrHttps()
+    {
+        IReadOnlyList<string> problems = new LauncherConfiguration
+        {
+            ServiceRegistry = new ServiceRegistryConfiguration { Url = "ftp://registry.example.com/" },
+        }.Validate();
+
+        Assert.Contains(problems, problem => problem.Contains("http", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AConfiguredServiceRegistryNeedsAServiceKeyAndAnEnvironment()
+    {
+        IReadOnlyList<string> problems = new LauncherConfiguration
+        {
+            ServiceRegistry = new ServiceRegistryConfiguration
+            {
+                Url = "https://registry.example.com/",
+                ServiceKey = "  ",
+                Environment = "",
+            },
+        }.Validate();
+
+        Assert.Equal(2, problems.Count);
+    }
+
+    [Fact]
+    public void AWellFormedServiceRegistryPasses()
+    {
+        LauncherConfiguration configuration = new()
+        {
+            ServiceRegistry = new ServiceRegistryConfiguration
+            {
+                Url = "https://registry.example.com/",
+            },
+        };
+
+        Assert.True(configuration.ServiceRegistry.IsConfigured);
+        Assert.Empty(configuration.Validate());
+        Assert.Equal("game-launcher-api", configuration.ServiceRegistry.ServiceKey);
+        Assert.Equal("production", configuration.ServiceRegistry.Environment);
+    }
 }

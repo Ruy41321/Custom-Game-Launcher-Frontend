@@ -26,7 +26,10 @@ That constraint was accepted from the start, before any of the update mechanism 
 is the reason none of this has to be retrofitted now that the check does — see
 [self-update.md](self-update.md). It also decides where the **signing key** does *not* go: the
 file the updater overwrites cannot be the file that authorizes the update, so the key is a
-constant in the binary rather than a field here.
+constant in the binary rather than a field here. The **service registry's** verification key is
+in the binary for the same reason, while its URL is a field here — pointing a launcher at a
+registry that cannot produce an acceptable signature achieves nothing, so only one of the two
+has to be out of reach.
 
 ---
 
@@ -36,6 +39,7 @@ constant in the binary rather than a field here.
 {
   "appName": "My Studio Launcher",
   "apiBaseUrl": "https://games.mystudio.dev/api/v1/",
+  "serviceRegistry": { "url": null, "serviceKey": "game-launcher-api", "environment": "production" },
   "theme": { "variant": "dark", "accentColor": "#7C5CFF" },
   "branding": { "logoPath": "assets/logo.png", "windowIconPath": null },
   "localization": { "defaultLanguage": null, "supportedLanguages": ["en", "it", "fr"] },
@@ -47,7 +51,8 @@ constant in the binary rather than a field here.
 | Field | Null / absent means |
 |---|---|
 | `appName` | the built-in name |
-| `apiBaseUrl` | `http://localhost:8080/api/v1/` |
+| `apiBaseUrl` | `http://localhost:8080/api/v1/`. With a registry configured this becomes the **fallback** — see [service-discovery.md](service-discovery.md) |
+| `serviceRegistry.url` | no registry: the address above is used as it always was |
 | `theme.variant` | `dark` — the product default. `light` and `system` are the alternatives |
 | `branding.logoPath` | the built-in asset; the path is relative to the application directory |
 | `localization.defaultLanguage` | **follow the operating system's UI language** |

@@ -3,6 +3,7 @@ using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Diagnostics;
+using GameLauncher.Core.Discovery;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
@@ -14,6 +15,7 @@ using GameLauncher.Core.Updates;
 using GameLauncher.Infrastructure.Api;
 using GameLauncher.Infrastructure.Authentication;
 using GameLauncher.Infrastructure.Configuration;
+using GameLauncher.Infrastructure.Discovery;
 using GameLauncher.Infrastructure.Downloads;
 using GameLauncher.Infrastructure.Installs;
 using GameLauncher.Infrastructure.Launching;
@@ -23,6 +25,7 @@ using GameLauncher.Infrastructure.Platform;
 using GameLauncher.Infrastructure.Publishing;
 using GameLauncher.Infrastructure.Updates;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace GameLauncher.Infrastructure.DependencyInjection;
 
@@ -40,6 +43,12 @@ public static class ServiceCollectionExtensions
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// How long the service registry gets. Shorter than everything else, because the launcher
+    /// has a usable answer without it and a window nobody can see yet.
+    /// </summary>
+    private static readonly TimeSpan RegistryTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// Registers every infrastructure implementation behind its Core interface. The UI layer
     /// calls this and then knows nothing about which concrete type it received.
     /// </summary>
@@ -51,11 +60,39 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IFileBrowser, FileBrowser>();
         services.AddSingleton<ILauncherConfigurationProvider, LauncherConfigurationProvider>();
 
+        // Where the API is, asked before any HTTP client is built. The cache and the client
+        // are registered here because the configuration below depends on them.
+        services.AddSingleton<IEndpointCache, FileEndpointCache>();
+        services.AddHttpClient<IServiceRegistryApi, ServiceRegistryApiClient>(ConfigureRegistryClient);
+        services.AddSingleton<IEndpointResolver, EndpointResolver>();
+
         // Read once and cached for the process. The HTTP clients need the API endpoint before
         // any view exists, and the shell needs the same document to brand itself from.
-        services.AddSingleton(provider => provider
-            .GetRequiredService<ILauncherConfigurationProvider>()
-            .LoadAsync().GetAwaiter().GetResult());
+        //
+        // What is registered is the *effective* configuration: the shipped document with its
+        // endpoint replaced by whatever the registry last said, when one is configured. The
+        // substitution happens here because every typed client binds its base address at
+        // construction, so this is the last moment at which one address can still be chosen.
+        services.AddSingleton(provider =>
+        {
+            LauncherConfiguration shipped = provider
+                .GetRequiredService<ILauncherConfigurationProvider>()
+                .LoadAsync().GetAwaiter().GetResult();
+
+            ResolvedEndpoint endpoint = provider
+                .GetRequiredService<IEndpointResolver>()
+                .ResolveAsync(shipped).GetAwaiter().GetResult();
+
+            // Worth a line in every log: "which server was it talking to?" is the first
+            // question about any report, and with a registry in play the answer is no longer
+            // whatever the configuration file happens to say now.
+            provider.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("GameLauncher.Endpoint")
+                .LogInformation(
+                    "Using API address {BaseUrl}, from {Source}.", endpoint.BaseUrl, endpoint.Source);
+
+            return shipped with { ApiBaseUrl = endpoint.BaseUrl };
+        });
 
         services.AddSingleton<IUserSettingsStore, JsonUserSettingsStore>();
         services.AddSingleton<ILocalizationService>(_ => new ResourceManagerLocalizationService());
@@ -184,6 +221,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IBuildPublisher, BuildPublisher>();
 
         return services;
+    }
+
+    /// <summary>
+    /// The registry client. No base address, because the registry is asked *where* the base
+    /// address is; no bearer token, because the host it talks to is not the API. The timeout
+    /// is short: this call is on the path that opens the window, and its fallback is an
+    /// address the launcher already has.
+    /// </summary>
+    private static void ConfigureRegistryClient(HttpClient client)
+    {
+        client.Timeout = RegistryTimeout;
+        client.DefaultRequestHeaders.UserAgent.Add(
+            new ProductInfoHeaderValue("CustomGameLauncher", ThisAssemblyVersion()));
     }
 
     private static void ConfigureMediaClient(HttpClient client)

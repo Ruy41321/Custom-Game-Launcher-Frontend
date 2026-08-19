@@ -8,6 +8,7 @@ using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.App.Views;
 using GameLauncher.Core.Configuration;
+using GameLauncher.Core.Discovery;
 using GameLauncher.Core.Localization;
 using GameLauncher.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +60,11 @@ public partial class App : Application
                 }
             });
 
+            // And for the same reason: asking the registry where the API lives happens behind
+            // the window, never in front of it. What it learns is used by the *next* start,
+            // because every HTTP client bound its address while this one was being built.
+            _ = RefreshEndpointAsync(configuration);
+
             desktop.ShutdownRequested += (_, _) =>
             {
                 _services?.Dispose();
@@ -67,6 +73,43 @@ public partial class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Refreshes the stored address of the API, in the background and silently.
+    ///
+    /// Nothing on screen depends on it: a launcher whose backend has moved uses the address it
+    /// knew for this run and the new one from the next start onwards. Which is why every
+    /// failure here is a log line — there is nothing a person could do about it, and the
+    /// launcher they are looking at is working.
+    /// </summary>
+    private async Task RefreshEndpointAsync(LauncherConfiguration configuration)
+    {
+        if (_services is null)
+        {
+            return;
+        }
+
+        try
+        {
+            EndpointClaim? claim = await _services
+                .GetRequiredService<IEndpointResolver>()
+                .RefreshAsync(configuration)
+                .ConfigureAwait(false);
+
+            if (claim is not null && !string.Equals(
+                    claim.BaseUrl, configuration.ApiBaseUrl, StringComparison.OrdinalIgnoreCase))
+            {
+                Log.Information(
+                    "The service registry names a different API address ({BaseUrl}); it will be " +
+                    "used from the next start.",
+                    claim.BaseUrl);
+            }
+        }
+        catch (Exception exception)
+        {
+            Log.Debug(exception, "Refreshing the API address from the service registry failed.");
+        }
     }
 
     private ServiceProvider BuildServiceProvider()
