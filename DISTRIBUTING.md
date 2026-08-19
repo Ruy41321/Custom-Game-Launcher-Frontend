@@ -18,7 +18,7 @@ than it looks: two of these steps are hard to undo if taken late.
 |---|---|
 | A Linux machine with Docker | The server is a `docker compose` stack. A small VPS is enough |
 | A domain name, and TLS on it | The launcher talks to your server over HTTPS |
-| A way to send email | Verification and password-reset links. A transactional provider is the short path |
+| A way to send email — **or not** | Verification and password-reset links. A transactional provider is the short path; §1.5 has what changes if you skip it, which is supported and costs you one manual job |
 | A safe place for one private key | It signs your launcher updates. Losing it cannot be repaired |
 | A way to give people the first download | There is no installer and no app store. A link is fine |
 
@@ -28,7 +28,8 @@ than it looks: two of these steps are hard to undo if taken late.
 
 ## Step 0 — Decide three things before you start
 
-**Your product name.** It appears in the window, in the emails and in the user's data directory.
+**Your product name.** It appears in the window, in the emails — if you send any — and in the
+user's data directory.
 
 **Your hostname.** Say `games.example.com`. The launcher is compiled with the API address in a
 configuration file, so changing it later means shipping a new launcher to everybody — possible,
@@ -129,11 +130,18 @@ collapses into one shared by everybody** — one launcher stuck in a crash loop 
 testers out of signing in, and nothing reports why. `HSTS_ENABLED` is harmless before TLS
 (browsers ignore it over plain HTTP) but is listed here because the two belong together.
 
-### 1.5 Email
+### 1.5 Email — or deliberately none
 
-The server **refuses to start** outside development if it cannot deliver, and names the variable
-it is missing — because a deployment where nobody can finish registering is worse than one that
-did not come up.
+There are two supported answers here and you should pick one on purpose. **With SMTP**, people
+confirm their own address and reset their own password. **Without it**, they cannot, and you
+become the recovery procedure — which is a real cost and a small one for a launcher with a
+dozen testers.
+
+What is not supported is *half* of it: the server **refuses to start** outside development if
+it is configured to send and cannot, and names the variable it is missing, because a deployment
+where nobody can finish registering is worse than one that did not come up.
+
+#### With SMTP
 
 ```bash
 MAIL_TRANSPORT=smtp
@@ -153,6 +161,73 @@ inbox. If your origin changes, change it here too.
 > **Whether the mail arrives is a DNS problem, not a code one.** SPF, DKIM and a reverse record
 > decide whether a verification link lands in an inbox or in spam. A transactional provider
 > handles all three for you; a VPS sending directly on port 25 handles none.
+
+#### If you have no SMTP server, and do not want one
+
+This is supported. It is not a degraded mode you have to work around — the server knows it
+cannot send and behaves accordingly, and so does the launcher.
+
+```bash
+MAIL_TRANSPORT=none
+REQUIRE_VERIFIED_EMAIL=false
+```
+
+**Both lines, or the server will not start.** With no transport there is nothing to deliver a
+verification link with, so an account that has to confirm its address is an account that can
+never sign in — the server refuses that combination at boot rather than letting you discover it
+at your first registration. It names the variable to change.
+
+You can leave `SMTP_*` and `MAIL_FROM_ADDRESS` empty; nothing reads them.
+
+What changes:
+
+| | With mail | `MAIL_TRANSPORT=none` |
+|---|---|---|
+| Confirming an address | A link, by email | Not required; accounts work immediately |
+| Forgetting a password | "Forgotten your password?" on the sign-in screen sends a link | **The button is not there.** The launcher shows *"ask an administrator for a temporary one"* instead |
+| Getting back in | The user does it themselves | **You do it**, from the console — see below |
+
+The launcher does not guess any of this. It reads `mail.enabled` from
+`GET /api/v1/capabilities` at start-up, so a launcher already in somebody's hands adapts the
+moment you change the setting and restart the API — you do not have to ship a new build.
+
+```bash
+curl -s https://games.example.com/api/v1/capabilities | grep -o '"mail":[^}]*}'
+#   {"mail":{"enabled":false}}
+```
+
+#### Handing somebody a password, when they cannot reset it themselves
+
+In the console (§1.6), open **Users**, find the account, press **Edit**, then
+**Set a temporary password…**. It asks once — because it ends every session that account has
+open and cancels any reset link it was sent — and then shows the new password **once**:
+
+```
+Temporary password for player@example.com
+     pwxze-dcpd7-kdj9x
+```
+
+Read it out, paste it into your chat, whatever you trust. Then close the row and it is gone:
+it is not stored anywhere, the console cannot fetch it again, and neither can you. If you lose
+it, set another one — that is the whole recovery procedure.
+
+Three things are true of that account until they choose their own password:
+
+- **it can do nothing else.** Every route answers *"this account is using a temporary password"*.
+  The launcher does not let them past the screen that changes it — no tabs, no cancel;
+- **their old password is dead**, and so is every device they were signed in on;
+- **they cannot keep the one you gave them.** Typing it in as the new password is refused, which
+  is what stops a "temporary" password from quietly becoming permanent.
+
+The audit trail records that you did it and to whom (`user.password.temporary_set`), and
+deliberately **not** what the password was.
+
+> **You cannot do this to your own account.** The flag it sets is honoured on the public API,
+> and the console has no password-change screen of its own — so you would lock yourself out of
+> the surface you administer. Ask another operator, or use the launcher.
+
+Everything here works with mail switched on too. The difference is only whether somebody has a
+self-service way to avoid asking you.
 
 ### 1.6 The first operator
 
@@ -491,6 +566,9 @@ Stated so you do not go looking:
 - **No data export.** Account erasure exists; the other half does not.
 - **No moderation tools.** An operator can delete any game through the API, but the console has
   no button for it.
+- **No settings screen in the console.** Everything about how the deployment behaves —
+  `MAIL_TRANSPORT` included — is `.env` plus a restart of the API. The console manages accounts
+  and reads numbers; it does not configure the server.
 - **macOS.** Not a target.
 
 ---
@@ -502,6 +580,9 @@ Stated so you do not go looking:
 | The server will not start and names a variable | It is telling you the truth. Read the line |
 | Everybody is throttled at once after adding TLS | `TRUSTED_PROXIES` is empty — §1.4 |
 | Registrations succeed but no mail arrives | The relay accepted it and a spam filter did not — SPF/DKIM, §1.5 |
+| "Forgotten your password?" is missing from the sign-in screen | `MAIL_TRANSPORT=none` on that deployment, and the launcher is saying so correctly — §1.5. Hand out a temporary password from the console |
+| Somebody is stuck on a screen asking for a new password | They are: an operator gave them a temporary one. Nothing else works until they choose their own, which is the point — §1.5 |
+| Everything answers `password_change_required` | The same thing, seen from the API |
 | The launcher shows a sign-in screen saying the server cannot be reached | It cannot reach the server at all. Check `apiBaseUrl` and that it ends in `/api/v1/` |
 | No update is ever offered | The public key is empty in the build, or the version in the document is not strictly newer, or the release is for another platform |
 | `--publish-release` refuses the document | A trailing newline, usually. Use `printf` |
@@ -521,7 +602,12 @@ and in `docker compose logs api`.
   including every rule a client holds and why
 - [Documentation/configuration-and-localization.md](Documentation/configuration-and-localization.md)
   — everything a fork can change
+- [Documentation/authentication-and-session.md](Documentation/authentication-and-session.md)
+  — what the launcher does on a server that sends no mail, and the forced password change
 - The server's
   [hardening-and-deployment.md](https://github.com/Ruy41321/Custom-Game-Launcher-Backend/blob/main/Documentation/hardening-and-deployment.md)
   §6 — the deployment checklist this page summarises
+- The server's
+  [administration.md](https://github.com/Ruy41321/Custom-Game-Launcher-Backend/blob/main/Documentation/administration.md)
+  — the console, including the one-time password and the two rules that stop it locking you out
 - [CONTRIBUTING.md](CONTRIBUTING.md) — if you end up wanting to change the launcher itself
