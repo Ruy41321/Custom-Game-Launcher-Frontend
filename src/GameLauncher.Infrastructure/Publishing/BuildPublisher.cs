@@ -75,6 +75,7 @@ public sealed class BuildPublisher(
             {
                 Platform = request.Platform,
                 Architecture = request.Architecture,
+                Name = request.Name,
             },
             cancellationToken).ConfigureAwait(false);
 

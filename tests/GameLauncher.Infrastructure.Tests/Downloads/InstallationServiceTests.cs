@@ -342,6 +342,48 @@ public sealed class InstallationServiceTests : IDisposable
         Assert.True(File.Exists(Path.Combine(result.Install.InstallDirectory, "Game.exe")));
     }
 
+    // What the player was asked about for this one install beats their standing preference,
+    // and it is a *root*: the launcher still names the game's own directory inside it, because
+    // unpacking a build loose into a folder somebody picked would make uninstalling it a
+    // recursive delete of that folder and of whatever else they keep there.
+    [Fact]
+    public async Task ARootChosenForOneInstallWinsOverTheSettingAndStillGetsItsOwnDirectory()
+    {
+        string preferred = Path.Combine(_root.Path, "preferred");
+        string forThisOne = Path.Combine(_root.Path, "just-this-once");
+        _settings.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(new UserSettings { InstallDirectory = preferred });
+
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)));
+
+        InstallResult result = await _service.InstallAsync(
+            RequestFor(null) with { InstallRoot = forThisOne },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.StartsWith(forThisOne, result.Install.InstallDirectory, StringComparison.Ordinal);
+        Assert.NotEqual(
+            Path.TrimEndingDirectorySeparator(forThisOne),
+            Path.TrimEndingDirectorySeparator(result.Install.InstallDirectory));
+        Assert.True(File.Exists(Path.Combine(result.Install.InstallDirectory, "Game.exe")));
+    }
+
+    // An update goes where the game already lives, whatever anybody was asked this time (D33).
+    [Fact]
+    public async Task AnInstallThatAlreadyExistsIsNotMovedByARootChosenNow()
+    {
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)));
+        InstallResult first = await _service.InstallAsync(
+            RequestFor(InstallDirectory),
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        ServerPlans(PlanOf(Planned("Game.exe", ExeContent)), from: "b1");
+        InstallResult second = await _service.InstallAsync(
+            RequestFor(null) with { InstallRoot = Path.Combine(_root.Path, "somewhere-else") },
+            cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(first.Install.InstallDirectory, second.Install.InstallDirectory);
+    }
+
     // A preference the user can no longer act on — an unplugged drive, a deleted folder — is a
     // worse reason to refuse an install than to quietly use the place that always works.
     [Fact]

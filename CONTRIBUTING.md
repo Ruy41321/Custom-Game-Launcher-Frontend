@@ -102,7 +102,8 @@ git clone https://github.com/Ruy41321/Custom-Game-Launcher-Frontend && cd Custom
 
 `dev.ps1` does two things a bare `dotnet run` leaves you to discover the slow way: it tells you
 whether the API is actually answering **before** the window opens — the client works offline by
-design, so a stopped backend produces a sign-in screen that refuses every password rather than
+design, so a stopped backend produces a sign-in screen that says the server cannot be reached
+rather than
 an error — and `-Reset` clears the per-user state, which is the only way back to a first-run
 launcher. On Linux, `dotnet run --project src/GameLauncher.App`.
 
@@ -274,6 +275,7 @@ Four projects, and which one a test belongs in follows from the layering:
 | `GameLauncher.Infrastructure.Tests` | API client (against a stub handler), download planner, SQLite store, config | temp directories, stub `HttpMessageHandler` |
 | `GameLauncher.App.Tests` | View models as plain objects | NSubstitute, and the **real** localization service |
 | `GameLauncher.Updater.Tests` | The swap, against real directories | a substituted process starter and clock |
+| `GameLauncher.Views.Tests` | That every view can be constructed at all (D68) | nothing — it is the one project with a running Avalonia, headless |
 
 Three rules that are not style preferences:
 

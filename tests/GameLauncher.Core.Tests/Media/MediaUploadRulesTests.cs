@@ -27,7 +27,7 @@ public sealed class MediaUploadRulesTests
     [Fact]
     public void APictureWithinEveryLimitIsAccepted() =>
         Assert.Null(MediaUploadRules.Reject(
-            Png(), MediaKind.Screenshot, "key art", existingScreenshots: 0, Limits));
+            Png(), MediaKind.Screenshot, "key art", existing: 0, Limits));
 
     [Fact]
     public void AnEmptyFileIsRefusedBeforeAnythingElse()
@@ -71,7 +71,7 @@ public sealed class MediaUploadRulesTests
     public void TheGalleryCapIsTheServersAndTheRejectionQuotesIt()
     {
         MediaRejection? rejection = MediaUploadRules.Reject(
-            Png(), MediaKind.Screenshot, string.Empty, existingScreenshots: 3, Limits);
+            Png(), MediaKind.Screenshot, string.Empty, existing: 3, Limits);
 
         Assert.Equal(MediaFailure.GalleryFull, rejection?.Reason);
         Assert.Equal(3, rejection?.Limit);
@@ -85,7 +85,7 @@ public sealed class MediaUploadRulesTests
     [InlineData(MediaKind.Logo)]
     public void TheGalleryCapDoesNotApplyToTheSingletonKinds(MediaKind kind) =>
         Assert.Null(MediaUploadRules.Reject(
-            Png(), kind, string.Empty, existingScreenshots: 99, Limits));
+            Png(), kind, string.Empty, existing: 99, Limits));
 
     [Fact]
     public void AltTextLongerThanTheServerAcceptsIsRefused()

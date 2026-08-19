@@ -89,10 +89,17 @@ not — see below.
 
 ---
 
-## Working offline (D29)
+## Working offline (D29, D77, D78)
 
 The rule: **an unreachable server keeps the session; a server that answers and refuses does
 not.**
+
+That rule needs somewhere to write the answer down, or every caller pays a full timeout to
+rediscover it — which is what made a launcher with a stopped backend unusable in practice
+until 2026-08-18. `IServerReachability` is that place: one failure holds a circuit shut for
+twenty seconds, the next request after the window is allowed through to find out, and its
+outcome decides the next one. `ReachabilityHandler` reports it from every API client, and
+`AuthenticationService` reads it before it spends a round trip on a rotation.
 
 `RestoreAsync` at start-up:
 
@@ -102,6 +109,7 @@ not.**
 | fresh | not asked | restored |
 | needs refresh | rotates | restored, rotated |
 | needs refresh | unreachable (`ApiException.IsTransient`) | **restored as it stands**, logged |
+| needs refresh | known unreachable (circuit open) | **restored as it stands**, with no request at all |
 | needs refresh | refuses | signed out |
 
 Signing in is no more possible offline than refreshing is. A launcher that answered an
@@ -114,9 +122,24 @@ A **refusal** is different and stays an error. An expired or revoked session has
 loud, or the player sees a short library and no explanation.
 
 The library completes the picture from the other side: it reads the local install store first
-and unconditionally, so the offline list is the half of the answer that never needed a server,
-and the network result is folded in when it arrives. See
+and unconditionally, and — since D78 — the account's **last stored library** as well, so an
+offline list is what the account owns rather than only what this disk holds. See
 [catalog-and-artwork.md](catalog-and-artwork.md).
+
+A launcher with **no** stored session cannot be signed into offline, because only a server
+knows whether a password is right. The sign-in screen says so before a password is typed, with
+a button that asks again, rather than accepting one and failing on a timeout.
+
+It also offers a way past it (D79). **Continue offline** opens the library with no session:
+
+- offered only when the server is unreachable **and** this computer has a game installed —
+  otherwise it is a door to an empty room, or a way to skip a sign-in that would work;
+- it creates **no session**. `IsSignedIn` stays false, so Explore, publishing and the
+  account's settings stay hidden, and the header shows **Sign in** instead of Sign out, which
+  is the only way out of the visit;
+- the library it opens is **what is installed**, never the stored list of the last account to
+  use this computer;
+- the card's Details button is gone, because the game page needs the catalog.
 
 **Known gap:** the game *detail* page does not work offline — it needs the catalog. Playing
 happens from the library, which does. This is tracked as an open debt.
@@ -128,6 +151,44 @@ happens from the library, which does. This is tracked as an open debt.
 `SignOutAsync` clears local state **first and unconditionally**, then tries to tell the server.
 A user who asks to sign out is signed out, whether or not there is a server to inform; a
 failure to revoke is logged and the session expires on its own.
+
+### What a page keeps across an account change (D70)
+
+The shell owns its pages for the lifetime of the window, so nothing on them is thrown away when
+they stop being shown. That is right while one person is signed in and wrong the moment
+somebody else signs in: the dashboard went on showing the previous publisher's game, and the
+library, the game page, Settings and the sign-in form all hold an account's state the same way.
+
+The whole handler runs through `OnUiThread` first, and that is not a detail (D73):
+`AuthenticationService` awaits its token store with `ConfigureAwait(false)`, so `SessionChanged`
+is raised on the thread pool. Resetting a page writes bound properties and re-evaluates bound
+commands, and Avalonia's thread check throws where nothing catches it — which does not produce
+an error banner, it ends the process. Every sign-in closed the launcher between the day this
+reset was added and the day somebody signed in through the window.
+
+Every page implements **`IAccountScopedPage.ResetForAccountChange()`**, `MainWindowViewModel`
+holds them in `Pages`, and the reset runs on a change of **account**:
+
+```csharp
+string? accountId = session?.User.Id;
+if (!string.Equals(accountId, _accountId, StringComparison.Ordinal)) { … }
+```
+
+Two things about that shape are the whole decision.
+
+**It is keyed on who, not on the event.** `SessionChanged` also fires on every token rotation,
+several times an hour, with the same person behind it. A reset there would empty the library
+under somebody's hands.
+
+**The line is the account's data, not the page's state.** What an account's token fetched goes:
+the library list, the search and its results, the game page, the publisher's games, selection
+and forms, the password typed into the account-deletion box, the address left in the sign-in
+form. What belongs to **this machine** stays: the install directory, the theme, the language,
+the crash-report consent, and the install rows on disk — none of them changes because a
+different person signed in on the same computer.
+
+A test walks the shell's page properties by reflection and fails when one is not in `Pages`,
+because a page missing from the list is a page that keeps somebody else's data.
 
 ---
 
@@ -227,6 +288,72 @@ default.
 nothing at all. The server refuses to be an account-enumeration oracle, and the client must not
 undo that by presenting the answer as confirmation that an account was found.
 
+## A server that sends no mail (D72)
+
+Some deployments cannot set up an SMTP relay, and the server supports that as a configuration
+rather than treating it as broken: `MAIL_TRANSPORT=none` switches off everything that needs a
+message, and the routes that would send answer 404.
+
+The launcher reads **`mail.enabled` from `GET /api/v1/capabilities`** and hides "forgotten your
+password?" where it is false, putting a sentence in its place that names the administrator to
+ask. `ReportMailFailure` still reads the 404 — that path is the backstop and is not going
+anywhere — but a button whose only possible outcome is a failure is not an offer, and the screen
+somebody is on when they press it is the screen they are already stuck on.
+
+The fallback is **true**, which is the opposite of `crashReports.enabled` and deliberately so:
+that one is permission to send something about the user, so silence means no. This one is a
+feature somebody needs, and a server too old to carry the key does send mail — reading its
+silence as "no mail" would hide the way back into an account on every deployment older than the
+field. Guessing wrong in this direction costs one refusal the screen already explains; guessing
+wrong in the other costs somebody their account.
+
+### The way back in: a one-time password
+
+An operator sets a temporary password through the server's loopback console
+([the backend's administration.md](../../Custom-Game-Launcher-Backend/Documentation/administration.md))
+and reads it out. From here it is an ordinary password that signs in — and a session that says
+so:
+
+```
+"user": { …, "passwordChangeRequired": true }
+```
+
+The shell reads it from the **session**, not from a refusal. `AfterSignInAsync` is the single
+method both the start-up restore and the sign-in button pass through, and it sends somebody to
+`ChangePasswordViewModel` instead of to a library whose first request would come back
+`403 password_change_required`. `CanNavigate` hides the tabs while it is in force, because every
+one of them leads to a page that only answers no.
+
+There is **no way out of that screen** while `IsForced`. That is the feature rather than an
+oversight: the server refuses every route but the change, so a "later" button would lead to a
+launcher where nothing works and nothing explains itself.
+
+### The change itself
+
+```
+POST /api/v1/me/password    {currentPassword, newPassword}   -> 200 session
+```
+
+`IAccountApi.ChangePasswordAsync` is on the **authenticated** client, so — exactly as for the
+erasure (D47) — it cannot live on `IAuthenticationService`, whose token handler that client
+depends on. `AccountService` composes the two, and the ordering rule is the mirror image of the
+erasure's: the new session is adopted **only if the change succeeded**, because a refusal leaves
+the old password and the old session in force and forgetting either would sign somebody out for
+mistyping their current password.
+
+The answer is a whole session because the server has just revoked every session the account
+held, this caller's included. `IAuthenticationService.AdoptAsync` exists for that one caller: it
+persists the session and announces it, without pretending anybody signed in.
+
+The page copies **none** of the password rules. The server owns them and names the rule it
+refused (D64), so a deployment that lowers its minimum needs no client release. The single local
+check is that the two new passwords match — the one mistake no server can catch, because only
+one of the two is ever sent.
+
+The screen is also the ordinary way to change a password, with a cancel button and without the
+sentence at the top. One page rather than two: the flow is identical, and a second
+implementation would be the one that goes untested.
+
 ## Asking for a link (D53)
 
 The sign-in screen can ask the server to send either of the two messages. Both requests go
@@ -308,9 +435,11 @@ they are easiest to break:
 - **No "remember me" / "stay signed out" distinction.** A restored session is restored; there
   is one behaviour.
 - **No second factor.** The server has none, so the client has none.
-- **No screen for confirming an address or choosing a new password.** Both flows end in a
+- **No screen for confirming an address, and none for a reset *link*.** Both flows end in a
   browser, on a page the server serves, and `VerifyEmailAsync` / `ConfirmPasswordResetAsync`
-  keep no caller. This is a decision, not a gap: the reset page is where the password rules
+  keep no caller. The launcher does have a password *change* screen — see above — but it is a
+  different thing: it is reached with a session in hand rather than with a token out of an
+  inbox. This is a decision, not a gap: the reset page is where the password rules
   are written, and a second set of fields here would be a second place for a product rule to
   live and drift — the reasoning of D40, on a surface where the client protects nothing by
   duplicating. It would also mean asking somebody to copy a token out of a mail client and

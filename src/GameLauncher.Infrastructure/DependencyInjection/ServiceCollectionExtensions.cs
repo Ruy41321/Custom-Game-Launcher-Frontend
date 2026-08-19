@@ -32,6 +32,14 @@ public static class ServiceCollectionExtensions
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>
+    /// How long the launcher waits to open a connection before calling the host unreachable.
+    /// Far shorter than <see cref="RequestTimeout"/> on purpose: a server that will answer is
+    /// reached in milliseconds, so everything past a few seconds is a machine that is not
+    /// there, and the whole cost of finding that out is paid by somebody watching a window.
+    /// </summary>
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
     /// Registers every infrastructure implementation behind its Core interface. The UI layer
     /// calls this and then knows nothing about which concrete type it received.
     /// </summary>
@@ -40,6 +48,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IPathProvider>(_ => new PathProvider());
         services.AddSingleton<IRuntimePlatform>(_ => new RuntimePlatform());
         services.AddSingleton<IDiskSpaceProbe, DiskSpaceProbe>();
+        services.AddSingleton<IFileBrowser, FileBrowser>();
         services.AddSingleton<ILauncherConfigurationProvider, LauncherConfigurationProvider>();
 
         // Read once and cached for the process. The HTTP clients need the API endpoint before
@@ -53,51 +62,81 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IApiErrorPresenter, ApiErrorPresenter>();
         services.AddSingleton(TimeProvider.System);
 
+        // One shared answer to "is the server there?", consulted before a request is sent and
+        // written to by every request that completes. Registered before the clients, because
+        // every one of them is handed it.
+        services.AddSingleton<IServerReachability>(provider =>
+            new ServerReachability(provider.GetRequiredService<TimeProvider>()));
+        services.AddTransient<ReachabilityHandler>();
+
         services.AddSingleton<ITokenStore, FileTokenStore>();
+
+        // What the account owns, as last answered, so an offline library is the library
+        // rather than the subset of it that happens to be installed here.
+        services.AddSingleton<ILibraryCache, FileLibraryCache>();
         services.AddSingleton<IInstallStore, SqliteInstallStore>();
         services.AddSingleton<IAuthenticationService, AuthenticationService>();
 
         // Erasure sits here rather than on IAuthenticationService because the account route
         // runs on the authenticated client, whose handler depends on IAuthenticationService:
         // the container would refuse a graph where the session service needed it back.
+        // Every client this launcher owns, given a bounded connection attempt. The default is
+        // the operating system's, and on Windows a host that is simply not there costs about
+        // twenty seconds of SYN retries — which is twenty seconds of a launcher that looks
+        // frozen, once per request. Reaching a server that exists takes milliseconds on a LAN
+        // and well under this over a bad mobile link, so nothing that would have succeeded is
+        // given up on. It bounds the *connection* only: a download still takes as long as it
+        // takes.
+        services.ConfigureHttpClientDefaults(builder => builder.ConfigurePrimaryHttpMessageHandler(
+            () => new SocketsHttpHandler { ConnectTimeout = ConnectTimeout }));
+
         services.AddSingleton<IAccountService, AccountService>();
         services.AddTransient<BearerTokenHandler>();
 
         // The auth client deliberately carries no bearer token: refreshing has to work exactly
         // when the access token has expired, and a handler that fetched one first would call
         // back into this very client.
-        services.AddHttpClient<IAuthApi, AuthApiClient>(ConfigureClient);
+        services.AddHttpClient<IAuthApi, AuthApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>();
 
         // Also tokenless, and for a related reason: the limits document is what a launcher
         // reads before it knows whether it can sign in at all, and the route needs no token.
-        services.AddHttpClient<ICapabilitiesApi, CapabilitiesApiClient>(ConfigureClient);
+        services.AddHttpClient<ICapabilitiesApi, CapabilitiesApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>();
 
         // Tokenless for a third reason, and the sharpest of them: the crashes worth having are
         // often the ones that happen before anybody has signed in.
-        services.AddHttpClient<ICrashReportApi, CrashReportApiClient>(ConfigureClient);
+        services.AddHttpClient<ICrashReportApi, CrashReportApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>();
 
         // And tokenless for the sharpest reason of the four: the launcher that most needs an
         // update is the one that cannot sign in — pointed at a server it has never reached, or
         // carrying the very bug the update fixes.
-        services.AddHttpClient<ILauncherReleaseApi, LauncherReleaseApiClient>(ConfigureClient);
+        services.AddHttpClient<ILauncherReleaseApi, LauncherReleaseApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>();
         services.AddSingleton<IServerCapabilityProvider, CachedServerCapabilityProvider>();
 
         // Authenticated, unlike the auth client beside it: erasing an account is something a
         // signed-in account does to itself, and the password in the body is a second proof
         // rather than the first one.
         services.AddHttpClient<IAccountApi, AccountApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
 
         services.AddHttpClient<ICatalogApi, CatalogApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
 
         services.AddHttpClient<ILibraryApi, LibraryApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
 
         services.AddHttpClient<IDownloadApi, DownloadApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
 
         services.AddHttpClient<IPublishingApi, PublishingApiClient>(ConfigureClient)
+            .AddHttpMessageHandler<ReachabilityHandler>()
             .AddHttpMessageHandler<BearerTokenHandler>();
 
         // A third client, and deliberately not one of the two above. It talks to the file

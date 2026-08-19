@@ -8,6 +8,7 @@ public sealed class ApiProblemTests
     [InlineData("invalid_input", ApiErrorCode.InvalidInput)]
     [InlineData("unauthenticated", ApiErrorCode.Unauthenticated)]
     [InlineData("forbidden", ApiErrorCode.Forbidden)]
+    [InlineData("password_change_required", ApiErrorCode.PasswordChangeRequired)]
     [InlineData("not_found", ApiErrorCode.NotFound)]
     [InlineData("conflict", ApiErrorCode.Conflict)]
     [InlineData("quota_exceeded", ApiErrorCode.QuotaExceeded)]
@@ -17,6 +18,17 @@ public sealed class ApiProblemTests
     public void EveryCodeTheServerCanSendIsUnderstood(string code, ApiErrorCode expected)
     {
         Assert.Equal(expected, new ApiProblem { Code = code }.ToErrorCode(500));
+    }
+
+    // A 403 whose body names the category, told apart from a plain refusal by the code and
+    // never by its prose: the shell sends somebody to the screen that ends it.
+    [Fact]
+    public void AForcedPasswordChangeIsNotAnOrdinaryRefusal()
+    {
+        ApiProblem problem = new() { Code = "password_change_required", Status = 403 };
+
+        Assert.Equal(ApiErrorCode.PasswordChangeRequired, problem.ToErrorCode(403));
+        Assert.NotEqual(ApiErrorCode.Forbidden, problem.ToErrorCode(403));
     }
 
     // A reverse proxy or a crashed worker answers without the envelope; the status is then

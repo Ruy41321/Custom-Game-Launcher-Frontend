@@ -201,7 +201,11 @@ internal sealed class ApiTransport(HttpClient httpClient)
                 : problem?.Title ?? response.ReasonPhrase ?? "The request failed.",
             status,
             problem?.RequestId ?? requestId,
-            RetryAfterOf(response));
+            RetryAfterOf(response))
+        {
+            Rule = problem?.Rule is { Length: > 0 } rule ? rule : null,
+            RuleArgs = problem?.RuleArgs ?? [],
+        };
     }
 
     private static string? RequestIdOf(HttpResponseMessage response) =>

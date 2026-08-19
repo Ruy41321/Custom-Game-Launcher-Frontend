@@ -120,6 +120,57 @@ public sealed class PublishingApiClientTests
         Assert.Null(build.ReadyAt);
     }
 
+    // A PATCH on a version, and the property that makes it worth having: an omitted field is
+    // absent from the body, so publishing a version cannot rewrite its notes as a side effect.
+    [Fact]
+    public async Task PublishingAVersionPatchesOnlyThatField()
+    {
+        const string versionJson = """
+            {"id":"v1","gameId":"g1","semver":"0.2.0","stage":"beta","releaseNotes":"",
+             "publishedAt":"2026-01-02T03:04:05Z","published":true,
+             "createdAt":"2026-01-02T03:04:05Z"}
+            """;
+
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.OK, versionJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        GameVersion version = await client.UpdateVersionAsync(
+            "orbital-drift",
+            "v1",
+            new VersionChanges { Published = true },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("/api/v1/games/orbital-drift/versions/v1", handler.LastRequest.PathAndQuery);
+        Assert.Equal(HttpMethod.Patch, handler.LastRequest.Method);
+        Assert.Equal("""{"published":true}""", handler.LastRequest.Body);
+        Assert.True(version.Published);
+    }
+
+    [Fact]
+    public async Task ABuildCarriesTheNameItWasGiven()
+    {
+        const string buildJson = """
+            {"id":"b1","versionId":"v1","name":"Nightly","platform":"windows",
+             "architecture":"x64","status":"uploading","manifestSha256":"","totalSizeBytes":0,
+             "fileCount":0,"entrypoint":"","launchArgs":"",
+             "createdAt":"2026-01-02T03:04:05Z","readyAt":""}
+            """;
+
+        var handler = StubHttpMessageHandler.RespondingWith(HttpStatusCode.Created, buildJson);
+        var client = new PublishingApiClient(ClientOver(handler));
+
+        GameBuild build = await client.CreateBuildAsync(
+            "orbital-drift",
+            "v1",
+            new CreateBuildRequest { Platform = GamePlatform.Windows, Name = "Nightly" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            """{"platform":"windows","architecture":"x64","name":"Nightly"}""",
+            handler.LastRequest.Body);
+        Assert.Equal("Nightly", build.Name);
+    }
+
     // This is the call that keeps a second build cost only what actually changed.
     [Fact]
     public async Task BlobNegotiationAsksAboutEveryBlobAndReadsBackOnlyTheMissingOnes()

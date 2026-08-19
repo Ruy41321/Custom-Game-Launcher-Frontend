@@ -47,6 +47,13 @@ public sealed record GameBuild
 
     public string VersionId { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The publisher's own label, empty when they gave none — which is also what a build
+    /// published before the server grew the column looks like. Not an identifier: two builds of
+    /// one version may share a name.
+    /// </summary>
+    public string Name { get; init; } = string.Empty;
+
     public GamePlatform Platform { get; init; }
 
     public BuildArchitecture Architecture { get; init; }

@@ -57,11 +57,36 @@ public sealed record CreateVersionRequest
     public bool Publish { get; init; }
 }
 
+/// <summary>
+/// A partial update to a version. Absent means "leave it alone", which is what makes publishing
+/// a version and rewording its notes two independent requests rather than one that has to carry
+/// both.
+/// </summary>
+public sealed record VersionChanges
+{
+    public BuildStage? Stage { get; init; }
+
+    public string? ReleaseNotes { get; init; }
+
+    /// <summary>
+    /// The field this type exists for: until the server grew a PATCH on a version, one created
+    /// without <see cref="CreateVersionRequest.Publish"/> could not be published by any route.
+    /// </summary>
+    public bool? Published { get; init; }
+}
+
 public sealed record CreateBuildRequest
 {
     public required GamePlatform Platform { get; init; }
 
     public BuildArchitecture Architecture { get; init; } = BuildArchitecture.X64;
+
+    /// <summary>
+    /// The publisher's own label for this build. Optional, and the server stores an empty one
+    /// happily: a build's identity is (version, platform, architecture), and this is the part
+    /// that says which of four otherwise identical rows came out of which directory.
+    /// </summary>
+    public string? Name { get; init; }
 }
 
 /// <summary>A blob the publisher is offering: its content address and how big it is.</summary>
@@ -202,6 +227,19 @@ public interface IPublishingApi
 
     Task<GameVersion> CreateVersionAsync(
         string idOrSlug, CreateVersionRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Changes a version after it exists: its stage, its notes, and whether it is published.
+    ///
+    /// Publishing is idempotent — the server keeps the original date, so pressing the button
+    /// twice cannot move when a release went out — and withdrawing is allowed, which is the
+    /// reversible thing standing next to <see cref="DeleteVersionAsync"/>.
+    /// </summary>
+    Task<GameVersion> UpdateVersionAsync(
+        string idOrSlug,
+        string versionId,
+        VersionChanges changes,
+        CancellationToken cancellationToken = default);
 
     Task<GameBuild> CreateBuildAsync(
         string idOrSlug,

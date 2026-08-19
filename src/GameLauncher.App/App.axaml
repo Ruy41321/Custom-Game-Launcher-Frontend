@@ -33,6 +33,34 @@
       <Setter Property="Opacity" Value="0.4" />
     </Style>
 
+    <!-- A button that paints nothing at all: a cover that is itself the way into a game, or
+         the header of a devlog card that opens it. Anything the button drew would sit on top
+         of the content, which is the whole control as far as anybody looking at it is
+         concerned. -->
+    <Style Selector="Button.bare">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <!-- The theme aligns a button Left, so a bare one takes the width of whatever is inside
+           it and the two content alignments above have nothing to spread across: a cover frame
+           holding a placeholder letter became a 44px sliver of the 300px card it sits in, and
+           the whole header of a devlog card was pressable only where the text ran. Measured
+           against Avalonia 12.1.1 rather than reasoned about — see §7. -->
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <!-- Same trap as the disabled link above, from the other side: the theme paints the
+         templated presenter on hover and on press, which would wash grey over whatever is
+         inside. The content dims instead, so it still answers the pointer. -->
+    <Style Selector="Button.bare /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.bare:pointerover">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+
     <!-- Cards: one game in Explore or the library, one version on the detail page. -->
     <Style Selector="Border.card">
       <Setter Property="Background" Value="{DynamicResource SystemControlBackgroundAltHighBrush}" />

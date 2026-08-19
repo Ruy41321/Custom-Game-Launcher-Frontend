@@ -22,13 +22,13 @@
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
           <TextBlock Text="{Binding AppName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
           <Button Content="{loc:Tr Nav.Library}" Command="{Binding ShowLibraryCommand}"
-                  Classes="link" IsVisible="{Binding IsSignedIn}" />
+                  Classes="link" IsVisible="{Binding CanNavigate}" />
           <Button Content="{loc:Tr Nav.Explore}" Command="{Binding ShowExploreCommand}"
-                  Classes="link" IsVisible="{Binding IsSignedIn}" />
+                  Classes="link" IsVisible="{Binding CanNavigate}" />
           <Button Content="{loc:Tr Nav.Developer}" Command="{Binding ShowDeveloperCommand}"
                   Classes="link" IsVisible="{Binding CanPublish}" />
           <Button Content="{loc:Tr Nav.Settings}" Command="{Binding ShowSettingsCommand}"
-                  Classes="link" IsVisible="{Binding IsSignedIn}" />
+                  Classes="link" IsVisible="{Binding CanNavigate}" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
@@ -36,6 +36,10 @@
                      IsVisible="{Binding IsSignedIn}" />
           <Button Content="{loc:Tr Auth.SignOut}" Command="{Binding SignOutCommand}"
                   Classes="link" IsVisible="{Binding IsSignedIn}" />
+
+          <!-- The only way out of an offline visit: there is no session to sign out of. -->
+          <Button Content="{loc:Tr Auth.SignIn}" Command="{Binding ShowLoginCommand}"
+                  Classes="link" IsVisible="{Binding IsOfflineGuest}" />
 
           <TextBlock Text="{loc:Tr Common.Language}" VerticalAlignment="Center" Opacity="0.7" />
           <ComboBox ItemsSource="{Binding Languages}"

@@ -11,6 +11,30 @@
   <Border Classes="card" Width="380" VerticalAlignment="Center" HorizontalAlignment="Center">
     <StackPanel Spacing="14">
 
+      <!-- Said before a password is typed rather than after one has been waited on: signing
+           in needs a server, and a form that simply fails looks like a refused password. -->
+      <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="4"
+              Padding="10,8" IsVisible="{Binding IsServerUnreachable}">
+        <StackPanel Spacing="6">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBlock Grid.Column="0" Text="{loc:Tr Auth.ServerUnreachable}"
+                       FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Content="{loc:Tr Status.Retry}" Classes="link"
+                    VerticalAlignment="Center" Command="{Binding RetryCommand}" />
+          </Grid>
+
+          <!-- Offered only where it leads somewhere: the server is missing and this computer
+               has a game on it. Signing in needs a server; playing what is already here
+               does not. -->
+          <StackPanel Spacing="2" IsVisible="{Binding CanContinueOffline}">
+            <TextBlock Text="{loc:Tr Auth.OfflineGamesAvailable}" FontSize="12"
+                       TextWrapping="Wrap" />
+            <Button Content="{loc:Tr Auth.ContinueOffline}" Classes="link"
+                    HorizontalAlignment="Left" Command="{Binding ContinueOfflineCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
       <TextBlock Text="{loc:Tr Auth.SignIn}" FontSize="22" FontWeight="Light"
                  IsVisible="{Binding !IsRegistering}" />
       <TextBlock Text="{loc:Tr Auth.Register}" FontSize="22" FontWeight="Light"
@@ -28,12 +52,34 @@
 
       <StackPanel Spacing="4">
         <TextBlock Text="{loc:Tr Auth.Password}" Opacity="0.7" FontSize="12" />
-        <TextBox Text="{Binding Password}" PasswordChar="•" />
+        <TextBox Text="{Binding Password}" PasswordChar="•"
+                 RevealPassword="{Binding ShowPassword}" />
+        <CheckBox Content="{loc:Tr Auth.ShowPassword}" IsChecked="{Binding ShowPassword}"
+                  FontSize="12" />
       </StackPanel>
 
       <Button Command="{Binding RequestPasswordResetCommand}" Classes="link"
-              HorizontalAlignment="Right" IsVisible="{Binding !IsRegistering}"
-              Content="{loc:Tr Auth.ForgotPassword}" />
+              HorizontalAlignment="Right"
+              Content="{loc:Tr Auth.ForgotPassword}">
+        <Button.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="!IsRegistering" />
+            <Binding Path="MailAvailable" />
+          </MultiBinding>
+        </Button.IsVisible>
+      </Button>
+
+      <!-- What takes its place. The way back in is an operator handing out a one-time
+           password, so the sentence names the person to ask rather than saying nothing. -->
+      <TextBlock Text="{loc:Tr Auth.NoMailContactAdministrator}" TextWrapping="Wrap"
+                 Opacity="0.7" FontSize="12">
+        <TextBlock.IsVisible>
+          <MultiBinding Converter="{x:Static BoolConverters.And}">
+            <Binding Path="!IsRegistering" />
+            <Binding Path="!MailAvailable" />
+          </MultiBinding>
+        </TextBlock.IsVisible>
+      </TextBlock>
 
       <TextBlock Classes="error" Text="{Binding ErrorMessage}"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />

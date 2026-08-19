@@ -25,10 +25,15 @@
         </Grid>
 
         <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
-                   Text="{Binding DefaultInstallDirectory, StringFormat={loc:Tr Settings.InstallDirectoryDefault}}" />
+                   Text="{Binding DefaultInstallDirectoryNotice}" />
 
         <TextBlock Text="{Binding InstalledElsewhereNotice}" Opacity="0.55" FontSize="11"
                    TextWrapping="Wrap" IsVisible="{Binding HasInstalledElsewhere}" />
+
+        <CheckBox Content="{loc:Tr Settings.AskWhereToInstall}"
+                  IsChecked="{Binding AskWhereToInstall}" Margin="0,6,0,0" />
+        <TextBlock Text="{loc:Tr Settings.AskWhereToInstallExplain}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" />
       </StackPanel>
 
       <StackPanel Spacing="8">
@@ -57,10 +62,10 @@
         <TextBlock Text="{loc:Tr Settings.DeleteAccountExplain}" Opacity="0.7" FontSize="12"
                    TextWrapping="Wrap" />
 
-        <TextBox PasswordChar="•" Watermark="{loc:Tr Settings.DeletePassword}"
+        <TextBox PasswordChar="•" PlaceholderText="{loc:Tr Settings.DeletePassword}"
                  Text="{Binding DeletePassword}" MaxWidth="320" HorizontalAlignment="Left" />
 
-        <TextBox Watermark="{loc:Tr Settings.DeleteReason}" Text="{Binding DeleteReason}"
+        <TextBox PlaceholderText="{loc:Tr Settings.DeleteReason}" Text="{Binding DeleteReason}"
                  MaxWidth="320" HorizontalAlignment="Left" />
 
         <Button Content="{loc:Tr Settings.DeleteAccount}" HorizontalAlignment="Left"

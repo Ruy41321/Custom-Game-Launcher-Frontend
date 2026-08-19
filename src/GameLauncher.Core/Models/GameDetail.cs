@@ -16,7 +16,10 @@ public sealed record GameDetail
 
     public IReadOnlyList<GameBuild> Builds { get; init; } = [];
 
-    /// <summary>Every picture the game has: at most one cover, banner and logo, plus the gallery.</summary>
+    /// <summary>
+    /// Everything hanging off the game: at most one cover, banner and logo, plus the screenshot
+    /// gallery and the videos.
+    /// </summary>
     public IReadOnlyList<GameMedia> Media { get; init; } = [];
 
     /// <summary>
@@ -24,7 +27,7 @@ public sealed record GameDetail
     /// uploaded it — which is the ordinary case for a banner and a logo.
     /// </summary>
     public GameMedia? Artwork(MediaKind kind) =>
-        kind == MediaKind.Screenshot
+        kind is MediaKind.Screenshot or MediaKind.Video
             ? null
             : Media.FirstOrDefault(item => item.Kind == kind);
 
@@ -41,15 +44,43 @@ public sealed record GameDetail
     ];
 
     /// <summary>
+    /// The videos, ordered the way the screenshots are and for the same reason. Kept separate
+    /// rather than filtered at each call site: they are shown in a different place and played
+    /// rather than decoded, and a list that mixed them would hand a container to an image
+    /// decoder.
+    /// </summary>
+    public IReadOnlyList<GameMedia> Videos =>
+    [
+        .. Media
+            .Where(item => item.Kind == MediaKind.Video)
+            .OrderBy(item => item.SortOrder)
+            .ThenBy(item => item.CreatedAt),
+    ];
+
+    /// <summary>
     /// The build to install on this machine, or null when the publisher has shipped nothing
-    /// for it yet. Newest ready build for the platform, preferring the running architecture.
+    /// for it yet. Newest ready build of a <em>published</em> version for the platform,
+    /// preferring the running architecture. A build whose version is not published is not a
+    /// candidate for anybody, its publisher included (D71).
     /// </summary>
     public GameBuild? BuildFor(GamePlatform platform, BuildArchitecture architecture) =>
         Builds
-            .Where(build => build.Status == BuildStatus.Ready && build.Platform == platform)
+            .Where(build =>
+                build.Status == BuildStatus.Ready
+                && build.Platform == platform
+                && IsPublished(build))
             .OrderByDescending(build => build.Architecture == architecture)
             .ThenByDescending(build => build.ReadyAt ?? build.CreatedAt)
             .FirstOrDefault();
+
+    /// <summary>
+    /// Whether the version a build belongs to is out. A build the version list says nothing
+    /// about counts as unpublished, the same direction the server's <c>versionPublished</c>
+    /// defaults in: a listing that forgot to carry the version withholds a build rather than
+    /// offering one nobody may download.
+    /// </summary>
+    private bool IsPublished(GameBuild build) =>
+        Versions.FirstOrDefault(version => version.Id == build.VersionId)?.Published ?? false;
 }
 
 /// <summary>One page of a paged listing, in the envelope the server sends.</summary>

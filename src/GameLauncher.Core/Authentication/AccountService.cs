@@ -40,4 +40,31 @@ public sealed class AccountService(
         logger.LogInformation("The account was erased; signing out.");
         await authentication.SignOutAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    public async Task ChangePasswordAsync(
+        string currentPassword, string newPassword, CancellationToken cancellationToken = default)
+    {
+        if (!authentication.IsAuthenticated)
+        {
+            throw new ApiException(ApiErrorCode.Unauthenticated, "Not signed in.");
+        }
+
+        ChangePasswordRequest request = new()
+        {
+            CurrentPassword = currentPassword,
+            NewPassword = newPassword,
+        };
+
+        // Nothing is caught, for the reason the erasure gives: a wrong current password and a
+        // new one that breaks the policy are both answers the person can act on.
+        AuthSession session = await account
+            .ChangePasswordAsync(request, cancellationToken)
+            .ConfigureAwait(false);
+
+        // Only on success, and the session in hand is the only live one left: the server
+        // revoked the rest, this caller's included. Adopting it is what keeps "the password
+        // changed" and "this launcher is still signed in" from being two facts that disagree.
+        logger.LogInformation("The password was changed; taking over the new session.");
+        await authentication.AdoptAsync(session, cancellationToken).ConfigureAwait(false);
+    }
 }

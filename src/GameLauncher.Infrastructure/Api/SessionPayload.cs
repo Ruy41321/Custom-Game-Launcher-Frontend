@@ -47,6 +47,9 @@ internal sealed record UserPayload
 
     public bool EmailVerified { get; init; }
 
+    /// <summary>Absent on a server older than the field, which reads as false — an ordinary account.</summary>
+    public bool PasswordChangeRequired { get; init; }
+
     public long UploadQuotaBytes { get; init; }
 
     public long UploadUsedBytes { get; init; }
@@ -57,6 +60,7 @@ internal sealed record UserPayload
         Email = Email,
         DisplayName = DisplayName,
         EmailVerified = EmailVerified,
+        PasswordChangeRequired = PasswordChangeRequired,
         UploadQuotaBytes = UploadQuotaBytes,
         UploadUsedBytes = UploadUsedBytes,
     };

@@ -36,6 +36,40 @@ public sealed class ApiErrorHandlingTests
         Assert.Equal("01HZY", exception.RequestId);
     }
 
+    // The rule is what makes a 422 sayable in the user's own language; the arguments are what
+    // let the sentence name the limit instead of only that one was broken.
+    [Fact]
+    public async Task AValidationEnvelopeCarriesItsRuleAndArguments()
+    {
+        const string envelope = """
+            { "title": "Validation failed", "status": 422, "code": "invalid_input",
+              "rule": "password_too_short", "ruleArgs": ["8"],
+              "detail": "password must be at least 8 characters", "requestId": "01HZY" }
+            """;
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(() => CallAsync(
+            StubHttpMessageHandler.RespondingWith(HttpStatusCode.UnprocessableEntity, envelope)));
+
+        Assert.Equal(ApiErrorCode.InvalidInput, exception.Code);
+        Assert.Equal("password_too_short", exception.Rule);
+        Assert.Equal("8", Assert.Single(exception.RuleArgs));
+    }
+
+    // Which is every refusal that is not about a field somebody typed, and every response from
+    // a server older than the field. Both have to read the same from here.
+    [Fact]
+    public async Task AnEnvelopeWithoutARuleLeavesTheExceptionWithoutOne()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(
+            HttpStatusCode.UnprocessableEntity,
+            """{ "code": "invalid_input", "detail": "password is required" }""");
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(() => CallAsync(handler));
+
+        Assert.Null(exception.Rule);
+        Assert.Empty(exception.RuleArgs);
+    }
+
     // The request id is the one string that finds the request in the server's logs, so it is
     // taken from the header when the body has no room for it.
     [Fact]

@@ -11,6 +11,14 @@ public sealed record AuthenticatedUser
 
     public bool EmailVerified { get; init; }
 
+    /// <summary>
+    /// The account is signed in on a password an operator chose for it. Every route but the
+    /// password change is refused until it is replaced, so this is not advice — it is the
+    /// state the launcher is in, and the shell shows the screen that ends it rather than
+    /// letting the first request discover it as a 403.
+    /// </summary>
+    public bool PasswordChangeRequired { get; init; }
+
     public long UploadQuotaBytes { get; init; }
 
     public long UploadUsedBytes { get; init; }

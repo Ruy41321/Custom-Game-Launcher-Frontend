@@ -87,6 +87,11 @@ public partial class App : Application
         // the library and the detail page show.
         services.AddSingleton<IImageProvider, CachedImageProvider>();
 
+        // One player for the whole launcher, because one video plays at a time and the native
+        // library behind it is not something to hold two copies of. It initialises lazily, so a
+        // session that never opens a trailer never loads it.
+        services.AddSingleton<IVideoPlayback, LibVlcVideoPlayback>();
+
         // View models are singletons: the shell holds all of them for the life of the window,
         // and a page that keeps its scroll position and search term when you come back to it
         // is what a user expects.
@@ -99,6 +104,7 @@ public partial class App : Application
         services.AddSingleton<GameDevlogViewModel>();
         services.AddSingleton<DeveloperViewModel>();
         services.AddSingleton<SettingsViewModel>();
+        services.AddSingleton<ChangePasswordViewModel>();
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();

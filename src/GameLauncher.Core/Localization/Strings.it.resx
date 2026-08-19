@@ -98,6 +98,21 @@
   <data name="Status.Offline" xml:space="preserve">
     <value>Offline — puoi comunque avviare i giochi installati</value>
   </data>
+  <data name="Status.Retry" xml:space="preserve">
+    <value>Riprova</value>
+  </data>
+  <data name="Auth.ServerUnreachable" xml:space="preserve">
+    <value>Il server non è raggiungibile, quindi al momento non è possibile accedere. Controlla la connessione e riprova.</value>
+  </data>
+  <data name="Auth.OfflineGamesAvailable" xml:space="preserve">
+    <value>I giochi già installati su questo computer si possono comunque avviare senza accedere.</value>
+  </data>
+  <data name="Auth.ContinueOffline" xml:space="preserve">
+    <value>Continua offline</value>
+  </data>
+  <data name="Status.OfflineNotSignedIn" xml:space="preserve">
+    <value>Offline e non connesso — questo è ciò che è installato su questo computer, non tutta la tua libreria</value>
+  </data>
   <data name="Status.Connecting" xml:space="preserve">
     <value>Connessione in corso…</value>
   </data>
@@ -143,8 +158,95 @@
   <data name="Error.DependencyFailure" xml:space="preserve">
     <value>Il server non è temporaneamente disponibile. Riprova tra poco.</value>
   </data>
-  <data name="Error.WithReference" xml:space="preserve">
-    <value>{0} (riferimento {1})</value>
+  <data name="Error.Validation.EmailRequired" xml:space="preserve">
+    <value>Inserisci un indirizzo email.</value>
+  </data>
+  <data name="Error.Validation.EmailTooLong" xml:space="preserve">
+    <value>L'indirizzo email è troppo lungo: al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.EmailInvalid" xml:space="preserve">
+    <value>Questo non sembra un indirizzo email.</value>
+  </data>
+  <data name="Error.Validation.PasswordRequired" xml:space="preserve">
+    <value>Inserisci una password.</value>
+  </data>
+  <data name="Error.Validation.PasswordTooShort" xml:space="preserve">
+    <value>La password deve contenere almeno {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.PasswordTooLong" xml:space="preserve">
+    <value>La password deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.PasswordBlank" xml:space="preserve">
+    <value>La password non può essere fatta di soli spazi.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameRequired" xml:space="preserve">
+    <value>Inserisci un nome visualizzato.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameTooShort" xml:space="preserve">
+    <value>Il nome visualizzato deve contenere almeno {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameTooLong" xml:space="preserve">
+    <value>Il nome visualizzato deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameInvalid" xml:space="preserve">
+    <value>Il nome visualizzato contiene caratteri non ammessi.</value>
+  </data>
+  <data name="Error.Validation.ErasureReasonTooLong" xml:space="preserve">
+    <value>Il motivo deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.TitleRequired" xml:space="preserve">
+    <value>Il titolo non può essere vuoto.</value>
+  </data>
+  <data name="Error.Validation.TitleTooLong" xml:space="preserve">
+    <value>Il titolo deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.SummaryTooLong" xml:space="preserve">
+    <value>Il riassunto deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.DescriptionTooLong" xml:space="preserve">
+    <value>La descrizione deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.SlugRequired" xml:space="preserve">
+    <value>Il titolo deve contenere almeno una lettera o una cifra, per ricavarne un indirizzo web.</value>
+  </data>
+  <data name="Error.Validation.SlugTooLong" xml:space="preserve">
+    <value>L'indirizzo web deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.SlugInvalid" xml:space="preserve">
+    <value>L'indirizzo web può contenere solo lettere minuscole, cifre e trattini singoli.</value>
+  </data>
+  <data name="Error.Validation.ReleaseDateInvalid" xml:space="preserve">
+    <value>La data di uscita non è una data valida.</value>
+  </data>
+  <data name="Error.Validation.VersionRequired" xml:space="preserve">
+    <value>Inserisci un numero di versione.</value>
+  </data>
+  <data name="Error.Validation.VersionInvalid" xml:space="preserve">
+    <value>Un numero di versione ha al massimo tre numeri separati da punti, come 1.2.3.</value>
+  </data>
+  <data name="Error.Validation.VersionTooLarge" xml:space="preserve">
+    <value>Ogni parte del numero di versione deve essere al massimo {0}.</value>
+  </data>
+  <data name="Error.Validation.ReleaseNotesTooLong" xml:space="preserve">
+    <value>Le note di rilascio devono contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.BuildNameTooLong" xml:space="preserve">
+    <value>Il nome della build deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteTitleRequired" xml:space="preserve">
+    <value>La voce del devlog deve avere un titolo.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteTitleTooLong" xml:space="preserve">
+    <value>Il titolo del devlog deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteBodyTooLong" xml:space="preserve">
+    <value>La voce del devlog deve contenere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.AltTextTooLong" xml:space="preserve">
+    <value>La descrizione può avere al massimo {0} caratteri.</value>
+  </data>
+  <data name="Error.Validation.AltTextInvalid" xml:space="preserve">
+    <value>La descrizione contiene caratteri non ammessi.</value>
   </data>
   <data name="Common.Previous" xml:space="preserve">
     <value>Precedente</value>
@@ -214,6 +316,12 @@
   </data>
   <data name="Explore.SearchPlaceholder" xml:space="preserve">
     <value>Cerca per titolo</value>
+  </data>
+  <data name="Explore.IdentifierPlaceholder" xml:space="preserve">
+    <value>ID o slug del gioco, per un gioco condiviso con te</value>
+  </data>
+  <data name="Explore.OpenIdentifier" xml:space="preserve">
+    <value>Apri</value>
   </data>
   <data name="Explore.Empty" xml:space="preserve">
     <value>Nessun risultato per questa ricerca.</value>
@@ -312,7 +420,7 @@
     <value>Annulla</value>
   </data>
   <data name="Detail.InstalledVersion" xml:space="preserve">
-    <value>Installato: {0}</value>
+    <value>Versione installata: {0}</value>
   </data>
   <data name="Detail.UpdateAvailable" xml:space="preserve">
     <value>È disponibile l'aggiornamento a {0}.</value>
@@ -416,6 +524,9 @@
   <data name="Publish.Create" xml:space="preserve">
     <value>Crea</value>
   </data>
+  <data name="Publish.SlugHint" xml:space="preserve">
+    <value>Dai questo identificativo a qualcuno per fargli aprire il gioco. Un gioco non elencato non compare in nessuna lista, quindi è l'unico modo per raggiungerlo.</value>
+  </data>
   <data name="Publish.GameCreated" xml:space="preserve">
     <value>Creato {0}.</value>
   </data>
@@ -436,6 +547,21 @@
   </data>
   <data name="Publish.PublishNow" xml:space="preserve">
     <value>Pubblicala subito</value>
+  </data>
+  <data name="Publish.PublishVersion" xml:space="preserve">
+    <value>Pubblica</value>
+  </data>
+  <data name="Publish.WithdrawVersion" xml:space="preserve">
+    <value>Ritira</value>
+  </data>
+  <data name="Publish.VersionPublished" xml:space="preserve">
+    <value>La versione {0} è pubblicata.</value>
+  </data>
+  <data name="Publish.VersionWithdrawn" xml:space="preserve">
+    <value>La versione {0} non è più pubblicata.</value>
+  </data>
+  <data name="Publish.BuildName" xml:space="preserve">
+    <value>Nome della build (facoltativo)</value>
   </data>
   <data name="Publish.VersionCreated" xml:space="preserve">
     <value>Creata la versione {0}.</value>
@@ -599,6 +725,9 @@
   <data name="Publish.NoArtwork" xml:space="preserve">
     <value>Questo gioco non ha ancora immagini.</value>
   </data>
+  <data name="Publish.OpenGamePage" xml:space="preserve">
+    <value>Apri la pagina del gioco</value>
+  </data>
   <data name="Publish.ImageUploaded" xml:space="preserve">
     <value>{0} caricata.</value>
   </data>
@@ -625,6 +754,48 @@
   </data>
   <data name="Publish.Kind.Logo" xml:space="preserve">
     <value>Logo</value>
+  </data>
+  <data name="Detail.Videos" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Detail.PlayVideo" xml:space="preserve">
+    <value>Riproduci</value>
+  </data>
+  <data name="Detail.StopVideo" xml:space="preserve">
+    <value>Interrompi</value>
+  </data>
+  <data name="Detail.VideoUnavailable" xml:space="preserve">
+    <value>La riproduzione video non è disponibile su questo computer.</value>
+  </data>
+  <data name="Detail.VideoFailed" xml:space="preserve">
+    <value>Non è stato possibile riprodurre il video.</value>
+  </data>
+  <data name="Publish.ChooseVideo" xml:space="preserve">
+    <value>Scegli un video</value>
+  </data>
+  <data name="Publish.Videos" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Publish.Kind.Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Publish.VideoLimits" xml:space="preserve">
+    <value>{0}, fino a {1}. Al massimo {2} video per gioco.</value>
+  </data>
+  <data name="Publish.VideoCount" xml:space="preserve">
+    <value>{0} di {1} video</value>
+  </data>
+  <data name="Publish.Media.VideoTooLarge" xml:space="preserve">
+    <value>Questo server accetta video fino a {0}.</value>
+  </data>
+  <data name="Publish.Media.UnsupportedVideoFormat" xml:space="preserve">
+    <value>Sono accettati solo MP4 e WebM. I file Matroska e QuickTime sono rifiutati anche dove un lettore li aprirebbe.</value>
+  </data>
+  <data name="Publish.Media.VideoGalleryFull" xml:space="preserve">
+    <value>Questo gioco ha già i {0} video che questo server consente.</value>
+  </data>
+  <data name="Publish.Media.VideoNotSupported" xml:space="preserve">
+    <value>Questo server non conserva video.</value>
   </data>
   <data name="Publish.Kind.Screenshot" xml:space="preserve">
     <value>Screenshot</value>
@@ -787,5 +958,56 @@
   </data>
   <data name="Update.Dismiss" xml:space="preserve">
     <value>Non ora</value>
+  </data>
+  <data name="Auth.ShowPassword" xml:space="preserve">
+    <value>Mostra password</value>
+  </data>
+  <data name="Detail.OpenFolder" xml:space="preserve">
+    <value>Vai ai file</value>
+  </data>
+  <data name="Detail.OpenFolderFailed" xml:space="preserve">
+    <value>Non è stato possibile aprire la cartella di installazione.</value>
+  </data>
+  <data name="Detail.UpdateBeforePlaying" xml:space="preserve">
+    <value>Aggiorna il gioco prima di avviarlo: quello che hai installato non è più la build più recente.</value>
+  </data>
+  <data name="Detail.ChooseInstallDirectory" xml:space="preserve">
+    <value>Dove vuoi installare {0}?</value>
+  </data>
+  <data name="Settings.AskWhereToInstall" xml:space="preserve">
+    <value>Chiedi dove installare ogni gioco</value>
+  </data>
+  <data name="Settings.AskWhereToInstallExplain" xml:space="preserve">
+    <value>Disattivo, un gioco finisce nella cartella qui sopra senza chiedere niente. Attivo, quella cartella è solo il punto da cui parte la domanda, e annullare la domanda annulla l'installazione.</value>
+  </data>
+  <data name="Account.ChangePassword" xml:space="preserve">
+    <value>Cambia la password</value>
+  </data>
+  <data name="Account.PasswordChangeRequired" xml:space="preserve">
+    <value>Questo account sta usando una password temporanea impostata da un amministratore. Scegline una tua per continuare.</value>
+  </data>
+  <data name="Account.CurrentPassword" xml:space="preserve">
+    <value>Password attuale</value>
+  </data>
+  <data name="Account.NewPassword" xml:space="preserve">
+    <value>Nuova password</value>
+  </data>
+  <data name="Account.ConfirmPassword" xml:space="preserve">
+    <value>Ripeti la nuova password</value>
+  </data>
+  <data name="Account.SavePassword" xml:space="preserve">
+    <value>Salva la nuova password</value>
+  </data>
+  <data name="Account.PasswordsDoNotMatch" xml:space="preserve">
+    <value>Le due nuove password non coincidono.</value>
+  </data>
+  <data name="Account.CurrentPasswordWrong" xml:space="preserve">
+    <value>Questa non è la tua password attuale.</value>
+  </data>
+  <data name="Auth.NoMailContactAdministrator" xml:space="preserve">
+    <value>Questo server non manda email. Se hai dimenticato la password, chiedi una password temporanea a un amministratore.</value>
+  </data>
+  <data name="Error.Validation.PasswordUnchanged" xml:space="preserve">
+    <value>La nuova password deve essere diversa da quella attuale.</value>
   </data>
 </root>

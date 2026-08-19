@@ -4,6 +4,9 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:loc="clr-namespace:GameLauncher.App.Localization"
              xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             xmlns:controls="clr-namespace:GameLauncher.App.Controls"
+             xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+             xmlns:vlcshared="clr-namespace:LibVLCSharp.Shared;assembly=LibVLCSharp"
              mc:Ignorable="d"
              x:Class="GameLauncher.App.Views.GameDetail"
              x:DataType="vm:GameDetailViewModel">
@@ -50,7 +53,8 @@
           <Button Content="{loc:Tr Explore.AddToLibrary}" Classes="accent"
                   Command="{Binding AddToLibraryCommand}" IsVisible="{Binding !InLibrary}" />
           <Button Content="{loc:Tr Library.Remove}"
-                  Command="{Binding RemoveFromLibraryCommand}" IsVisible="{Binding InLibrary}" />
+                  Command="{Binding RemoveFromLibraryCommand}"
+                  IsVisible="{Binding CanRemoveFromLibrary}" />
           <Button Content="{loc:Tr Library.Play}" Classes="accent"
                   Command="{Binding PlayCommand}" IsVisible="{Binding CanPlay}" />
           <Button Content="{loc:Tr Library.Install}" Classes="accent"
@@ -61,6 +65,8 @@
                   Command="{Binding VerifyCommand}" IsVisible="{Binding CanVerify}" />
           <Button Content="{loc:Tr Library.Uninstall}"
                   Command="{Binding UninstallCommand}" IsVisible="{Binding CanUninstall}" />
+          <Button Content="{loc:Tr Detail.OpenFolder}"
+                  Command="{Binding OpenFolderCommand}" IsVisible="{Binding CanOpenFolder}" />
           <Button Content="{loc:Tr Detail.CancelDownload}"
                   Command="{Binding CancelInstallCommand}" IsVisible="{Binding IsWorking}" />
         </StackPanel>
@@ -78,6 +84,10 @@
 
         <TextBlock Text="{Binding InstalledVersion}" Opacity="0.7" FontSize="12"
                    IsVisible="{Binding IsInstalled}" />
+
+        <!-- Where the Play button would have been, saying why it is not there. -->
+        <TextBlock Text="{loc:Tr Detail.UpdateBeforePlaying}" Opacity="0.7" FontSize="12"
+                   TextWrapping="Wrap" IsVisible="{Binding MustUpdateBeforePlaying}" />
 
         <TextBlock Text="{loc:Tr Detail.Broken}" Classes="error" TextWrapping="Wrap"
                    IsVisible="{Binding IsBroken}" />
@@ -122,7 +132,7 @@
                 </ItemsPanelTemplate>
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="vm:ScreenshotViewModel">
+                <DataTemplate x:DataType="vm:MediaCardViewModel">
                   <Button Classes="link" Padding="0"
                           Command="{Binding $parent[ItemsControl].((vm:GameDetailViewModel)DataContext).ShowScreenshotCommand}"
                           CommandParameter="{Binding}">
@@ -138,6 +148,68 @@
           </ScrollViewer>
         </StackPanel>
 
+        <!-- Videos. Their own section rather than rows in the screenshot strip: one is played
+             and the other is decoded, and the player is a native surface that has nothing in
+             common with an Image. The surface is only in the tree while something is playing —
+             a NativeControlHost draws above everything around it, so an idle one would sit on
+             top of the page for no reason. -->
+        <StackPanel Spacing="8" IsVisible="{Binding HasVideos}">
+          <TextBlock Text="{loc:Tr Detail.Videos}" FontSize="18" FontWeight="Light"
+                     Margin="0,10,0,0" />
+
+          <!-- A ContentControl and not a VideoView sitting here hidden. `IsVisible` does not
+               take a control out of the visual tree, and a NativeControlHost creates its child
+               window the moment it is attached — which crashed the launcher on every game page
+               until the manifest gained its supportedOS list. Bound to null until something
+               plays, this creates nothing at all. -->
+          <Border CornerRadius="6" ClipToBounds="True" Height="360" Background="Black"
+                  IsVisible="{Binding IsPlayingVideo}">
+            <ContentControl Content="{Binding VideoPlayer}">
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="vlcshared:MediaPlayer">
+                  <vlc:VideoView MediaPlayer="{Binding}" />
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+          </Border>
+
+          <Button Content="{loc:Tr Detail.StopVideo}" Classes="link"
+                  Command="{Binding StopVideoCommand}"
+                  IsVisible="{Binding IsPlayingVideo}" HorizontalAlignment="Left" />
+
+          <TextBlock Classes="error" Text="{Binding VideoError}" TextWrapping="Wrap" FontSize="12"
+                     IsVisible="{Binding VideoError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <ItemsControl ItemsSource="{Binding Videos}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MediaCardViewModel">
+                <Button Classes="bare" Padding="0"
+                        Command="{Binding $parent[ItemsControl].((vm:GameDetailViewModel)DataContext).PlayVideoCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding AltText}">
+                  <Border Width="180" Height="76" CornerRadius="4" Padding="10"
+                          Background="{DynamicResource SystemChromeMediumColor}">
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                      <TextBlock Text="{loc:Tr Detail.PlayVideo}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding AltText}" FontSize="11" Opacity="0.7"
+                                 TextTrimming="CharacterEllipsis" MaxLines="2"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="{loc:Tr Detail.VideoUnavailable}" Opacity="0.6" FontSize="12"
+                     TextWrapping="Wrap" IsVisible="{Binding ShowVideoUnavailable}" />
+        </StackPanel>
+
         <TextBlock Text="{loc:Tr Detail.Devlog}" FontSize="18" FontWeight="Light" Margin="0,10,0,0" />
 
         <TextBlock Text="{loc:Tr Detail.DevlogEmpty}" Opacity="0.5" FontSize="12"
@@ -146,23 +218,41 @@
         <TextBlock Classes="error" Text="{Binding DevlogError}" TextWrapping="Wrap" FontSize="12"
                    IsVisible="{Binding DevlogError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
+        <!-- Cards that open, rather than every post's full text one after another. The whole
+             header is the toggle: a small chevron would be the only thing on the card worth
+             pressing and the hardest thing on it to hit. -->
         <ItemsControl ItemsSource="{Binding Devlog}">
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:PatchNoteCardViewModel">
               <Border Classes="card" Margin="0,0,0,10">
                 <StackPanel Spacing="6">
-                  <StackPanel Orientation="Horizontal" Spacing="10">
-                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                    <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3"
-                            Padding="6,1" IsVisible="{Binding ShowVersion}">
-                      <TextBlock Text="{Binding VersionLabel}" FontSize="11" />
-                    </Border>
-                  </StackPanel>
-                  <StackPanel Orientation="Horizontal" Spacing="8">
-                    <TextBlock Text="{Binding PublishedOn}" Opacity="0.5" FontSize="12" />
-                    <TextBlock Text="{Binding Author}" Opacity="0.5" FontSize="12" />
-                  </StackPanel>
-                  <TextBlock Text="{Binding Body}" TextWrapping="Wrap" Opacity="0.85" />
+
+                  <Button Classes="bare" Command="{Binding ToggleCommand}"
+                          AutomationProperties.Name="{Binding Title}">
+                    <StackPanel Spacing="6">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                        <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3"
+                                Padding="6,1" IsVisible="{Binding ShowVersion}"
+                                VerticalAlignment="Center">
+                          <TextBlock Text="{Binding VersionLabel}" FontSize="11" />
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding PublishedOn}" Opacity="0.5" FontSize="12" />
+                        <TextBlock Text="{Binding Author}" Opacity="0.5" FontSize="12" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+
+                  <!-- One line of the post while it is shut, so a list of them is a list. -->
+                  <TextBlock Text="{Binding Preview}" Opacity="0.6" FontSize="12"
+                             TextTrimming="CharacterEllipsis" MaxLines="1"
+                             IsVisible="{Binding !IsExpanded}" />
+
+                  <controls:MarkdownPresenter Markdown="{Binding Body}" Opacity="0.9"
+                                              IsVisible="{Binding IsExpanded}" />
                 </StackPanel>
               </Border>
             </DataTemplate>

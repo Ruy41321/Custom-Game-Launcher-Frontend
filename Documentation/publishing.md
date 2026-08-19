@@ -195,6 +195,36 @@ The gallery cap applies to screenshots alone. A game has one cover, one banner a
 uploading another *is* how you replace it — counting those against the gallery would refuse a
 legitimate replacement.
 
+### The gallery shows the pictures
+
+Both lists hold `MediaCardViewModel`, the same type the game page uses for its screenshot strip:
+a `GameMedia` and its decoded `Bitmap`, fetched through `IImageProvider` once the rows are on
+screen. Before this the artwork tab was **alt text and nothing else**, so a publisher reordering
+their own screenshots was reading the descriptions they had typed and remembering which picture
+each one belonged to.
+
+One type rather than one per screen, for the reason the server keeps `mayViewGame` in `domain/`:
+two view models both meaning "a picture and its bitmap" is one shape maintained in two places.
+The dashboard needs `Media` on it because its commands act on the record; the game page never
+looks at it.
+
+A picture that does not arrive leaves its row — with its description, its arrows and its delete
+button — and an empty frame. `IImageLoader` reports every failure as null (an unreachable host, a
+refused request, a response too large, bytes that are not an image), and a gallery that lost one
+thumbnail is not a page that failed.
+
+### A button to the game's own page
+
+The dashboard shows the boxes a publisher filled in; only the game page shows what they add up
+to — whether the banner is the right way round, whether the summary reads as a sentence, whether
+the screenshots are in an order that means something. It is a navigation event to the shell
+(D17), so this page does not know the game page exists, and "back" returns here because showing
+the dashboard already records it as the list to come back to.
+
+It is offered **for a draft too**, which is the case worth stating: `CatalogService::gameDetail`
+serves a game to whoever may edit it whatever its visibility, and a publisher's own unreleased
+page is a thing only they can read.
+
 ### A picture is never replaced in place
 
 `PATCH /media/{id}` carries alt text and sort order and nothing else. There is no route that
@@ -212,6 +242,31 @@ verified by UI automation, which this repository deliberately does not have, whi
 command a test presses; a gallery is capped at a dozen entries, which is where dragging stops
 paying; and a swap is two deterministic `PATCH`es where a drop could renumber the whole list,
 with nothing to make those calls atomic.
+
+### Uploading a video
+
+A video goes through the same route with `kind=video`, and differs in three numbers and one
+refusal.
+
+The numbers are `media.maxVideoBytes`, `media.maxVideosPerGame` and `media.videoContentTypes`,
+all from `/capabilities`, and the dashboard shows **the video sentence** while video is the
+chosen kind: a publisher choosing a trailer and reading the picture limit has been told the
+wrong thing. The two galleries are also counted apart — a game at its video cap can still take
+a screenshot — because the server counts them apart.
+
+The refusal is the reason the client checks the size at all. An oversized picture is refused by
+the API with a message naming the limit; an oversized video is refused by the web framework in
+front of it, before any handler runs, as a bare `413` with no problem document. If the client
+does not catch it, nothing can explain it.
+
+**Video is offered only where the server said it stores one.** A deployment that names no video
+limits cannot take one, and the kind is removed from the dropdown rather than left there to
+produce refusals — the same rule that removes dead-end buttons elsewhere.
+
+The picker offers `mp4` and `webm`, and the bytes are checked against the container rules before
+anything travels: the ISO base media brand (so a HEIC is not offered as a trailer) and the WebM
+DocType in the first 64 bytes (so Matroska is refused). As with pictures, a positive answer
+vouches for nothing — the server decides, from the same bytes.
 
 ### Publishing and withdrawing are one field
 
@@ -303,6 +358,34 @@ Two conveniences worth keeping:
 - **The entrypoint is guessed** when the chosen directory contains exactly one `.exe`. Typing
   the name again is a chance to get it wrong in a way that only surfaces after the upload.
 
+### The version list: publish afterwards, and what is under each row (D65)
+
+Each version is a `VersionRowViewModel` rather than a bare `GameVersion`, because the row has to
+say two things the wire record cannot.
+
+**Publish and Withdraw.** Until 2026-08-17 there was no server route that changed a version, so
+a version created with "publish it now" unticked was a dead end: the only way past it was to
+delete the version and its builds and upload everything again. `PATCH …/versions/{id}` fixed
+that, and the row carries the button. It is a command rather than a checkbox because it is a
+request the server can refuse, and a tick that springs back is a UI claiming state it does not
+own — a refusal leaves the row saying what is actually true and puts the reason on the error
+line. There is no confirmation prompt: D43's budget is for the things that cannot be undone, and
+this one is undone by pressing the other button. Publishing is safe to repeat, because the
+server keeps the original publication date.
+
+**Which builds are under it.** The server sends versions and builds as two flat lists, so
+joining them is this page's job. The summary shows each build's **name** where it has one and
+falls back to its platform and architecture where it does not — the same information the builds
+list below repeats, and the only thing that distinguishes two rows both reading
+"0.3.0 beta published". The summary is refreshed **in place** after a build is published or
+deleted, rather than the list being rebuilt, which would drop the selection the publisher is in
+the middle of using.
+
+A build is named on the publish form, and the field is cleared afterwards: the next build is a
+different one, and inheriting the last label is how two builds end up called the same thing by
+accident. The name is optional on both sides — an unnamed build is a valid build, and so is
+every build published before the server grew the column.
+
 Progress is a phase plus bytes, same shape as an install (D26). The phases that move no bytes —
 packaging, negotiating, finalizing — report as indeterminate rather than as a bar filling while
 nothing transfers. Cancelling is a `CancellationTokenSource` the view model owns; a cancelled
@@ -345,9 +428,6 @@ game the caller may not edit, and the client must not translate that into a perm
 - **No draft/preview of what a build will look like** in Explore before publishing.
 - **No upload queue or background publishing.** The dashboard publishes one build, in the
   foreground, from the page the publisher is on.
-- **No thumbnails in the artwork tab.** The gallery is a list of descriptions and positions;
-  showing the pictures would work — `IImageProvider` is already there — but the ordering and
-  the alt text are what this screen is for.
 - **No Markdown preview** when writing a devlog entry. The launcher renders bodies as text
   everywhere, so a preview would be showing the same thing twice.
 - **No retention policy.** Nothing deletes an old build on its own, on either side.

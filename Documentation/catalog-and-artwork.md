@@ -94,11 +94,45 @@ is the one that has to survive a reinstall of the launcher.
 The library page reads the **install store first and unconditionally**, then folds in the
 server's list when it arrives. That is what makes it work offline (D29): the local half never
 needed a server, so an unreachable one produces a library with a banner rather than an empty
-page. A card carries both facts — what the account owns, and what this machine has — which is
-what lets the same card offer Install, Update or Play.
+page.
+
+Since D78 there is a third source, and it is what makes the offline page the *library*: every
+successful answer is stored per account under the user's data directory (`ILibraryCache`), and
+an unreachable server is answered from it. The install rows alone showed nothing at all to
+somebody who had not downloaded a game yet, and hid every title owned and not installed here;
+anything installed that the stored list does not mention is appended to it, so a game installed
+since the last successful load is still on the page and still playable. A card carries both facts — what the account owns, and what this machine has — which is
+what lets the same card offer Install, Update or Play — plus, since D69, whether what is
+here is still the newest build.
 
 Adding a game is idempotent; removing one that is not there is a genuine `NotFound`, because
 there the two models really do disagree.
+
+### Play waits for the update check (D69)
+
+A card offers **Play** only when this machine's newest build for the game is the one that is
+installed — the same rule the game page has had since D61, which the card could not follow
+because it knew nothing about updates. Now it asks:
+
+- **one request per *installed* game**, not per row. A library is everything an account was
+  ever given; what is installed is bounded by the disk, and a card with nothing on this machine
+  has no Play button to take away. `LibraryViewModel.CheckForUpdatesAsync` walks the cards and
+  calls `ICatalogApi.GetGameAsync` for those in `Installed`;
+- **after the list and the covers are on screen**, in the order the cards are shown, so nothing
+  waits on it;
+- and it compares `GameDetail.BuildFor(platform, architecture)` against `InstalledGame.BuildId`,
+  which is exactly what the game page compares.
+
+When there *is* an update, the button **disappears** and the sentence that replaces it is
+`Detail.UpdateBeforePlaying` — the same sentence, because it is the same rule, and a greyed-out
+button with no explanation is the same dead end with worse manners. `PlayAsync` refuses too:
+the check can land between a press and the click that follows it.
+
+**A question that could not be asked leaves Play where it was.** Offline no check is made at
+all, and a single refused check leaves its card untouched and says nothing. Refusing to start a
+game already on this disk because a server could not be reached is precisely what the offline
+library exists to prevent (D29). What it costs is a card that can offer Play for the length of
+one request and then withdraw it.
 
 ### Offline, the covers are there too (D45)
 
@@ -220,6 +254,73 @@ a UI that changes for no reason the user did.
 
 ---
 
+## Videos (D74, D75, D76)
+
+A video is a fifth `MediaKind`, and everything about the *transport* is the artwork story
+unchanged: the server stores it content-addressed on the same public root, the URL is absolute
+and unsigned, and the launcher never sends a token to fetch it. Three things are different, and
+each is a decision rather than a detail.
+
+### It is never handed to an image decoder
+
+`MediaCardViewModel.IsVideo` is the switch, and `LoadAsync` returns early for one — in that one
+place rather than at every call site. The server stores the container and nothing else, so there
+is no thumbnail to fetch; asking `IImageProvider` for one would spend a download to be told no.
+A video card shows a frame and its description until somebody presses play.
+
+`GameDetail.Videos` is its own list beside `Screenshots`, sorted the same way (`SortOrder`, then
+`CreatedAt` as the tie-break) and for the same reason. `GameDetail.Artwork(kind)` answers `null`
+for a video the way it does for a screenshot: those are galleries, and "the video" is a question
+with no answer.
+
+### The launcher asks whether this server does video at all
+
+`/capabilities` carries `media.maxVideoBytes`, `media.maxVideosPerGame` and
+`media.videoContentTypes`, and `MediaCapabilities.SupportsVideo` demands all three.
+
+**The fallback is no video**, which is the opposite of `mail.enabled`'s (D72). The asymmetry is
+the decision, not an oversight: mail is a feature every server older than its key still had,
+while video did not exist before these keys existed. Reading silence as "yes" here would offer
+an upload that cannot succeed.
+
+### The size limit is enforced here, because the server's refusal for it says nothing
+
+An oversized *picture* comes back as a 422 naming its limit. An oversized **video** never
+reaches a handler: the web framework in front of the API refuses the body first, with a bare
+`413` and **no problem document at all**. So `MediaUploadRules` checking `MaxVideoBytes` before
+the upload is not an optimisation — it is the only thing that can produce a sentence.
+
+`VideoFormats.LooksLikeAVideo` mirrors `ImageFormats` and D41's rule exactly: it refuses early,
+it never vouches. It reads the ISO base media **brand** and not just the `ftyp` box, because
+HEIC and AVIF are ISO base media files too; and it looks for the EBML `DocType` only in the
+first 64 bytes, where the header is, so Matroska — which shares WebM's four magic bytes — is
+refused.
+
+### Playing it
+
+`IVideoPlayback` is one player for the launcher, behind an interface for the reason
+`IImageProvider` is: what is underneath needs a native library and a window to draw into.
+`LibVLCSharp.Avalonia` renders into a `VideoView`, and LibVLC fetches the URL itself — which is
+what makes seeking a Range request rather than a wait for the whole file.
+
+Two properties are about *not* being there, and they are the interesting ones:
+
+- **`IsAvailable` can be false, and that is ordinary.** There is no `VideoLAN.LibVLC.Linux`
+  package — VideoLAN expects libvlc from the distribution — so on Linux playback depends on
+  whether VLC is installed. The page says so and stays usable. Initialisation is lazy, and
+  `ShowVideoUnavailable` short-circuits on `HasVideos`, so a game page with no trailer never
+  loads ~100 MB of native library to answer a question nobody asked.
+- **`Player` is null until something plays**, and the view holds a `ContentControl` rather than a
+  hidden `VideoView`. `IsVisible="False"` does not take a control out of the visual tree, and a
+  `NativeControlHost` creates its child window the moment it is attached — which crashed the
+  launcher on every game page until `app.manifest` gained its `supportedOS` list (D76).
+
+Everything except the picture is a state machine and is tested: a machine that cannot play is
+never asked, a refusal leaves a sentence, and Stop, Back, loading another game and losing the
+account all silence it. The picture is checked by hand.
+
+---
+
 ## The devlog (D38)
 
 `ICatalogApi.GetPatchNotesAsync` — its own paged route, newest first, default page size 10.
@@ -276,6 +377,12 @@ Stated explicitly:
   publisher's — rendering remote markup is a decision this feature does not need.
 - **Offline, the *detail page* still does not work.** It needs the catalog. The library does,
   covers included.
+- **A video has no poster frame, no seek bar and no volume control.** The card shows a
+  description and a play button, and the player is LibVLC's surface with a Stop button under it.
+  Extracting a first frame server-side is a decoding job the server deliberately does not do, and
+  transport controls are a piece of UI, not a missing capability.
+- **Nothing plays without libvlc**, and on Linux that means the distribution's VLC. Stated in
+  D75; the page says so rather than pretending.
 
 ## Related documents
 

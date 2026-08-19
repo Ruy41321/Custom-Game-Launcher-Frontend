@@ -5,6 +5,7 @@ using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -19,6 +20,7 @@ public sealed class DeveloperViewModelTests
     private readonly ResourceManagerLocalizationService _localization = new("en");
 
     private readonly IFilePicker _files = Substitute.For<IFilePicker>();
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
     private readonly IServerCapabilityProvider _capabilities =
         Substitute.For<IServerCapabilityProvider>();
 
@@ -41,7 +43,7 @@ public sealed class DeveloperViewModelTests
         runtime.Platform.Returns(GamePlatform.Windows);
         runtime.Architecture.Returns(BuildArchitecture.X64);
 
-        var errors = new ApiErrorPresenter(_localization);
+        var errors = new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance);
 
         return new DeveloperViewModel(
             _catalog,
@@ -53,7 +55,7 @@ public sealed class DeveloperViewModelTests
             _folders,
             new GameEditorViewModel(_publishing, errors, _localization),
             new GameMediaViewModel(
-                _catalog, _publishing, _capabilities, errors, _localization, _files),
+                _catalog, _publishing, _capabilities, errors, _localization, _files, _images),
             new GameDevlogViewModel(_catalog, _publishing, errors, _localization));
     }
 
@@ -131,6 +133,146 @@ public sealed class DeveloperViewModelTests
         Assert.Equal("v1", model.SelectedVersion?.Id);
     }
 
+    // The dead end note 13 described: a version created without "publish it now" had no route
+    // back, so the button that fixes it is worth asserting on rather than assuming.
+    [Fact]
+    public async Task PublishingAVersionSendsThePatchAndUpdatesTheRow()
+    {
+        OwnsGames(GameNamed("Orbital Drift"));
+        Detail(new GameDetail
+        {
+            Game = GameNamed("Orbital Drift"),
+            Versions = [new GameVersion { Id = "v1", Semver = "0.1.0", Published = false }],
+        });
+        _publishing.UpdateVersionAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<VersionChanges>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new GameVersion { Id = "v1", Semver = "0.1.0", Published = true });
+
+        DeveloperViewModel model = await SelectedGameWithVersions();
+
+        Assert.False(model.Versions[0].Published);
+        await model.SetVersionPublishedCommand.ExecuteAsync(model.Versions[0]);
+
+        await _publishing.Received(1).UpdateVersionAsync(
+            "Orbital Drift",
+            "v1",
+            Arg.Is<VersionChanges>(changes => changes != null && changes.Published == true),
+            Arg.Any<CancellationToken>());
+        Assert.True(model.Versions[0].Published);
+        Assert.Contains("0.1.0", model.StatusMessage);
+    }
+
+    // The same button the other way round. Withdrawing exists because it is the reversible
+    // thing next to Delete, and pressing it must not be read as publishing again.
+    [Fact]
+    public async Task WithdrawingAPublishedVersionSendsTheOppositePatch()
+    {
+        OwnsGames(GameNamed("Orbital Drift"));
+        Detail(new GameDetail
+        {
+            Game = GameNamed("Orbital Drift"),
+            Versions = [new GameVersion { Id = "v1", Semver = "0.1.0", Published = true }],
+        });
+        _publishing.UpdateVersionAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<VersionChanges>(),
+                Arg.Any<CancellationToken>())
+            .Returns(new GameVersion { Id = "v1", Semver = "0.1.0", Published = false });
+
+        DeveloperViewModel model = await SelectedGameWithVersions();
+        await model.SetVersionPublishedCommand.ExecuteAsync(model.Versions[0]);
+
+        await _publishing.Received(1).UpdateVersionAsync(
+            "Orbital Drift",
+            "v1",
+            Arg.Is<VersionChanges>(changes => changes != null && changes.Published == false),
+            Arg.Any<CancellationToken>());
+        Assert.False(model.Versions[0].Published);
+    }
+
+    // A refused publish must leave the row saying what is actually true on the server, or the
+    // next press would send the opposite of what the publisher meant.
+    [Fact]
+    public async Task ARefusedPublishLeavesTheRowUnchangedAndSaysWhy()
+    {
+        OwnsGames(GameNamed("Orbital Drift"));
+        Detail(new GameDetail
+        {
+            Game = GameNamed("Orbital Drift"),
+            Versions = [new GameVersion { Id = "v1", Semver = "0.1.0", Published = false }],
+        });
+        _publishing.UpdateVersionAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<VersionChanges>(),
+                Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Forbidden, "nope"));
+
+        DeveloperViewModel model = await SelectedGameWithVersions();
+        await model.SetVersionPublishedCommand.ExecuteAsync(model.Versions[0]);
+
+        Assert.False(model.Versions[0].Published);
+        Assert.False(string.IsNullOrEmpty(model.ErrorMessage));
+    }
+
+    // Note 18's second half: the version row says which builds are under it, because "0.3.0
+    // beta published" three times over says nothing about which is which.
+    [Fact]
+    public async Task AVersionRowNamesItsBuilds()
+    {
+        OwnsGames(GameNamed("Orbital Drift"));
+        Detail(new GameDetail
+        {
+            Game = GameNamed("Orbital Drift"),
+            Versions = [new GameVersion { Id = "v1", Semver = "0.1.0" }],
+            Builds =
+            [
+                new GameBuild { Id = "b1", VersionId = "v1", Name = "Nightly" },
+                new GameBuild
+                {
+                    Id = "b2",
+                    VersionId = "v1",
+                    Platform = GamePlatform.Linux,
+                    Architecture = BuildArchitecture.Arm64,
+                },
+                new GameBuild { Id = "b3", VersionId = "other", Name = "Not this one" },
+            ],
+        });
+
+        DeveloperViewModel model = await SelectedGameWithVersions();
+
+        // A named build shows its name; an unnamed one falls back to what tells it apart
+        // anyway; and a build of another version is not this row's business.
+        Assert.Contains("Nightly", model.Versions[0].BuildsSummary);
+        Assert.Contains("Linux Arm64", model.Versions[0].BuildsSummary);
+        Assert.DoesNotContain("Not this one", model.Versions[0].BuildsSummary);
+        Assert.True(model.Versions[0].HasBuilds);
+    }
+
+    [Fact]
+    public async Task AVersionWithNoBuildsSummarisesToNothing()
+    {
+        OwnsGames(GameNamed("Orbital Drift"));
+        Detail(new GameDetail
+        {
+            Game = GameNamed("Orbital Drift"),
+            Versions = [new GameVersion { Id = "v1", Semver = "0.1.0" }],
+        });
+
+        DeveloperViewModel model = await SelectedGameWithVersions();
+
+        Assert.Equal(string.Empty, model.Versions[0].BuildsSummary);
+        Assert.False(model.Versions[0].HasBuilds);
+    }
+
+    /// <summary>Loads the page and selects the first game, awaiting the load the setter starts.</summary>
+    private async Task<DeveloperViewModel> SelectedGameWithVersions()
+    {
+        DeveloperViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        model.SelectedGame = model.Games[0];
+        await Task.Yield();
+        return model;
+    }
+
     // A build belongs to a version, so there is nothing to publish to until one is chosen.
     [Fact]
     public void PublishingIsNotOfferedWithoutAVersionADirectoryAndAnExecutable()
@@ -143,7 +285,8 @@ public sealed class DeveloperViewModelTests
         model.Entrypoint = "Game.exe";
         Assert.False(model.CanPublish);
 
-        model.SelectedVersion = new GameVersion { Id = "v1", Semver = "0.1.0" };
+        model.SelectedVersion = new VersionRowViewModel(
+            new GameVersion { Id = "v1", Semver = "0.1.0" }, []);
         Assert.True(model.CanPublish);
     }
 
@@ -217,7 +360,13 @@ public sealed class DeveloperViewModelTests
                 Arg.Any<CancellationToken>())
             .Returns(new PublishResult
             {
-                Build = new GameBuild { Id = "b1", Status = BuildStatus.Ready },
+                Build = new GameBuild
+                {
+                    Id = "b1",
+                    VersionId = "v1",
+                    Name = "Nightly",
+                    Status = BuildStatus.Ready,
+                },
                 UploadedBytes = 1_048_576,
                 BlobsUploaded = 1,
                 BlobsAlreadyPresent = 3,
@@ -228,6 +377,7 @@ public sealed class DeveloperViewModelTests
         model.SelectedGame = model.Games[0];
         await Task.Yield();
 
+        model.BuildName = "  Nightly  ";
         model.BuildDirectory = "/builds/orbital-drift";
         model.Entrypoint = "Game.exe";
         model.LaunchArgs = "--fullscreen";
@@ -236,6 +386,7 @@ public sealed class DeveloperViewModelTests
         await model.PublishCommand.ExecuteAsync(null);
 
         Assert.Equal("v1", asked?.VersionId);
+        Assert.Equal("Nightly", asked?.Name);
         Assert.Equal("Game.exe", asked?.Entrypoint);
         Assert.Equal("--fullscreen", asked?.LaunchArgs);
         Assert.Equal(GamePlatform.Linux, asked?.Platform);
@@ -244,6 +395,13 @@ public sealed class DeveloperViewModelTests
         Assert.Null(model.Progress);
         Assert.Contains("1 MB", model.StatusMessage!, StringComparison.Ordinal);
         Assert.Contains("3", model.StatusMessage!, StringComparison.Ordinal);
+
+        // The name is cleared, because the next build is a different one and inheriting the
+        // last label is how two builds end up called the same thing by accident.
+        Assert.Equal(string.Empty, model.BuildName);
+
+        // And the version row above has just gained a build, without the list being rebuilt.
+        Assert.Contains("Nightly", model.Versions[0].BuildsSummary);
     }
 
     // A packaging failure is local and specific, and saying which rule was broken is the
@@ -543,6 +701,40 @@ public sealed class DeveloperViewModelTests
         Assert.Empty(model.Versions);
         Assert.Empty(model.Builds);
         Assert.False(model.Editor.HasGame);
+
+        // The three tabs are one selection. Leaving the artwork and the devlog of a game that
+        // no longer exists is how a publisher edits the alt text of a deleted picture.
+        Assert.False(model.Artwork.HasGame);
+        Assert.False(model.Devlog.HasGame);
+        Assert.Empty(model.Devlog.Entries);
+        Assert.Empty(model.Devlog.Versions);
+    }
+
+    // --- what a page keeps across accounts (D70) ---------------------------------------------
+
+    // The page the complaint was made about: after a sign-out and a sign-in the dashboard was
+    // still showing the previous account's game, list, selection and forms.
+    [Fact]
+    public async Task NothingOfAPublishersWorkSurvivesAChangeOfAccount()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync(
+            [Version("v1", "0.3.0")], [Build("b1", "v1")]);
+
+        model.NewGameTitle = "Something half typed";
+        model.BuildDirectory = "/home/somebody/build";
+
+        model.ResetForAccountChange();
+
+        Assert.Empty(model.Games);
+        Assert.Null(model.Selected);
+        Assert.Null(model.SelectedGame);
+        Assert.Empty(model.Versions);
+        Assert.Empty(model.Builds);
+        Assert.False(model.Editor.HasGame);
+        Assert.False(model.Artwork.HasGame);
+        Assert.False(model.Devlog.HasGame);
+        Assert.Empty(model.NewGameTitle);
+        Assert.Empty(model.BuildDirectory);
     }
 
     // Clearing the selection rather than letting the list pick the next row: the tabs below
@@ -596,5 +788,66 @@ public sealed class DeveloperViewModelTests
         Assert.NotNull(model.ErrorMessage);
         Assert.Single(model.Games);
         Assert.NotNull(model.Selected);
+    }
+
+    // --- opening the game's own page -----------------------------------------------------------
+
+    // This page shows the boxes a publisher filled in; only the game page shows what they add up
+    // to. The slug is what travels — a URL, a message to a tester — so it is what is raised.
+    [Fact]
+    public async Task OpeningTheGamePageAsksForTheSelectedGameBySlug()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync([], []);
+
+        string? asked = null;
+        model.GameSelected += (_, idOrSlug) => asked = idOrSlug;
+
+        model.OpenGamePageCommand.Execute(null);
+
+        Assert.Equal("orbital drift", asked);
+    }
+
+    // A draft is exactly the case this exists for: the server serves the detail to whoever may
+    // edit the game, so a publisher can read their own unreleased page before anybody else can.
+    [Fact]
+    public async Task TheGamePageIsOfferedForADraftToo()
+    {
+        DeveloperViewModel model = await WithSelectedGameAsync([], []);
+
+        Assert.Equal(GameVisibility.Draft, model.Selected!.Game.Visibility);
+        Assert.True(model.CanOpenGamePage);
+    }
+
+    // A game whose slug the server has not derived is still openable, by id.
+    [Fact]
+    public async Task AGameWithNoSlugIsOpenedByItsId()
+    {
+        var unslugged = new Game { Id = "g-77", Slug = string.Empty, Title = "Untitled" };
+        OwnsGames(unslugged);
+        Detail(new GameDetail { Game = unslugged });
+
+        DeveloperViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        model.SelectedGame = unslugged;
+        await Task.Yield();
+
+        string? asked = null;
+        model.GameSelected += (_, idOrSlug) => asked = idOrSlug;
+        model.OpenGamePageCommand.Execute(null);
+
+        Assert.Equal("g-77", asked);
+    }
+
+    [Fact]
+    public void WithNoGameSelectedThereIsNothingToOpen()
+    {
+        DeveloperViewModel model = CreateViewModel();
+
+        bool raised = false;
+        model.GameSelected += (_, _) => raised = true;
+        model.OpenGamePageCommand.Execute(null);
+
+        Assert.False(model.CanOpenGamePage);
+        Assert.False(raised);
     }
 }

@@ -6,6 +6,7 @@ using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Platform;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -25,7 +26,8 @@ public sealed class SettingsViewModelTests
     private readonly ResourceManagerLocalizationService _localization = new("en");
     private readonly ApiErrorPresenter _errors;
 
-    public SettingsViewModelTests() => _errors = new ApiErrorPresenter(_localization);
+    public SettingsViewModelTests() =>
+        _errors = new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance);
 
     private SettingsViewModel CreateViewModel()
     {
@@ -48,6 +50,23 @@ public sealed class SettingsViewModelTests
 
         Assert.Empty(model.InstallDirectory);
         Assert.Equal("/home/luigi/Games", model.DefaultInstallDirectory);
+    }
+
+    // The sentence is assembled here rather than by a StringFormat in the view, which is what
+    // the page used to do — with a `{loc:Tr}` as the format, which is a binding and not a
+    // string, so building the page threw and every setting on it was invisible.
+    [Fact]
+    public async Task TheDefaultDirectoryIsNamedInASentenceTheViewOnlyDisplays()
+    {
+        Stored(new UserSettings());
+
+        SettingsViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            _localization.Translate("Settings.InstallDirectoryDefault", "/home/luigi/Games"),
+            model.DefaultInstallDirectoryNotice);
+        Assert.Contains("/home/luigi/Games", model.DefaultInstallDirectoryNotice, StringComparison.Ordinal);
     }
 
     [Fact]

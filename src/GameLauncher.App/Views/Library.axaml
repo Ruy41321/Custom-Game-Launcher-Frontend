@@ -20,7 +20,16 @@
 
     <Border Grid.Row="1" Background="{DynamicResource SystemAccentColor}" CornerRadius="4"
             Padding="10,6" Margin="0,0,0,14" IsVisible="{Binding IsOffline}">
-      <TextBlock Text="{loc:Tr Status.Offline}" FontSize="12" TextWrapping="Wrap" />
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBlock Grid.Column="0" Text="{loc:Tr Status.Offline}" FontSize="12"
+                   TextWrapping="Wrap" VerticalAlignment="Center"
+                   IsVisible="{Binding IsOfflineWithAccount}" />
+        <TextBlock Grid.Column="0" Text="{loc:Tr Status.OfflineNotSignedIn}" FontSize="12"
+                   TextWrapping="Wrap" VerticalAlignment="Center"
+                   IsVisible="{Binding IsOfflineWithoutAccount}" />
+        <Button Grid.Column="1" Content="{loc:Tr Status.Retry}" Classes="link"
+                VerticalAlignment="Center" Command="{Binding RetryCommand}" />
+      </Grid>
     </Border>
 
     <ProgressBar Grid.Row="2" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
@@ -45,20 +54,27 @@
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="vm:GameCardViewModel">
             <Border Classes="card" Width="300" Margin="0,0,14,14">
-              <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+              <Grid RowDefinitions="Auto,Auto,*,Auto,Auto,Auto">
 
                 <!-- Offline the install row has no cover URL to fetch, so the placeholder is
-                     what a library shows on a train. -->
-                <Border Grid.Row="0" Height="150" CornerRadius="4" ClipToBounds="True"
-                        Background="{DynamicResource SystemChromeMediumColor}" Margin="0,0,0,8">
-                  <Panel>
-                    <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               IsVisible="{Binding !HasCover}" />
-                    <Image Source="{Binding Cover}" Stretch="UniformToFill"
-                           IsVisible="{Binding HasCover}" />
-                  </Panel>
-                </Border>
+                     what a library shows on a train. The frame is also the way into the game's
+                     page: the automation name is the title because the content is a picture. -->
+                <Button Grid.Row="0" Classes="bare" Margin="0,0,0,8"
+                        AutomationProperties.Name="{Binding Title}"
+                        IsEnabled="{Binding CanOpenDetails}"
+                        Command="{Binding $parent[ItemsControl].((vm:LibraryViewModel)DataContext).OpenGameCommand}"
+                        CommandParameter="{Binding}">
+                  <Border Height="150" CornerRadius="4" ClipToBounds="True"
+                          Background="{DynamicResource SystemChromeMediumColor}">
+                    <Panel>
+                      <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 IsVisible="{Binding !HasCover}" />
+                      <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                             IsVisible="{Binding HasCover}" />
+                    </Panel>
+                  </Border>
+                </Button>
 
                 <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis" />
@@ -66,15 +82,23 @@
                            TextWrapping="Wrap" Margin="0,6" MaxHeight="52" />
                 <TextBlock Grid.Row="3" Text="{Binding StatusText}" FontSize="11" Opacity="0.55"
                            Margin="0,0,0,6" IsVisible="{Binding HasStatus}" />
-                <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8">
+                <!-- Where the Play button would have been, saying why it is not there —
+                     the same sentence the game page shows, because it is the same rule. -->
+                <TextBlock Grid.Row="4" Text="{loc:Tr Detail.UpdateBeforePlaying}" FontSize="11"
+                           Opacity="0.7" TextWrapping="Wrap" Margin="0,0,0,6"
+                           IsVisible="{Binding MustUpdateBeforePlaying}" />
+
+                <StackPanel Grid.Row="5" Orientation="Horizontal" Spacing="8">
                   <Button Content="{loc:Tr Library.Play}" Classes="accent"
                           IsVisible="{Binding CanPlay}"
                           Command="{Binding $parent[ItemsControl].((vm:LibraryViewModel)DataContext).PlayCommand}"
                           CommandParameter="{Binding}" />
                   <Button Content="{loc:Tr Explore.Details}" Classes="link"
+                          IsVisible="{Binding CanOpenDetails}"
                           Command="{Binding $parent[ItemsControl].((vm:LibraryViewModel)DataContext).OpenGameCommand}"
                           CommandParameter="{Binding}" />
                   <Button Content="{loc:Tr Library.Remove}" Classes="link"
+                          IsVisible="{Binding CanRemove}"
                           Command="{Binding $parent[ItemsControl].((vm:LibraryViewModel)DataContext).RemoveCommand}"
                           CommandParameter="{Binding}" />
                 </StackPanel>

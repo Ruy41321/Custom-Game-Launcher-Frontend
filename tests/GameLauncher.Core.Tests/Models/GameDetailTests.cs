@@ -6,15 +6,20 @@ public sealed class GameDetailTests
 {
     private static readonly DateTimeOffset Epoch = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
+    private const string Released = "v-released";
+    private const string Unreleased = "v-unreleased";
+
     private static GameBuild Build(
         string id,
         GamePlatform platform,
         BuildArchitecture architecture = BuildArchitecture.X64,
         BuildStatus status = BuildStatus.Ready,
-        int readyDaysAfterEpoch = 0) =>
+        int readyDaysAfterEpoch = 0,
+        string versionId = Released) =>
         new()
         {
             Id = id,
+            VersionId = versionId,
             Platform = platform,
             Architecture = architecture,
             Status = status,
@@ -22,10 +27,25 @@ public sealed class GameDetailTests
             CreatedAt = Epoch,
         };
 
+    /// <summary>
+    /// A detail carrying both kinds of version, which is what a *publisher* is served: their
+    /// unpublished versions come down beside the released ones.
+    /// </summary>
+    private static GameDetail Detail(params GameBuild[] builds) =>
+        new()
+        {
+            Versions =
+            [
+                new GameVersion { Id = Released, Semver = "1.0.0", Published = true },
+                new GameVersion { Id = Unreleased, Semver = "2.0.0", Published = false },
+            ],
+            Builds = builds,
+        };
+
     [Fact]
     public void NoBuildForThePlatformMeansNothingToInstall()
     {
-        var detail = new GameDetail { Builds = [Build("linux", GamePlatform.Linux)] };
+        GameDetail detail = Detail(Build("linux", GamePlatform.Linux));
 
         Assert.Null(detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64));
     }
@@ -34,14 +54,9 @@ public sealed class GameDetailTests
     [Fact]
     public void AnUnfinishedBuildIsNeverOffered()
     {
-        var detail = new GameDetail
-        {
-            Builds =
-            [
-                Build("uploading", GamePlatform.Windows, status: BuildStatus.Uploading),
-                Build("failed", GamePlatform.Windows, status: BuildStatus.Failed),
-            ],
-        };
+        GameDetail detail = Detail(
+            Build("uploading", GamePlatform.Windows, status: BuildStatus.Uploading),
+            Build("failed", GamePlatform.Windows, status: BuildStatus.Failed));
 
         Assert.Null(detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64));
     }
@@ -49,15 +64,10 @@ public sealed class GameDetailTests
     [Fact]
     public void TheNewestReadyBuildWins()
     {
-        var detail = new GameDetail
-        {
-            Builds =
-            [
-                Build("old", GamePlatform.Windows, readyDaysAfterEpoch: 1),
-                Build("new", GamePlatform.Windows, readyDaysAfterEpoch: 9),
-                Build("middle", GamePlatform.Windows, readyDaysAfterEpoch: 5),
-            ],
-        };
+        GameDetail detail = Detail(
+            Build("old", GamePlatform.Windows, readyDaysAfterEpoch: 1),
+            Build("new", GamePlatform.Windows, readyDaysAfterEpoch: 9),
+            Build("middle", GamePlatform.Windows, readyDaysAfterEpoch: 5));
 
         Assert.Equal("new", detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64)?.Id);
     }
@@ -67,10 +77,7 @@ public sealed class GameDetailTests
     [Fact]
     public void TheRunningArchitectureIsPreferredButNotRequired()
     {
-        var detail = new GameDetail
-        {
-            Builds = [Build("x64-only", GamePlatform.MacOs, BuildArchitecture.X64)],
-        };
+        GameDetail detail = Detail(Build("x64-only", GamePlatform.MacOs, BuildArchitecture.X64));
 
         Assert.Equal(
             "x64-only", detail.BuildFor(GamePlatform.MacOs, BuildArchitecture.Arm64)?.Id);
@@ -79,17 +86,44 @@ public sealed class GameDetailTests
     [Fact]
     public void AMatchingArchitectureBeatsANewerMismatchedOne()
     {
-        var detail = new GameDetail
-        {
-            Builds =
-            [
-                Build("newer-x64", GamePlatform.MacOs, BuildArchitecture.X64, readyDaysAfterEpoch: 9),
-                Build("older-arm64", GamePlatform.MacOs, BuildArchitecture.Arm64, readyDaysAfterEpoch: 1),
-            ],
-        };
+        GameDetail detail = Detail(
+            Build("newer-x64", GamePlatform.MacOs, BuildArchitecture.X64, readyDaysAfterEpoch: 9),
+            Build("older-arm64", GamePlatform.MacOs, BuildArchitecture.Arm64, readyDaysAfterEpoch: 1));
 
         Assert.Equal(
             "older-arm64", detail.BuildFor(GamePlatform.MacOs, BuildArchitecture.Arm64)?.Id);
+    }
+
+    // D71. The server hides an unpublished version from everybody but its publisher, so this
+    // only ever bites the publisher — who was losing Play on their own library card over a
+    // build nobody, themselves included, may download.
+    [Fact]
+    public void ABuildOfAnUnpublishedVersionIsNotOffered()
+    {
+        GameDetail detail = Detail(
+            Build("released", GamePlatform.Windows, readyDaysAfterEpoch: 1),
+            Build("draft", GamePlatform.Windows, readyDaysAfterEpoch: 9, versionId: Unreleased));
+
+        Assert.Equal("released", detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64)?.Id);
+    }
+
+    [Fact]
+    public void OnlyUnpublishedVersionsMeansNothingToInstall()
+    {
+        GameDetail detail = Detail(
+            Build("draft", GamePlatform.Windows, versionId: Unreleased));
+
+        Assert.Null(detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64));
+    }
+
+    // Withholding is the safe direction, the same one the server's versionPublished defaults in.
+    [Fact]
+    public void ABuildWhoseVersionIsNotInTheListIsWithheld()
+    {
+        GameDetail detail = Detail(
+            Build("orphan", GamePlatform.Windows, versionId: "a-version-nobody-sent"));
+
+        Assert.Null(detail.BuildFor(GamePlatform.Windows, BuildArchitecture.X64));
     }
 }
 

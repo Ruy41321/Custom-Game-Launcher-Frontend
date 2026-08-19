@@ -95,4 +95,59 @@ public sealed class AccountServiceTests
         await _api.DidNotReceive().DeleteAccountAsync(
             Arg.Any<DeleteAccountRequest>(), Arg.Any<CancellationToken>());
     }
+
+    // --- the password change ----------------------------------------------------------
+
+    [Fact]
+    public async Task SendsBothPasswordsAndTakesOverTheSessionItGetsBack()
+    {
+        AuthSession replacement = new() { AccessToken = "fresh", RefreshToken = "also-fresh" };
+        _api.ChangePasswordAsync(Arg.Any<ChangePasswordRequest>(), Arg.Any<CancellationToken>())
+            .Returns(replacement);
+
+        AccountService service = CreateService();
+
+        await service.ChangePasswordAsync(
+            "the temporary one", "a brand new passphrase", TestContext.Current.CancellationToken);
+
+        await _api.Received(1).ChangePasswordAsync(
+            Arg.Is<ChangePasswordRequest>(request =>
+                request!.CurrentPassword == "the temporary one"
+                && request.NewPassword == "a brand new passphrase"),
+            Arg.Any<CancellationToken>());
+
+        await _authentication.Received(1).AdoptAsync(replacement, Arg.Any<CancellationToken>());
+    }
+
+    // The ordering rule, the opposite way round from the erasure: a refusal leaves the old
+    // password and the old session in force, so forgetting either would sign somebody out for
+    // typing their current password wrong.
+    [Fact]
+    public async Task ARefusedChangeTakesOverNothing()
+    {
+        _api.ChangePasswordAsync(Arg.Any<ChangePasswordRequest>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Unauthenticated, "wrong password"));
+
+        AccountService service = CreateService();
+
+        await Assert.ThrowsAsync<ApiException>(() => service.ChangePasswordAsync(
+            "not it", "a brand new passphrase", TestContext.Current.CancellationToken));
+
+        await _authentication.DidNotReceive().AdoptAsync(
+            Arg.Any<AuthSession>(), Arg.Any<CancellationToken>());
+        await _authentication.DidNotReceive().SignOutAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RefusesWithNoSessionAtAll()
+    {
+        _authentication.IsAuthenticated.Returns(false);
+        AccountService service = CreateService();
+
+        await Assert.ThrowsAsync<ApiException>(() => service.ChangePasswordAsync(
+            "a", "b", TestContext.Current.CancellationToken));
+
+        await _api.DidNotReceive().ChangePasswordAsync(
+            Arg.Any<ChangePasswordRequest>(), Arg.Any<CancellationToken>());
+    }
 }

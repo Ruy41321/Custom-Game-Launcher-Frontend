@@ -87,6 +87,27 @@ public sealed partial class GameDevlogViewModel : ViewModelBase
         HasGame && !IsBusy && PendingDeletion is null
         && EntryTitle.Trim().Length > 0 && EntryBody.Trim().Length > 0;
 
+    /// <summary>
+    /// Puts the tab back to "no game", without a request — the synchronous half of
+    /// <see cref="ShowAsync"/> with null, for when there is no longer an account to fetch
+    /// with. The form goes too: a half-written entry belongs to whoever was writing it.
+    /// </summary>
+    public void Clear()
+    {
+        _game = null;
+
+        Entries.Clear();
+        Versions.Clear();
+        PendingDeletion = null;
+        ErrorMessage = null;
+        StatusMessage = null;
+        IsBusy = false;
+        HasMore = false;
+        ClearForm();
+
+        RaiseDerived();
+    }
+
     public async Task ShowAsync(
         Game? game,
         IEnumerable<GameVersion> versions,

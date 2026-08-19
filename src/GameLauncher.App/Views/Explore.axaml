@@ -12,15 +12,16 @@
 
   <Grid RowDefinitions="Auto,*" Margin="24,20">
 
-    <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10" Margin="0,0,0,16">
-      <TextBox Grid.Column="0" Text="{Binding SearchText}"
+    <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="10" Margin="0,0,0,16">
+      <TextBox Grid.Row="0" Grid.Column="0" Text="{Binding SearchText}"
                PlaceholderText="{loc:Tr Explore.SearchPlaceholder}">
         <TextBox.KeyBindings>
           <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
         </TextBox.KeyBindings>
       </TextBox>
 
-      <ComboBox Grid.Column="1" MinWidth="170"
+      <ComboBox Grid.Row="0" Grid.Column="1" MinWidth="170"
                 ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}">
         <ComboBox.ItemTemplate>
           <DataTemplate x:DataType="vm:SortOption">
@@ -29,7 +30,22 @@
         </ComboBox.ItemTemplate>
       </ComboBox>
 
-      <Button Grid.Column="2" Content="{loc:Tr Common.Search}" Command="{Binding SearchCommand}" />
+      <Button Grid.Row="0" Grid.Column="2"
+              Content="{loc:Tr Common.Search}" Command="{Binding SearchCommand}" />
+
+      <!-- The search box above never finds an unlisted game: the server lists only public ones.
+           This one takes the identifier the publisher shared and opens it directly. -->
+      <TextBox Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Text="{Binding IdentifierText}"
+               PlaceholderText="{loc:Tr Explore.IdentifierPlaceholder}">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding OpenIdentifierCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+
+      <Button Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+              Content="{loc:Tr Explore.OpenIdentifier}"
+              Command="{Binding OpenIdentifierCommand}" />
     </Grid>
 
     <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
@@ -59,17 +75,25 @@
               <Grid RowDefinitions="Auto,Auto,*,Auto">
 
                 <!-- The frame is there whether or not the picture is, so a grid of cards keeps
-                     its shape while the covers are still arriving. -->
-                <Border Grid.Row="0" Height="150" CornerRadius="4" ClipToBounds="True"
-                        Background="{DynamicResource SystemChromeMediumColor}" Margin="0,0,0,8">
-                  <Panel>
-                    <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               IsVisible="{Binding !HasCover}" />
-                    <Image Source="{Binding Cover}" Stretch="UniformToFill"
-                           IsVisible="{Binding HasCover}" />
-                  </Panel>
-                </Border>
+                     its shape while the covers are still arriving. It is also the way into the
+                     game, which is where a pointer goes first: the button carries the title as
+                     its automation name because its content is a picture and would otherwise
+                     be announced as the panel it is made of. -->
+                <Button Grid.Row="0" Classes="bare" Margin="0,0,0,8"
+                        AutomationProperties.Name="{Binding Title}"
+                        Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).OpenGameCommand}"
+                        CommandParameter="{Binding}">
+                  <Border Height="150" CornerRadius="4" ClipToBounds="True"
+                          Background="{DynamicResource SystemChromeMediumColor}">
+                    <Panel>
+                      <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 IsVisible="{Binding !HasCover}" />
+                      <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                             IsVisible="{Binding HasCover}" />
+                    </Panel>
+                  </Border>
+                </Button>
 
                 <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
                            TextTrimming="CharacterEllipsis" />

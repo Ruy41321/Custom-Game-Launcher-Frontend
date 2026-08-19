@@ -52,7 +52,8 @@ public sealed class InstallationService(
         string installDirectory = request.InstallDirectory
             ?? existing?.InstallDirectory
             ?? InstallPaths.DefaultInstallDirectory(
-                await InstallRootAsync(cancellationToken).ConfigureAwait(false),
+                await InstallRootAsync(request.InstallRoot, cancellationToken)
+                    .ConfigureAwait(false),
                 request.Game.Slug,
                 request.Game.Id);
 
@@ -281,16 +282,24 @@ public sealed class InstallationService(
     }
 
     /// <summary>
-    /// Where new games go. The user's choice wins over the platform default, and an install
-    /// that already exists is never moved by changing it — the setting decides where the
-    /// *next* game lands, not where the ones already on disk live.
+    /// Where new games go, most specific answer first: what the player was asked about for
+    /// this one install, then their standing preference, then the platform default. An install
+    /// that already exists is never moved by any of them — they decide where the *next* game
+    /// lands, not where the ones already on disk live (D33).
     /// </summary>
-    private async Task<string> InstallRootAsync(CancellationToken cancellationToken)
+    private async Task<string> InstallRootAsync(
+        string? requested, CancellationToken cancellationToken)
     {
-        UserSettings preferences = await settings
-            .LoadAsync(cancellationToken).ConfigureAwait(false);
+        string? chosen = requested;
 
-        string? chosen = preferences.InstallDirectory;
+        if (string.IsNullOrWhiteSpace(chosen))
+        {
+            UserSettings preferences = await settings
+                .LoadAsync(cancellationToken).ConfigureAwait(false);
+
+            chosen = preferences.InstallDirectory;
+        }
+
         if (string.IsNullOrWhiteSpace(chosen))
         {
             return paths.DefaultInstallDirectory;

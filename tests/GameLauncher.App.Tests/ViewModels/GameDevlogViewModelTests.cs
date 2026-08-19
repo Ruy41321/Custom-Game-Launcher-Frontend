@@ -2,6 +2,7 @@ using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -49,7 +50,11 @@ public sealed class GameDevlogViewModelTests
     };
 
     private GameDevlogViewModel CreateViewModel() =>
-        new(_catalog, _publishing, new ApiErrorPresenter(_localization), _localization);
+        new(
+            _catalog,
+            _publishing,
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
+            _localization);
 
     private async Task<GameDevlogViewModel> ShowingAsync()
     {

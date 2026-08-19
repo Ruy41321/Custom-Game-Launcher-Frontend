@@ -12,6 +12,7 @@ using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
 using GameLauncher.Core.Publishing;
 using GameLauncher.Core.Updates;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -27,6 +28,8 @@ public sealed class MainWindowViewModelTests
         Substitute.For<IAuthenticationService>();
     private readonly ICatalogApi _catalog = Substitute.For<ICatalogApi>();
     private readonly ILibraryApi _library = Substitute.For<ILibraryApi>();
+    private readonly ILibraryCache _libraryCache = Substitute.For<ILibraryCache>();
+    private readonly ServerReachability _reachability = new(TimeProvider.System);
     private readonly IUserSettingsStore _settings = Substitute.For<IUserSettingsStore>();
     private readonly ICrashReportUploader _crashReports =
         Substitute.For<ICrashReportUploader>();
@@ -47,14 +50,26 @@ public sealed class MainWindowViewModelTests
 
     private readonly IApplicationShutdown _shutdown = Substitute.For<IApplicationShutdown>();
 
+    private readonly IServerCapabilityProvider _capabilities =
+        Substitute.For<IServerCapabilityProvider>();
+
+    private readonly IAccountService _account = Substitute.For<IAccountService>();
+
     /// <summary>
     /// Every start asks about updates, so the answer is arranged here rather than in the
     /// factory: an unconfigured substitute hands back a null result, and the failure would show
     /// up inside the banner instead of in whatever the test was actually about.
     /// </summary>
-    public MainWindowViewModelTests() =>
+    public MainWindowViewModelTests()
+    {
         _updates.CheckAsync(Arg.Any<CancellationToken>())
             .Returns(UpdateCheckResult.NotConfigured);
+
+        // The sign-in screen reads this on every load, and an unconfigured Task<T> member
+        // yields null — the same row of §7 that keeps costing cycles.
+        _capabilities.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(ServerCapabilities.Fallback);
+    }
 
     private MainWindowViewModel CreateShell()
     {
@@ -63,7 +78,7 @@ public sealed class MainWindowViewModelTests
         _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
             .Returns(new PagedResult<Game>());
 
-        var errors = new ApiErrorPresenter(_localization);
+        var errors = new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance);
         var runtime = Substitute.For<IRuntimePlatform>();
         runtime.Platform.Returns(GamePlatform.Windows);
         runtime.Architecture.Returns(BuildArchitecture.X64);
@@ -85,7 +100,13 @@ public sealed class MainWindowViewModelTests
             _updateInstaller,
             _shutdown,
             errors,
-            new LoginViewModel(_authentication, errors, _localization),
+            new LoginViewModel(
+                _authentication,
+                _capabilities,
+                _reachability,
+                Substitute.For<IInstallStore>(),
+                errors,
+                _localization),
             new ExploreViewModel(
                 _catalog,
                 _library,
@@ -95,6 +116,11 @@ public sealed class MainWindowViewModelTests
                 new FakeTimeProvider(DateTimeOffset.UnixEpoch)),
             new LibraryViewModel(
                 _library,
+                _libraryCache,
+                _authentication,
+                _reachability,
+                _catalog,
+                runtime,
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IGameLauncher>(),
                 errors,
@@ -111,6 +137,10 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IGameLauncher>(),
                 _images,
+                Substitute.For<IVideoPlayback>(),
+                Substitute.For<IFileBrowser>(),
+                Substitute.For<IFolderPicker>(),
+                _settings,
                 TimeProvider.System),
             DeveloperPage(errors, runtime),
             new SettingsViewModel(
@@ -119,10 +149,11 @@ public sealed class MainWindowViewModelTests
                 Substitute.For<IInstallStore>(),
                 Substitute.For<IFolderPicker>(),
                 Substitute.For<IThemeSwitcher>(),
-                Substitute.For<IAccountService>(),
+                _account,
                 _authentication,
                 errors,
-                _localization));
+                _localization),
+            new ChangePasswordViewModel(_account, errors, _localization));
     }
 
     /// <summary>
@@ -152,7 +183,8 @@ public sealed class MainWindowViewModelTests
                 capabilities,
                 errors,
                 _localization,
-                Substitute.For<IFilePicker>()),
+                Substitute.For<IFilePicker>(),
+                _images),
             new GameDevlogViewModel(_catalog, publishing, errors, _localization));
     }
 
@@ -165,11 +197,57 @@ public sealed class MainWindowViewModelTests
         Assert.False(shell.IsSignedIn);
     }
 
+    // Signing in needs a server; playing what is already on this disk does not. The sign-in
+    // screen offers the way in and the shell is what does the navigating (D17).
+    [Fact]
+    public async Task ContinuingOfflineOpensTheLibraryWithNoSession()
+    {
+        MainWindowViewModel shell = CreateShell();
+
+        await shell.ContinueOfflineCommand.ExecuteAsync(null);
+
+        Assert.Same(shell.Library, shell.CurrentPage);
+        Assert.True(shell.IsOfflineGuest);
+        Assert.False(shell.IsSignedIn);
+
+        // No session, so none of the account's surfaces are offered.
+        Assert.False(shell.CanNavigate);
+        Assert.False(shell.CanPublish);
+    }
+
+    // The only way out of an offline visit: there is no session to sign out of.
+    [Fact]
+    public async Task TheOfflineVisitLeadsBackToTheSignInScreen()
+    {
+        MainWindowViewModel shell = CreateShell();
+        await shell.ContinueOfflineCommand.ExecuteAsync(null);
+
+        await shell.ShowLoginCommand.ExecuteAsync(null);
+
+        Assert.Same(shell.Login, shell.CurrentPage);
+        Assert.False(shell.IsOfflineGuest);
+    }
+
+    [Fact]
+    public async Task SigningInAfterAnOfflineVisitEndsIt()
+    {
+        MainWindowViewModel shell = CreateShell();
+        await shell.ContinueOfflineCommand.ExecuteAsync(null);
+        Assert.True(shell.IsOfflineGuest);
+
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.SessionChanged += Raise.EventWith(
+            new SessionChangedEventArgs(SessionFor("user-1")));
+
+        Assert.False(shell.IsOfflineGuest);
+    }
+
     // A launcher that asked for a password on every start would not be worth signing into.
     [Fact]
     public async Task ARestoredSessionLandsInTheLibrary()
     {
         _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(true);
+        _authentication.IsAuthenticated.Returns(true);
         MainWindowViewModel shell = CreateShell();
 
         await shell.InitializeAsync(TestContext.Current.CancellationToken);
@@ -340,6 +418,29 @@ public sealed class MainWindowViewModelTests
         Assert.Same(shell.Explore, shell.CurrentPage);
     }
 
+    // A publisher looking at their own dashboard can open the page a player lands on, and going
+    // back returns to the dashboard rather than to the library — which works because showing the
+    // dashboard already records it as the list to return to.
+    [Fact]
+    public async Task OpeningTheGamePageFromTheDashboardAndComingBack()
+    {
+        var draft = new Game { Id = "g1", Slug = "orbital-drift", Title = "Orbital Drift" };
+        _catalog.GetMyGamesAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<Game> { Items = [draft], Total = 1 });
+        _catalog.GetGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GameDetail { Game = draft });
+
+        MainWindowViewModel shell = CreateShell();
+        await shell.ShowDeveloperCommand.ExecuteAsync(null);
+        shell.Developer.SelectedGame = draft;
+
+        shell.Developer.OpenGamePageCommand.Execute(null);
+        Assert.Same(shell.GameDetail, shell.CurrentPage);
+
+        shell.GameDetail.BackCommand.Execute(null);
+        Assert.Same(shell.Developer, shell.CurrentPage);
+    }
+
     [Fact]
     public async Task GoingBackFromTheLibraryReturnsToTheLibrary()
     {
@@ -348,6 +449,7 @@ public sealed class MainWindowViewModelTests
         MainWindowViewModel shell = CreateShell();
 
         // After CreateShell, which stubs an empty library of its own: the last stub wins.
+        _authentication.IsAuthenticated.Returns(true);
         _library.GetLibraryAsync(Arg.Any<CancellationToken>())
             .Returns([new Game { Id = "g1", Slug = "orbital-drift", Title = "Orbital Drift" }]);
 
@@ -546,5 +648,276 @@ public sealed class MainWindowViewModelTests
         Assert.Equal("it", _localization.CurrentCulture.TwoLetterISOLanguageName);
         await _settings.Received(1).SaveAsync(
             Arg.Is<UserSettings>(saved => saved!.Language == "it"), Arg.Any<CancellationToken>());
+    }
+
+    // --- what a page keeps across accounts (D70) ---------------------------------------------
+
+    // The complaint this comes from: sign out, sign in as somebody else, and the dashboard was
+    // still showing the previous publisher's game. Every page holds an account's data the same
+    // way, so every page is asserted here rather than only the one it was noticed on.
+    [Fact]
+    public async Task NothingOnScreenSurvivesADifferentAccount()
+    {
+        MainWindowViewModel shell = await SignedInShellShowingSomething();
+
+        _authentication.SessionChanged += Raise.EventWith(
+            new SessionChangedEventArgs(SessionFor("user-2")));
+
+        Assert.Empty(shell.Library.Games);
+        Assert.Empty(shell.Explore.Games);
+        Assert.Empty(shell.Developer.Games);
+        Assert.Null(shell.Developer.Selected);
+        Assert.Null(shell.Developer.SelectedGame);
+        Assert.Empty(shell.Developer.Devlog.Entries);
+        Assert.Null(shell.GameDetail.Detail);
+        Assert.Empty(shell.Settings.DeletePassword);
+        Assert.Empty(shell.Login.Password);
+        Assert.Empty(shell.Login.Email);
+    }
+
+    // Signing out is the same rule: the next person at this computer is a different account.
+    [Fact]
+    public async Task NothingOnScreenSurvivesASignOut()
+    {
+        MainWindowViewModel shell = await SignedInShellShowingSomething();
+
+        _authentication.SessionChanged += Raise.EventWith(new SessionChangedEventArgs(null));
+
+        Assert.Empty(shell.Library.Games);
+        Assert.Empty(shell.Developer.Games);
+        Assert.Same(shell.Login, shell.CurrentPage);
+    }
+
+    // The trap underneath the fix: the same event announces a rotated access token, several
+    // times an hour, with the same person behind it. Resetting there empties the library under
+    // somebody's hands. It is the account that is compared, not the event that is trusted.
+    [Fact]
+    public async Task ARotatedTokenChangesNothingOnScreen()
+    {
+        MainWindowViewModel shell = await SignedInShellShowingSomething();
+
+        _authentication.SessionChanged += Raise.EventWith(
+            new SessionChangedEventArgs(SessionFor("user-1")));
+
+        Assert.NotEmpty(shell.Library.Games);
+        Assert.NotEmpty(shell.Developer.Games);
+        Assert.NotNull(shell.Developer.Selected);
+    }
+
+    // The list is what gets reset, so a page missing from it is a page that keeps somebody
+    // else's data — which is the bug, not a smaller version of it.
+    [Fact]
+    public void EveryPageTheShellOwnsIsOneTheAccountChangeResets()
+    {
+        MainWindowViewModel shell = CreateShell();
+
+        IEnumerable<System.Reflection.PropertyInfo> pages = typeof(MainWindowViewModel)
+            .GetProperties()
+            .Where(property => typeof(ViewModelBase).IsAssignableFrom(property.PropertyType))
+
+            // Not a page of its own: it is whichever of the pages below is showing.
+            .Where(property => property.Name != nameof(MainWindowViewModel.CurrentPage));
+
+        foreach (System.Reflection.PropertyInfo property in pages)
+        {
+            object? page = property.GetValue(shell);
+            Assert.True(
+                page is IAccountScopedPage scoped && shell.Pages.Contains(scoped),
+                property.Name + " is not reset when the account changes");
+        }
+    }
+
+    // --- a session on somebody else's password ------------------------------------------
+
+    // The server refuses every route but the change with `password_change_required`, so the
+    // library would be a page that only says no.
+    [Fact]
+    public async Task ARestoredSessionOnATemporaryPasswordLandsOnTheChangeScreen()
+    {
+        _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(true);
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.CurrentSession.Returns(ForcedSessionFor("user-1"));
+        MainWindowViewModel shell = CreateShell();
+
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Same(shell.ChangePassword, shell.CurrentPage);
+        Assert.True(shell.ChangePassword.IsForced);
+        Assert.True(shell.MustChangePassword);
+
+        // And nothing was fetched with a token that reaches nothing.
+        await _library.DidNotReceive().GetLibraryAsync(Arg.Any<CancellationToken>());
+    }
+
+    // The same rule from the other entry point, which is the reason there is only one of them.
+    [Fact]
+    public async Task SigningInOnATemporaryPasswordLandsOnTheChangeScreenToo()
+    {
+        MainWindowViewModel shell = CreateShell();
+        _authentication.CurrentSession.Returns(ForcedSessionFor("user-1"));
+        _authentication
+            .SignInAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(ForcedSessionFor("user-1"));
+
+        shell.Login.Email = "locked@example.com";
+        shell.Login.Password = "the temporary one";
+        await shell.Login.SubmitCommand.ExecuteAsync(null);
+        await Task.Yield();
+
+        Assert.Same(shell.ChangePassword, shell.CurrentPage);
+        Assert.True(shell.ChangePassword.IsForced);
+    }
+
+    [Fact]
+    public async Task ChangingThePasswordLandsInTheLibrary()
+    {
+        _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(true);
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.CurrentSession.Returns(ForcedSessionFor("user-1"));
+        MainWindowViewModel shell = CreateShell();
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        _authentication.CurrentSession.Returns(SessionFor("user-1"));
+        shell.ChangePassword.CurrentPassword = "the temporary one";
+        shell.ChangePassword.NewPassword = "a brand new passphrase";
+        shell.ChangePassword.ConfirmPassword = "a brand new passphrase";
+        await shell.ChangePassword.SubmitCommand.ExecuteAsync(null);
+        await Task.Yield();
+
+        Assert.Same(shell.Library, shell.CurrentPage);
+    }
+
+    // The publish tab is hidden as well: it is a page whose every button the server refuses.
+    [Fact]
+    public async Task NothingElseIsOfferedWhileThePasswordIsSomebodyElsesChoice()
+    {
+        _authentication.RestoreAsync(Arg.Any<CancellationToken>()).Returns(true);
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.IsAuthenticated.Returns(true);
+        _authentication.HasPermission(Permissions.GamePublish).Returns(true);
+        _authentication.CurrentSession.Returns(ForcedSessionFor("user-1"));
+        MainWindowViewModel shell = CreateShell();
+
+        await shell.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(shell.CanPublish);
+
+        // And the tabs with it: each of them is a page whose first request answers 403.
+        Assert.True(shell.IsSignedIn);
+        Assert.False(shell.CanNavigate);
+    }
+
+    // Found by signing in through the real window, which is the only place it showed. The
+    // event does not arrive on the UI thread — `AuthenticationService` awaits its token store
+    // with ConfigureAwait(false), so a sign-in publishes from the thread pool — and everything
+    // the handler touches is bound. `Button.get_Command()` threw "the calling thread cannot
+    // access this object" on a pool thread, which does not surface as an error message: the
+    // launcher closed. Every sign-in, since the pages started being reset.
+    [Fact]
+    public void ASessionPublishedOffTheUiThreadIsAppliedOnIt()
+    {
+        RecordingSynchronizationContext context = new();
+        SynchronizationContext? previous = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(context);
+
+        MainWindowViewModel shell;
+        try
+        {
+            // Captured in the constructor, exactly as the running application captures Avalonia's.
+            shell = CreateShell();
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        // Raised with no context current, which is what a thread-pool continuation looks like.
+        _authentication.SessionChanged += Raise.EventWith(
+            new SessionChangedEventArgs(SessionFor("user-1")));
+
+        Assert.True(
+            context.Posts > 0,
+            "the session change reached the bound properties without going through the UI thread");
+        Assert.Equal("user-1", shell.AccountName);
+    }
+
+    /// <summary>
+    /// Runs what is posted to it, immediately and inline, and counts. Inline because these
+    /// tests assert on the outcome straight after the event; the count is what says the work
+    /// went *through* it rather than round it.
+    /// </summary>
+    private sealed class RecordingSynchronizationContext : SynchronizationContext
+    {
+        public int Posts { get; private set; }
+
+        public override void Post(SendOrPostCallback callback, object? state)
+        {
+            Posts++;
+            callback(state);
+        }
+    }
+
+    private static AuthSession SessionFor(string userId) =>
+        new() { User = new AuthenticatedUser { Id = userId, DisplayName = userId } };
+
+    private static AuthSession ForcedSessionFor(string userId) =>
+        new()
+        {
+            User = new AuthenticatedUser
+            {
+                Id = userId,
+                DisplayName = userId,
+                PasswordChangeRequired = true,
+            },
+        };
+
+    /// <summary>
+    /// A shell signed in as <c>user-1</c> with something loaded on every page: a library, a
+    /// search, a game page, a dashboard with a game selected, a password typed into the
+    /// account-deletion box and an address left in the sign-in form.
+    /// </summary>
+    private async Task<MainWindowViewModel> SignedInShellShowingSomething()
+    {
+        Game game = new() { Id = "g1", Slug = "orbital-drift", Title = "Orbital Drift" };
+
+        // Built before the answers are arranged: `CreateShell` stubs an empty library and an
+        // empty Explore of its own, and NSubstitute's last stub wins.
+        MainWindowViewModel shell = CreateShell();
+
+        // Signed in, which the library asks about before it asks the server at all: with
+        // nobody signed in it shows the disk and makes no request (the offline visit).
+        _authentication.IsAuthenticated.Returns(true);
+
+        _library.GetLibraryAsync(Arg.Any<CancellationToken>()).Returns([game]);
+        _catalog.ExploreAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<Game> { Items = [game], Total = 1, Limit = 24 });
+        _catalog.GetMyGamesAsync(Arg.Any<GameQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new PagedResult<Game> { Items = [game], Total = 1, Limit = 24 });
+        _catalog.GetGameAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new GameDetail { Game = game });
+
+        _authentication.SessionChanged += Raise.EventWith(
+            new SessionChangedEventArgs(SessionFor("user-1")));
+
+        await shell.ShowLibraryCommand.ExecuteAsync(null);
+        await shell.ShowExploreCommand.ExecuteAsync(null);
+        await shell.ShowDeveloperCommand.ExecuteAsync(null);
+        shell.Developer.SelectedGame = shell.Developer.Games[0];
+        await Task.Yield();
+
+        shell.Explore.OpenGameCommand.Execute(new StoreCardViewModel(game));
+        await Task.Yield();
+
+        shell.Settings.DeletePassword = "correct horse battery staple";
+        shell.Login.Email = "harness-dev@example.test";
+        shell.Login.Password = "correct horse battery staple";
+
+        Assert.NotEmpty(shell.Library.Games);
+        Assert.NotEmpty(shell.Explore.Games);
+        Assert.NotEmpty(shell.Developer.Games);
+        Assert.NotNull(shell.Developer.Selected);
+        Assert.NotNull(shell.GameDetail.Detail);
+
+        return shell;
     }
 }

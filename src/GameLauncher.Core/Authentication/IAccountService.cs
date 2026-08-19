@@ -30,4 +30,26 @@ public interface IAccountService
     /// </summary>
     Task DeleteAsync(
         string password, string? reason = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replaces the account's password and takes over the session the server answers with.
+    ///
+    /// Here for the same structural reason as the erasure, and it is worth stating because the
+    /// natural home looks even more obvious: this ends every session the account held, and
+    /// sessions are <see cref="IAuthenticationService"/>'s. The route is on the authenticated
+    /// client, whose token handler depends on that service, so putting it there closes the
+    /// cycle the container refuses to build (D47).
+    ///
+    /// The order is the substance again, and the opposite way round from the erasure: the
+    /// server's answer is adopted **only** when the change succeeded, because a refusal leaves
+    /// the old password — and the old session — in force, and forgetting either would sign
+    /// somebody out for typing their current password wrong.
+    ///
+    /// Throws <see cref="Api.ApiException"/> as the server answered:
+    /// <see cref="Api.ApiErrorCode.Unauthenticated"/> for a wrong current password, and
+    /// <see cref="Api.ApiErrorCode.InvalidInput"/> — with a rule — for a new one that breaks the
+    /// policy or repeats the old one.
+    /// </summary>
+    Task ChangePasswordAsync(
+        string currentPassword, string newPassword, CancellationToken cancellationToken = default);
 }

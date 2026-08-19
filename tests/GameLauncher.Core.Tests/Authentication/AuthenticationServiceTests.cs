@@ -14,6 +14,13 @@ public sealed class AuthenticationServiceTests
     private readonly ITokenStore _store = Substitute.For<ITokenStore>();
     private readonly FakeTimeProvider _clock = new(Now);
 
+    /// <summary>
+    /// The real circuit breaker rather than a substitute: it is pure state over the same fake
+    /// clock, and what these tests need to say — that a rotation is *not* attempted while the
+    /// server is known to be missing — is a statement about the two of them together.
+    /// </summary>
+    private readonly ServerReachability _reachability = new(new FakeTimeProvider(Now));
+
     private static AuthSession SessionExpiring(
         DateTimeOffset expiresAt, string accessToken = "access", string refreshToken = "refresh") =>
         new()
@@ -26,7 +33,66 @@ public sealed class AuthenticationServiceTests
         };
 
     private AuthenticationService CreateService() =>
-        new(_api, _store, NullLogger<AuthenticationService>.Instance, _clock);
+        new(_api, _store, _reachability, NullLogger<AuthenticationService>.Instance, _clock);
+
+    // --- an unreachable server ------------------------------------------------------------
+
+    /// <summary>
+    /// The bug this exists for: with the server down, every authenticated request funnelled
+    /// through a rotation that could not succeed and paid a full connection timeout for it —
+    /// so a start-up spent twenty seconds on the sign-in screen and twenty more per page.
+    /// </summary>
+    [Fact]
+    public async Task NoRotationIsAttemptedAgainstAServerKnownToBeMissing()
+    {
+        _store.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(SessionExpiring(Now.AddMinutes(-5)));
+        _reachability.ReportUnreachable();
+
+        using AuthenticationService service = CreateService();
+
+        Assert.True(await service.RestoreAsync(TestContext.Current.CancellationToken));
+        Assert.True(service.IsAuthenticated);
+        await _api.DidNotReceive().RefreshAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AskingForATokenOfflineFailsAtOnceAndKeepsTheSession()
+    {
+        _store.LoadAsync(Arg.Any<CancellationToken>())
+            .Returns(SessionExpiring(Now.AddMinutes(-5)));
+        _reachability.ReportUnreachable();
+
+        using AuthenticationService service = CreateService();
+        await service.RestoreAsync(TestContext.Current.CancellationToken);
+
+        ApiException exception = await Assert.ThrowsAsync<ApiException>(
+            () => service.GetAccessTokenAsync(TestContext.Current.CancellationToken));
+
+        Assert.Equal(ApiErrorCode.Network, exception.Code);
+
+        // A server that could not be asked has said nothing about this session (D29).
+        Assert.True(service.IsAuthenticated);
+        await _store.DidNotReceive().ClearAsync(Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
+    /// The circuit stops the launcher retrying by itself and never answers for somebody who
+    /// has just pressed Sign in.
+    /// </summary>
+    [Fact]
+    public async Task SigningInGoesToTheWireEvenWhileTheCircuitIsOpen()
+    {
+        _reachability.ReportUnreachable();
+        _api.LoginAsync("a@b.c", "pw", Arg.Any<CancellationToken>())
+            .Returns(SessionExpiring(Now.AddMinutes(15)));
+
+        using AuthenticationService service = CreateService();
+        await service.SignInAsync("a@b.c", "pw", TestContext.Current.CancellationToken);
+
+        Assert.True(service.IsAuthenticated);
+        Assert.True(_reachability.AllowsRequests);
+    }
 
     // --- restoring on startup -------------------------------------------------------------
 

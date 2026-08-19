@@ -240,7 +240,7 @@ public sealed class AuthApiClientTests
             "\"password\":\"a whole new password\"", handler.LastRequest.Body, StringComparison.Ordinal);
     }
 
-    // Passwords are 12-256 characters with no character-class rules, so a passphrase full of
+    // Passwords are 8-256 characters with no character-class rules, so a passphrase full of
     // accents is entirely ordinary. The serializer escapes non-ASCII rather than emitting it
     // raw; that is still the same string once the server decodes it, and this pins it down.
     [Fact]

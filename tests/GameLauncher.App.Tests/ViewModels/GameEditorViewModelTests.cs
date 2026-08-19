@@ -2,6 +2,7 @@ using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -13,7 +14,10 @@ public sealed class GameEditorViewModelTests
     private readonly ResourceManagerLocalizationService _localization = new("en");
 
     private GameEditorViewModel CreateViewModel() =>
-        new(_publishing, new ApiErrorPresenter(_localization), _localization);
+        new(
+            _publishing,
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
+            _localization);
 
     private static Game Existing() => new()
     {

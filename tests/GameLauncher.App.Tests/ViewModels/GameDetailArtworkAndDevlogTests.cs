@@ -2,12 +2,14 @@ using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
+using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -22,6 +24,7 @@ public sealed class GameDetailArtworkAndDevlogTests
 {
     private readonly ICatalogApi _catalog = Substitute.For<ICatalogApi>();
     private readonly IImageProvider _images = Substitute.For<IImageProvider>();
+    private readonly IVideoPlayback _playback = Substitute.For<IVideoPlayback>();
     private readonly ResourceManagerLocalizationService _localization = new("en");
 
     private static readonly DateTimeOffset Now = new(2026, 8, 3, 12, 0, 0, TimeSpan.Zero);
@@ -42,7 +45,7 @@ public sealed class GameDetailArtworkAndDevlogTests
         return new GameDetailViewModel(
             _catalog,
             Substitute.For<ILibraryApi>(),
-            new ApiErrorPresenter(_localization),
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
             _localization,
             runtime,
             Substitute.For<IAuthenticationService>(),
@@ -50,7 +53,23 @@ public sealed class GameDetailArtworkAndDevlogTests
             Substitute.For<IInstallStore>(),
             Substitute.For<IGameLauncher>(),
             _images,
+            _playback,
+            Substitute.For<IFileBrowser>(),
+            Substitute.For<IFolderPicker>(),
+            SettingsStore(),
             new FakeTimeProvider(Now));
+    }
+
+    /// <summary>
+    /// The install flow reads the preferences, and an unconfigured substitute answers a
+    /// <c>Task&lt;UserSettings&gt;</c> with null rather than with defaults — which crashes the
+    /// view model rather than failing an assertion.
+    /// </summary>
+    private static IUserSettingsStore SettingsStore()
+    {
+        var store = Substitute.For<IUserSettingsStore>();
+        store.LoadAsync(Arg.Any<CancellationToken>()).Returns(new UserSettings());
+        return store;
     }
 
     private static GameMedia Picture(
@@ -221,6 +240,32 @@ public sealed class GameDetailArtworkAndDevlogTests
         Assert.Equal(["Patch 0.2.0", "Plans"], model.Devlog.Select(note => note.Title));
         Assert.False(model.DevlogIsEmpty);
         Assert.False(model.HasMoreDevlog);
+
+        // A devlog whose every card is shut is a page that looks like it failed to load, and
+        // one where they are all open is the wall of text this replaced.
+        Assert.True(model.Devlog[0].IsExpanded);
+        Assert.False(model.Devlog[1].IsExpanded);
+
+        model.Devlog[1].ToggleCommand.Execute(null);
+        Assert.True(model.Devlog[1].IsExpanded);
+        Assert.True(model.Devlog[0].IsExpanded);
+    }
+
+    // The body is Markdown and was written as Markdown; a shut card shows a line of it as
+    // text rather than as the syntax.
+    [Fact]
+    public async Task AShutCardPreviewsTheProseRatherThanTheSyntax()
+    {
+        Returns(Detail());
+        Devlog(1, Note("n1", "Release 0.1") with
+        {
+            BodyMarkdown = "# Ciao a tutti\n## benvenuti\n\nun **saluto** a tutti",
+        });
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.Equal("Ciao a tutti", Assert.Single(model.Devlog).Preview);
     }
 
     // The badge names the version, and the id is never what a reader is shown.

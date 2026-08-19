@@ -19,7 +19,7 @@ namespace GameLauncher.App.ViewModels;
 /// because it is where somebody goes looking for it, and because a page whose only purpose is
 /// to delete an account is a page that only ever gets opened by mistake.
 /// </summary>
-public sealed partial class SettingsViewModel : ViewModelBase
+public sealed partial class SettingsViewModel : ViewModelBase, IAccountScopedPage
 {
     private readonly IUserSettingsStore _store;
     private readonly IPathProvider _paths;
@@ -59,6 +59,14 @@ public sealed partial class SettingsViewModel : ViewModelBase
     /// <summary>Empty means "wherever the platform puts things", which is shown alongside.</summary>
     [ObservableProperty]
     private string _installDirectory = string.Empty;
+
+    /// <summary>
+    /// Turns the setting above from an answer into a starting point: every install of a game
+    /// that is not already here asks where it should go. Off by default — a folder dialog in
+    /// front of every install is one people turn off after the second game.
+    /// </summary>
+    [ObservableProperty]
+    private bool _askWhereToInstall;
 
     [ObservableProperty]
     private string _themeVariant = DefaultTheme;
@@ -109,6 +117,17 @@ public sealed partial class SettingsViewModel : ViewModelBase
     public string DefaultInstallDirectory => _paths.DefaultInstallDirectory;
 
     /// <summary>
+    /// The whole sentence, built here rather than by a <c>StringFormat</c> in the view. The
+    /// view had one, and its format string was a <c>{loc:Tr}</c> — which is a binding, not a
+    /// string (D3), so constructing the page threw and the ContentControl showed **nothing**:
+    /// every setting on it was invisible. A sentence assembled in a view model is the shape the
+    /// page already used next door for <see cref="InstalledElsewhereNotice"/>, and a test can
+    /// read it.
+    /// </summary>
+    public string DefaultInstallDirectoryNotice =>
+        _localization.Translate("Settings.InstallDirectoryDefault", DefaultInstallDirectory);
+
+    /// <summary>
     /// What is already installed does not move when this changes, and saying so on the page is
     /// cheaper than a support question.
     /// </summary>
@@ -116,11 +135,32 @@ public sealed partial class SettingsViewModel : ViewModelBase
 
     public bool HasInstalledElsewhere => InstalledElsewhereNotice.Length > 0;
 
+    /// <summary>
+    /// The page where the line between an account and a machine is visible, so it is the page
+    /// that draws it: the install directory, the theme, the language and the crash-report
+    /// consent are this computer's and survive, because none of them changes when somebody
+    /// else signs in on it. What goes is the account deletion — a typed password above all,
+    /// which must never be sitting in a box for the next person, plus the confirmation it
+    /// arms and whatever the last attempt said.
+    /// </summary>
+    public void ResetForAccountChange()
+    {
+        DeletePassword = string.Empty;
+        DeleteReason = string.Empty;
+        PendingDeletion = null;
+        IsDeleting = false;
+        StatusMessage = null;
+        ErrorMessage = null;
+        OnPropertyChanged(nameof(HasPendingDeletion));
+        OnPropertyChanged(nameof(CanDeleteAccount));
+    }
+
     public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         _settings = await _store.LoadAsync(cancellationToken).ConfigureAwait(true);
 
         InstallDirectory = _settings.InstallDirectory ?? string.Empty;
+        AskWhereToInstall = _settings.AskWhereToInstall;
         ThemeVariant = _settings.ThemeVariant ?? DefaultTheme;
         SendCrashReports = _settings.SendCrashReports;
         StatusMessage = null;
@@ -140,6 +180,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
             : string.Empty;
 
         OnPropertyChanged(nameof(DefaultInstallDirectory));
+        OnPropertyChanged(nameof(DefaultInstallDirectoryNotice));
         OnPropertyChanged(nameof(InstalledElsewhereNotice));
         OnPropertyChanged(nameof(HasInstalledElsewhere));
     }
@@ -174,6 +215,7 @@ public sealed partial class SettingsViewModel : ViewModelBase
         _settings = _settings with
         {
             InstallDirectory = trimmed.Length == 0 ? null : trimmed,
+            AskWhereToInstall = AskWhereToInstall,
             ThemeVariant = ThemeVariant,
             SendCrashReports = SendCrashReports,
         };
@@ -273,6 +315,18 @@ public sealed partial class SettingsViewModel : ViewModelBase
     partial void OnSendCrashReportsChanged(bool value)
     {
         if (value != _settings.SendCrashReports)
+        {
+            _ = SaveAsync();
+        }
+    }
+
+    /// <summary>
+    /// Saved on the toggle, like the theme and the crash-report consent: a checkbox that needs
+    /// a second press to take effect is one somebody will believe they set.
+    /// </summary>
+    partial void OnAskWhereToInstallChanged(bool value)
+    {
+        if (value != _settings.AskWhereToInstall)
         {
             _ = SaveAsync();
         }

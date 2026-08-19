@@ -16,6 +16,14 @@ public sealed record UserSettings
     /// <summary>Null uses the platform default install location.</summary>
     public string? InstallDirectory { get; init; }
 
+    /// <summary>
+    /// Whether every install asks where the game should go, taking
+    /// <see cref="InstallDirectory"/> as the starting point rather than as the answer. Off by
+    /// default: a launcher that interrupts every install with a folder dialog is one people
+    /// turn off, and the setting above already covers wanting games somewhere specific.
+    /// </summary>
+    public bool AskWhereToInstall { get; init; }
+
     /// <summary>Opt-in: crash reports are never uploaded unless this is explicitly true.</summary>
     public bool SendCrashReports { get; init; }
 

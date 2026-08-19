@@ -6,12 +6,14 @@ using CommunityToolkit.Mvvm.Input;
 using GameLauncher.App.Services;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
+using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
+using GameLauncher.Core.Text;
 
 namespace GameLauncher.App.ViewModels;
 
@@ -39,36 +41,25 @@ public sealed class VersionCardViewModel(GameVersion version, ILocalizationServi
 }
 
 /// <summary>
-/// One picture of the gallery. Its own object because a screenshot arrives on its own: the
-/// page shows the frames it has and fills them in as the rest land.
-/// </summary>
-public sealed partial class ScreenshotViewModel(GameMedia media) : ViewModelBase
-{
-    [ObservableProperty]
-    private Bitmap? _image;
-
-    public string Url => media.Url;
-
-    /// <summary>The publisher's description, which is what a screen reader reads out.</summary>
-    public string AltText => media.AltText;
-
-    public bool HasImage => Image is not null;
-
-    public async Task LoadAsync(
-        IImageProvider images, CancellationToken cancellationToken = default) =>
-        Image = await images.GetAsync(media.Url, cancellationToken).ConfigureAwait(true);
-
-    partial void OnImageChanged(Bitmap? value) => OnPropertyChanged(nameof(HasImage));
-}
-
-/// <summary>
-/// One devlog entry, as a card. The body is shown as the publisher typed it: rendering remote
-/// Markdown would mean rendering remote markup, and a devlog is not worth that.
+/// One devlog entry, as a card that opens.
+///
+/// It used to be a block of raw text, which is what made a devlog of three posts look like one
+/// unreadable wall: the body is Markdown, the publisher wrote it as Markdown, and it arrived on
+/// screen with the asterisks still in it. It is parsed now (see <see cref="MarkdownParser"/> for
+/// why that does not reopen what D38 closed), and a card that is not open shows one line of it,
+/// so a list of entries is a list rather than a scroll.
 /// </summary>
 public sealed partial class PatchNoteCardViewModel : ViewModelBase
 {
     private readonly PatchNote _note;
     private readonly ILocalizationService _localization;
+
+    /// <summary>
+    /// Whether the body is shown. The newest entry arrives open, because a devlog whose every
+    /// card is shut is a page that looks like it failed to load.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isExpanded;
 
     public PatchNoteCardViewModel(
         PatchNote note, string versionLabel, ILocalizationService localization)
@@ -81,6 +72,28 @@ public sealed partial class PatchNoteCardViewModel : ViewModelBase
     public string Title => _note.Title;
 
     public string Body => _note.BodyMarkdown;
+
+    /// <summary>
+    /// The first paragraph, as plain text, for a card that is shut. Taken from the parsed
+    /// document rather than from the raw string so that a post opening with a heading or a
+    /// fenced block does not preview as <c>## Ciao a tutti</c>.
+    /// </summary>
+    public string Preview
+    {
+        get
+        {
+            MarkdownBlock? first = MarkdownParser
+                .Parse(_note.BodyMarkdown)
+                .FirstOrDefault(block => block.Kind != MarkdownBlockKind.Code);
+
+            return first is null
+                ? string.Empty
+                : string.Concat(first.Spans.Select(span => span.Text));
+        }
+    }
+
+    [RelayCommand]
+    private void Toggle() => IsExpanded = !IsExpanded;
 
     public string Author => _localization.Translate("Detail.DevlogBy", _note.Author.DisplayName);
 
@@ -103,7 +116,7 @@ public sealed partial class PatchNoteCardViewModel : ViewModelBase
 /// across navigations rather than rebuilt, so <see cref="LoadAsync"/> resets everything it
 /// does not overwrite.
 /// </summary>
-public sealed partial class GameDetailViewModel : ViewModelBase
+public sealed partial class GameDetailViewModel : ViewModelBase, IAccountScopedPage
 {
     private readonly ICatalogApi _catalog;
     private readonly ILibraryApi _library;
@@ -115,6 +128,10 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     private readonly IInstallStore _installs;
     private readonly IGameLauncher _games;
     private readonly IImageProvider _images;
+    private readonly IVideoPlayback _playback;
+    private readonly IFileBrowser _files;
+    private readonly IFolderPicker _folders;
+    private readonly IUserSettingsStore _settings;
     private readonly TransferRateEstimator _rate;
 
     private CancellationTokenSource? _installCancellation;
@@ -145,7 +162,19 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     /// <summary>Which screenshot is shown large. The first one, until somebody picks another.</summary>
     [ObservableProperty]
-    private ScreenshotViewModel? _selectedScreenshot;
+    private MediaCardViewModel? _selectedScreenshot;
+
+    /// <summary>The video being played, or the last one that was. Null until somebody presses play.</summary>
+    [ObservableProperty]
+    private MediaCardViewModel? _playingVideo;
+
+    /// <summary>
+    /// Why nothing is playing, when somebody asked for it. Kept apart from
+    /// <see cref="ErrorMessage"/> for the reason <see cref="DevlogError"/> is: a trailer that
+    /// will not play must not replace a page a game can still be installed from.
+    /// </summary>
+    [ObservableProperty]
+    private string? _videoError;
 
     [ObservableProperty]
     private bool _isDevlogBusy;
@@ -184,9 +213,17 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         IInstallStore installs,
         IGameLauncher games,
         IImageProvider images,
+        IVideoPlayback playback,
+        IFileBrowser files,
+        IFolderPicker folders,
+        IUserSettingsStore settings,
         TimeProvider time)
     {
         _images = images;
+        _playback = playback;
+        _files = files;
+        _folders = folders;
+        _settings = settings;
         _catalog = catalog;
         _library = library;
         _errors = errors;
@@ -213,13 +250,47 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     public ObservableCollection<VersionCardViewModel> Versions { get; } = [];
 
-    public ObservableCollection<ScreenshotViewModel> Screenshots { get; } = [];
+    public ObservableCollection<MediaCardViewModel> Screenshots { get; } = [];
+
+    /// <summary>
+    /// The videos, in the order the publisher arranged them. A list of their own rather than
+    /// rows in the screenshot strip: one is played and the other is decoded, and the two have
+    /// nothing in common on screen beyond belonging to the same game.
+    /// </summary>
+    public ObservableCollection<MediaCardViewModel> Videos { get; } = [];
 
     public ObservableCollection<PatchNoteCardViewModel> Devlog { get; } = [];
 
     public bool HasHero => Hero is not null;
 
     public bool HasScreenshots => Screenshots.Count > 0;
+
+    public bool HasVideos => Videos.Count > 0;
+
+    /// <summary>
+    /// Whether this machine can play anything. False is ordinary rather than broken — there is
+    /// no libvlc package for Linux, so a machine without VLC installed lands here — and the
+    /// page says so instead of offering a button that does nothing.
+    /// </summary>
+    public bool CanPlayVideo => _playback.IsAvailable;
+
+    /// <summary>
+    /// What a <c>VideoView</c> binds to, and <b>null until something is playing</b> — which is
+    /// load-bearing twice over. The view puts the player in a <c>ContentControl</c>, so a null
+    /// here means no native child window is created at all: opening a game page costs nothing,
+    /// and a machine that cannot host one is not asked to. And reading this property is what
+    /// loads libvlc, so a page with no trailer on it never pays for ~100 MB of native library.
+    /// </summary>
+    public object? VideoPlayer => IsPlayingVideo ? _playback.Player : null;
+
+    public bool IsPlayingVideo => PlayingVideo is not null;
+
+    /// <summary>
+    /// Whether to say that this machine cannot play. Both halves, and in this order: the
+    /// short-circuit is what keeps a game page with no videos from initialising a native
+    /// library to answer a question nobody on that page is asking.
+    /// </summary>
+    public bool ShowVideoUnavailable => HasVideos && !_playback.IsAvailable;
 
     /// <summary>True once the first page has come back and there was nothing in it.</summary>
     public bool DevlogIsEmpty =>
@@ -282,7 +353,29 @@ public sealed partial class GameDetailViewModel : ViewModelBase
     /// <summary>Started by this launcher and not yet seen to exit.</summary>
     public bool IsRunning => Installed is not null && _games.IsRunning(Installed.GameId);
 
-    public bool CanPlay => IsInstalled && !IsWorking && !IsRunning;
+    /// <summary>
+    /// An update is not optional. A player who starts an old build talks to a server, saves
+    /// into a format or joins a session the new one changed, and every one of those failures
+    /// arrives later and looks like the game being broken rather than like a skipped update.
+    /// The button is not disabled but absent, and the sentence below says why — a greyed-out
+    /// Play with no explanation is the same dead end with worse manners.
+    /// </summary>
+    public bool CanPlay => IsInstalled && !HasUpdate && !IsWorking && !IsRunning;
+
+    /// <summary>Shown exactly where the Play button would have been.</summary>
+    public bool MustUpdateBeforePlaying => HasUpdate && !IsWorking;
+
+    /// <summary>
+    /// Leaving the library while the files are still on this disk would leave an install the
+    /// account no longer owns: it could not be updated, could not be repaired, and nothing on
+    /// the page would say why. Uninstalling first is the order that works, so the button is
+    /// not offered until then.
+    /// </summary>
+    public bool CanRemoveFromLibrary => InLibrary && Installed is null;
+
+    /// <summary>The install directory, if there is one to show.</summary>
+    public bool CanOpenFolder =>
+        Installed is { } install && install.InstallDirectory.Length > 0;
 
     /// <summary>
     /// The arguments the build itself carries, shown so a player can see what their own are
@@ -367,10 +460,15 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         Progress = null;
         Hero = null;
         SelectedScreenshot = null;
+        // Loading another game stops the previous one's trailer. Nothing else would: the page
+        // object outlives the game it is showing.
+        StopVideo();
+        VideoError = null;
         DevlogError = null;
         _devlogTotal = 0;
         Versions.Clear();
         Screenshots.Clear();
+        Videos.Clear();
         Devlog.Clear();
         RaiseDerived();
 
@@ -434,13 +532,20 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
         foreach (GameMedia shot in detail.Screenshots)
         {
-            Screenshots.Add(new ScreenshotViewModel(shot));
+            Screenshots.Add(new MediaCardViewModel(shot));
+        }
+
+        // No LoadAsync for these: a video has no thumbnail to fetch, and MediaCardViewModel
+        // knows to skip the decoder rather than every caller having to remember.
+        foreach (GameMedia video in detail.Videos)
+        {
+            Videos.Add(new MediaCardViewModel(video));
         }
 
         SelectedScreenshot = Screenshots.FirstOrDefault();
         RaiseDerived();
 
-        foreach (ScreenshotViewModel screenshot in Screenshots.ToList())
+        foreach (MediaCardViewModel screenshot in Screenshots.ToList())
         {
             await screenshot.LoadAsync(_images, cancellationToken).ConfigureAwait(true);
         }
@@ -470,7 +575,12 @@ public sealed partial class GameDetailViewModel : ViewModelBase
             _devlogTotal = result.Total;
             foreach (PatchNote note in result.Items)
             {
-                Devlog.Add(new PatchNoteCardViewModel(note, VersionLabelFor(note), _localization));
+                PatchNoteCardViewModel card = new(note, VersionLabelFor(note), _localization);
+
+                // Only the newest, and only on the first page: an older entry fetched by
+                // pressing "show older" opening itself would push the list under the pointer.
+                card.IsExpanded = Devlog.Count == 0;
+                Devlog.Add(card);
             }
         }
         catch (ApiException exception)
@@ -495,7 +605,7 @@ public sealed partial class GameDetailViewModel : ViewModelBase
             : string.Empty;
 
     [RelayCommand]
-    private void ShowScreenshot(ScreenshotViewModel? screenshot)
+    private void ShowScreenshot(MediaCardViewModel? screenshot)
     {
         if (screenshot is not null)
         {
@@ -503,8 +613,62 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         }
     }
 
+    /// <summary>
+    /// Starts a trailer. Everything about this is a state machine except the picture itself,
+    /// which is the one thing no test here can see — so what is pinned by tests is: nothing
+    /// plays on a machine that cannot play, a refusal says so instead of failing silently, and
+    /// a second press replaces the first video rather than stacking two.
+    /// </summary>
     [RelayCommand]
-    private void Back() => BackRequested?.Invoke(this, EventArgs.Empty);
+    private void PlayVideo(MediaCardViewModel? video)
+    {
+        if (video is null || !video.IsVideo)
+        {
+            return;
+        }
+
+        VideoError = null;
+
+        if (!_playback.IsAvailable)
+        {
+            VideoError = _localization.Translate("Detail.VideoUnavailable");
+            RaiseVideoDerived();
+            return;
+        }
+
+        if (!_playback.Play(video.Url))
+        {
+            PlayingVideo = null;
+            VideoError = _localization.Translate("Detail.VideoFailed");
+            RaiseVideoDerived();
+            return;
+        }
+
+        PlayingVideo = video;
+        RaiseVideoDerived();
+    }
+
+    /// <summary>
+    /// Stops whatever is playing. Called by the button, and by everything that takes the page
+    /// away — navigating back, loading another game, losing the account — because a trailer
+    /// still playing over the next screen is the failure this exists to prevent.
+    /// </summary>
+    [RelayCommand]
+    private void StopVideo()
+    {
+        _playback.StopPlayback();
+        PlayingVideo = null;
+        RaiseVideoDerived();
+    }
+
+    [RelayCommand]
+    private void Back()
+    {
+        // Leaving the page stops the sound. A trailer still playing over the library is the
+        // failure this line exists to prevent, and nothing else takes this page down.
+        StopVideo();
+        BackRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     [RelayCommand]
     private async Task AddToLibraryAsync(CancellationToken cancellationToken)
@@ -522,6 +686,27 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         catch (ApiException exception)
         {
             ErrorMessage = _errors.Describe(exception);
+        }
+    }
+
+    /// <summary>
+    /// Shows the install directory in the desktop's file manager. Saves, screenshots, logs and
+    /// mods are all in there and none of them is anywhere the launcher would think to look, so
+    /// the way to that folder is worth a button rather than a support answer.
+    /// </summary>
+    [RelayCommand]
+    private void OpenFolder()
+    {
+        if (Installed is not { } install)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+
+        if (!_files.Reveal(install.InstallDirectory))
+        {
+            ErrorMessage = _localization.Translate("Detail.OpenFolderFailed");
         }
     }
 
@@ -564,6 +749,25 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
         ErrorMessage = null;
         StatusMessage = null;
+
+        // Asked before anything is planned or written, and only for a game that is not here
+        // yet: an update goes where the game already lives, and asking again would invite
+        // somebody to answer with a second directory the first install is not in.
+        string? root = null;
+        if (Installed is null && await ShouldAskWhereToInstallAsync().ConfigureAwait(true))
+        {
+            root = await _folders
+                .PickAsync(_localization.Translate("Detail.ChooseInstallDirectory", Title))
+                .ConfigureAwait(true);
+
+            // Cancelling the question cancels the install. Falling back to the default here
+            // would install the game somewhere the player has just declined to confirm.
+            if (root is null)
+            {
+                return;
+            }
+        }
+
         _rate.Reset();
         Progress = new DownloadProgress { Phase = InstallPhase.Planning };
         RaiseDerived();
@@ -574,12 +778,25 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         try
         {
             InstallResult result = await _installations.InstallAsync(
-                new InstallRequest { Game = Detail.Game, Version = version, Build = build },
+                new InstallRequest
+                {
+                    Game = Detail.Game,
+                    Version = version,
+                    Build = build,
+                    InstallRoot = root,
+                },
                 new Progress<DownloadProgress>(OnProgress),
                 cancellation.Token).ConfigureAwait(true);
 
             Installed = result.Install;
             StatusMessage = _localization.Translate("Detail.InstallComplete");
+
+            // Installing a game is deciding to own it, and finding it missing from the library
+            // afterwards is the kind of gap people report as a bug. It runs after the install
+            // rather than before, so a download that never finished leaves no entitlement
+            // nobody asked for; and its own failure goes to ErrorMessage without touching
+            // StatusMessage, because the files really are on this disk either way.
+            await AddToLibraryAfterInstallAsync(cancellation.Token).ConfigureAwait(true);
         }
         catch (Exception exception) when (
             exception is ApiException or InsufficientDiskSpaceException
@@ -601,6 +818,39 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelInstall() => _installCancellation?.Cancel();
+
+    /// <summary>
+    /// The preference is read at the moment it is needed rather than held from page load: the
+    /// settings page writes it, and a game page opened before that would otherwise keep asking
+    /// — or keep not asking — until it was navigated away from.
+    /// </summary>
+    private async Task<bool> ShouldAskWhereToInstallAsync()
+    {
+        UserSettings settings = await _settings.LoadAsync().ConfigureAwait(true);
+        return settings.AskWhereToInstall;
+    }
+
+    /// <summary>
+    /// Adds a freshly installed game to the library, if it is not already there. Adding one
+    /// twice is not an error the server minds, but there is no reason to spend the round trip.
+    /// </summary>
+    private async Task AddToLibraryAfterInstallAsync(CancellationToken cancellationToken)
+    {
+        if (InLibrary || Detail is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _library.AddAsync(Detail.Game.Id, cancellationToken).ConfigureAwait(true);
+            InLibrary = true;
+        }
+        catch (ApiException exception)
+        {
+            ErrorMessage = _errors.Describe(exception);
+        }
+    }
 
     /// <summary>
     /// Saved on demand rather than on every keystroke: the row is what the next launch reads,
@@ -742,6 +992,10 @@ public sealed partial class GameDetailViewModel : ViewModelBase
 
     partial void OnDetailChanged(GameDetail? value) => RaiseDerived();
 
+    /// <summary>Whether the game can leave the library depends on both halves of that.</summary>
+    partial void OnInLibraryChanged(bool value) =>
+        OnPropertyChanged(nameof(CanRemoveFromLibrary));
+
     partial void OnHeroChanged(Bitmap? value) => OnPropertyChanged(nameof(HasHero));
 
     partial void OnInstalledChanged(InstalledGame? value)
@@ -769,6 +1023,14 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         RaiseDerived();
     }
 
+    private void RaiseVideoDerived()
+    {
+        OnPropertyChanged(nameof(IsPlayingVideo));
+        OnPropertyChanged(nameof(VideoPlayer));
+        OnPropertyChanged(nameof(CanPlayVideo));
+        OnPropertyChanged(nameof(ShowVideoUnavailable));
+    }
+
     private void RaiseDevlogDerived()
     {
         OnPropertyChanged(nameof(DevlogIsEmpty));
@@ -776,10 +1038,54 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         LoadMoreDevlogCommand.NotifyCanExecuteChanged();
     }
 
+    /// <summary>
+    /// One game, fetched for one account, and half of what is on the page is about whether
+    /// *that* account owns it — the library button, the download permission, the versions the
+    /// server chose to show. None of it is worth keeping for the next person.
+    ///
+    /// An install in flight is cancelled rather than left running: it is downloading with
+    /// credentials that no longer exist, so its next signed URL would be refused, and a
+    /// transfer that fails halfway with nobody watching is worse than one stopped on purpose.
+    /// What is already on the disk stays there, and the recovery pass at the next start is
+    /// what decides whether it is an install or a mess (see <c>IInstallationService</c>).
+    /// </summary>
+    public void ResetForAccountChange()
+    {
+        _installCancellation?.Cancel();
+
+        Detail = null;
+        Installed = null;
+        InLibrary = false;
+        Hero = null;
+        SelectedScreenshot = null;
+        StopVideo();
+        VideoError = null;
+        Progress = null;
+        IsBusy = false;
+        IsDevlogBusy = false;
+        ErrorMessage = null;
+        StatusMessage = null;
+        DevlogError = null;
+        LaunchOptions = string.Empty;
+        _devlogTotal = 0;
+
+        Versions.Clear();
+        Screenshots.Clear();
+        Videos.Clear();
+        Devlog.Clear();
+
+        RaiseDerived();
+        RaiseDevlogDerived();
+        RaiseVideoDerived();
+    }
+
     private void RaiseDerived()
     {
         OnPropertyChanged(nameof(HasHero));
         OnPropertyChanged(nameof(HasScreenshots));
+        OnPropertyChanged(nameof(HasVideos));
+        OnPropertyChanged(nameof(CanPlayVideo));
+        OnPropertyChanged(nameof(ShowVideoUnavailable));
         OnPropertyChanged(nameof(Title));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(Description));
@@ -799,6 +1105,9 @@ public sealed partial class GameDetailViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanVerify));
         OnPropertyChanged(nameof(IsRunning));
         OnPropertyChanged(nameof(CanPlay));
+        OnPropertyChanged(nameof(MustUpdateBeforePlaying));
+        OnPropertyChanged(nameof(CanRemoveFromLibrary));
+        OnPropertyChanged(nameof(CanOpenFolder));
         OnPropertyChanged(nameof(BuildLaunchArgs));
         OnPropertyChanged(nameof(LaunchOptionsHint));
         OnPropertyChanged(nameof(CanEditLaunchOptions));

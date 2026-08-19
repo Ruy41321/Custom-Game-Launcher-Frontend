@@ -29,7 +29,7 @@ public sealed class StoreCardViewModel(Game game) : GameCoverCardViewModel(game)
 /// The store front. Paging, sorting and searching are all the server's decisions — this only
 /// asks and renders, which is why an older client cannot be broken by a new sort order.
 /// </summary>
-public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
+public sealed partial class ExploreViewModel : ViewModelBase, IAccountScopedPage, IDisposable
 {
     /// <summary>
     /// How long the box waits after the last keystroke. Long enough that typing a word is one
@@ -59,8 +59,27 @@ public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
     /// </summary>
     private CancellationTokenSource? _inFlight;
 
+    /// <summary>
+    /// Held while <see cref="ResetForAccountChange"/> empties the query. Both fields below mean
+    /// "somebody changed what they are looking for" when they are written — one arms the
+    /// debounce, the other loads at once — and emptying them would otherwise issue a request
+    /// with nobody signed in. The same guard as the dashboard's <c>_suppressSelectionReload</c>,
+    /// and it exists rather than a write to the backing field because the toolkit's analyzer
+    /// makes that an error (MVVMTK0034).
+    /// </summary>
+    private bool _suppressReload;
+
     [ObservableProperty]
     private string _searchText = string.Empty;
+
+    /// <summary>
+    /// An identifier typed by hand, for a game this list will never contain. An unlisted game is
+    /// served to anybody holding its id or slug and appears in no listing, so without somewhere
+    /// to type one there is no way at all to reach a game a publisher shared privately.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenIdentifierCommand))]
+    private string _identifierText = string.Empty;
 
     [ObservableProperty]
     private SortOption _selectedSort;
@@ -322,6 +341,11 @@ public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
     /// </summary>
     partial void OnSearchTextChanged(string value)
     {
+        if (_suppressReload)
+        {
+            return;
+        }
+
         _debounce ??= _time.CreateTimer(
             _ => OnUiThread(() => _ = LoadAsync(CancellationToken.None)),
             state: null,
@@ -341,6 +365,16 @@ public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
             GameSelected?.Invoke(this, game.Slug.Length > 0 ? game.Slug : game.Id);
         }
     }
+
+    /// <summary>
+    /// Opens whatever was typed, without asking the server first whether it exists. The detail
+    /// page has to describe a refusal anyway — it is reached from three other places — and a
+    /// lookup here would only mean the same 404 arriving twice, in two wordings.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenIdentifier))]
+    private void OpenIdentifier() => GameSelected?.Invoke(this, IdentifierText.Trim());
+
+    private bool CanOpenIdentifier() => IdentifierText.Trim().Length > 0;
 
     [RelayCommand]
     private async Task AddToLibraryAsync(
@@ -365,7 +399,52 @@ public sealed partial class ExploreViewModel : ViewModelBase, IDisposable
     /// A different order is a different list, not more of the same one, so it reloads from the
     /// top rather than leaving three pages of the old order above the new first page.
     /// </summary>
-    partial void OnSelectedSortChanged(SortOption value) => _ = LoadAsync(CancellationToken.None);
+    partial void OnSelectedSortChanged(SortOption value)
+    {
+        if (!_suppressReload)
+        {
+            _ = LoadAsync(CancellationToken.None);
+        }
+    }
+
+    /// <summary>
+    /// Everything here came from a search made with the previous account's token, including
+    /// the search itself: what somebody typed is as much theirs as the results it found.
+    ///
+    /// The query is emptied under <see cref="_suppressReload"/>: both of those setters mean
+    /// "somebody changed the query", and a reset that reloaded the list would issue a request
+    /// while nobody is signed in, which is the opposite of what it is for.
+    /// </summary>
+    public void ResetForAccountChange()
+    {
+        Disarm();
+        _inFlight?.Cancel();
+
+        Games.Clear();
+        ErrorMessage = null;
+        IsBusy = false;
+        IsLoadingMore = false;
+        HasMore = false;
+        Total = 0;
+        HasLoaded = false;
+        NextPage = 1;
+        IdentifierText = string.Empty;
+
+        _suppressReload = true;
+        try
+        {
+            SearchText = string.Empty;
+            SelectedSort = SortOptions[0];
+        }
+        finally
+        {
+            _suppressReload = false;
+        }
+
+        OnPropertyChanged(nameof(IsEmpty));
+        OnPropertyChanged(nameof(HasEnded));
+        OnPropertyChanged(nameof(ResultsLabel));
+    }
 
     /// <summary>
     /// The page lives as long as the window, so this runs when the container is torn down. It

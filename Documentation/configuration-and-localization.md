@@ -154,6 +154,22 @@ rebuilds those by hand; the welcome line and the update banner's three sentences
 that exist today. Adding another composed sentence means adding it there too, and the way this
 is noticed is by looking at the window.
 
+It cannot be a `StringFormat` either, and that one cost a whole page. `{loc:Tr}` returns a
+`Binding`, so
+
+```xml
+<!-- Do not: this throws when the view is constructed. -->
+<TextBlock Text="{Binding DefaultInstallDirectory, StringFormat={loc:Tr Settings.InstallDirectoryDefault}}" />
+```
+
+fails with `Unable to cast object of type 'Avalonia.Data.Binding' to type 'System.String'` —
+**at construction, for the whole view**. The shell's `ContentControl` swallows it and renders an
+empty rectangle, so the Settings page showed *nothing at all* while the launcher ran, the suite
+stayed green, and the maintainer reported the settings as missing. Compose the sentence in the
+view model instead (`SettingsViewModel.DefaultInstallDirectoryNotice`), which is what the page
+already did next door. `tests/GameLauncher.Views.Tests` now builds every view so a page that
+cannot be constructed fails a test instead of appearing blank (D68).
+
 `LocalizationSource.Instance` is the single global in the application. A markup extension is
 instantiated by the XAML loader and has no access to the DI container, so the instance is
 published during start-up. It is the one place a static is the honest answer rather than a
@@ -177,6 +193,9 @@ No UI code changes.
   somebody complained in a language the maintainer does not test in.
 - **A literal user-visible string in `.axaml` fails the build.** The other test scans every
   `.axaml` for literal `Text=` / `Content=` values.
+- **A view that cannot be constructed fails the build**, in `tests/GameLauncher.Views.Tests`,
+  which is the one project with a running Avalonia (headless). It answers one question per
+  page — does this build at all — because the answer was no for Settings and nothing said so.
 
 Together they mean: **a new UI string is added in English, Italian and French, all three, in the
 same commit.** There is no partial state that passes.

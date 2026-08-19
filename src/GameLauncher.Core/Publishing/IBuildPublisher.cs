@@ -13,6 +13,12 @@ public sealed record PublishRequest
 
     public BuildArchitecture Architecture { get; init; } = BuildArchitecture.X64;
 
+    /// <summary>
+    /// A label for this build, so a publisher can tell it apart from the other three rows that
+    /// also say "windows x64 ready". Optional: an unnamed build is a valid build.
+    /// </summary>
+    public string? Name { get; init; }
+
     /// <summary>The directory holding the build, exactly as it should be installed.</summary>
     public required string Directory { get; init; }
 

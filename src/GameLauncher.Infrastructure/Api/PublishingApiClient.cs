@@ -37,6 +37,16 @@ public sealed class PublishingApiClient(HttpClient httpClient) : IPublishingApi
         _transport.PostAsync<GameVersion>(
             GamePath(idOrSlug) + "/versions", request, cancellationToken);
 
+    public Task<GameVersion> UpdateVersionAsync(
+        string idOrSlug,
+        string versionId,
+        VersionChanges changes,
+        CancellationToken cancellationToken = default) =>
+        _transport.PatchAsync<GameVersion>(
+            GamePath(idOrSlug) + "/versions/" + Uri.EscapeDataString(versionId),
+            changes,
+            cancellationToken);
+
     public Task<GameBuild> CreateBuildAsync(
         string idOrSlug,
         string versionId,

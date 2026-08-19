@@ -2,12 +2,14 @@ using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
+using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Downloads;
 using GameLauncher.Core.Installs;
 using GameLauncher.Core.Launching;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
 using GameLauncher.Core.Platform;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -33,6 +35,28 @@ public sealed class GameDetailViewModelTests
 
     private readonly IImageProvider _images = Substitute.For<IImageProvider>();
 
+    /// <summary>
+    /// Playback is unavailable unless a test says otherwise, which is the honest default:
+    /// a substitute has no native library behind it, and so does a machine without VLC.
+    /// </summary>
+    private readonly IVideoPlayback _playback = Substitute.For<IVideoPlayback>();
+
+    private readonly IFileBrowser _files = Substitute.For<IFileBrowser>();
+
+    private readonly IFolderPicker _folders = Substitute.For<IFolderPicker>();
+
+    private readonly IUserSettingsStore _settings = Substitute.For<IUserSettingsStore>();
+
+    /// <summary>
+    /// The preferences and the devlog are read on paths every test walks through, and an
+    /// unconfigured substitute answers a <c>Task&lt;T&gt;</c> with <c>default(T)</c> — a null
+    /// <see cref="UserSettings"/> crashes the view model instead of failing an assertion.
+    /// Arranged in the constructor, which runs before the test body, so a test that wants
+    /// other settings arranges them over the top (NSubstitute's last stub wins).
+    /// </summary>
+    public GameDetailViewModelTests() =>
+        _settings.LoadAsync(Arg.Any<CancellationToken>()).Returns(new UserSettings());
+
     private GameDetailViewModel CreateViewModel(
         GamePlatform platform = GamePlatform.Windows,
         BuildArchitecture architecture = BuildArchitecture.X64)
@@ -52,7 +76,7 @@ public sealed class GameDetailViewModelTests
         return new GameDetailViewModel(
             _catalog,
             _library,
-            new ApiErrorPresenter(_localization),
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
             _localization,
             runtime,
             _authentication,
@@ -60,6 +84,10 @@ public sealed class GameDetailViewModelTests
             _installs,
             _games,
             _images,
+            _playback,
+            _files,
+            _folders,
+            _settings,
             new FakeTimeProvider(Now));
     }
 
@@ -172,8 +200,8 @@ public sealed class GameDetailViewModelTests
     {
         Returns(DetailWith(
             false,
-            new GameBuild { Id = "win", Platform = GamePlatform.Windows, Status = BuildStatus.Ready },
-            new GameBuild { Id = "lin", Platform = GamePlatform.Linux, Status = BuildStatus.Ready }));
+            new GameBuild { Id = "win", VersionId = "v1", Platform = GamePlatform.Windows, Status = BuildStatus.Ready },
+            new GameBuild { Id = "lin", VersionId = "v1", Platform = GamePlatform.Linux, Status = BuildStatus.Ready }));
 
         GameDetailViewModel model = CreateViewModel(GamePlatform.Linux);
         await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
@@ -187,7 +215,7 @@ public sealed class GameDetailViewModelTests
     {
         Returns(DetailWith(
             false,
-            new GameBuild { Id = "win", Platform = GamePlatform.Windows, Status = BuildStatus.Ready }));
+            new GameBuild { Id = "win", VersionId = "v1", Platform = GamePlatform.Windows, Status = BuildStatus.Ready }));
 
         GameDetailViewModel model = CreateViewModel(GamePlatform.MacOs);
         await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
@@ -205,6 +233,7 @@ public sealed class GameDetailViewModelTests
             new GameBuild
             {
                 Id = "win",
+                VersionId = "v1",
                 Platform = GamePlatform.Windows,
                 Status = BuildStatus.Ready,
                 TotalSizeBytes = 3_221_225_472,
@@ -342,7 +371,12 @@ public sealed class GameDetailViewModelTests
         Assert.False(model.CanInstall);
         Assert.True(model.CanUninstall);
         Assert.True(model.CanVerify);
-        Assert.Equal("Installed: 0.2.0", model.InstalledVersion);
+        Assert.Equal("Installed version: 0.2.0", model.InstalledVersion);
+
+        // An update is not optional: playing the old build is what produces the failures that
+        // arrive later and look like a broken game.
+        Assert.False(model.CanPlay);
+        Assert.True(model.MustUpdateBeforePlaying);
     }
 
     [Fact]
@@ -518,7 +552,7 @@ public sealed class GameDetailViewModelTests
         GameDetailViewModel model = new(
             _catalog,
             _library,
-            new ApiErrorPresenter(_localization),
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
             _localization,
             runtime,
             _authentication,
@@ -526,6 +560,10 @@ public sealed class GameDetailViewModelTests
             _installs,
             _games,
             _images,
+            _playback,
+            _files,
+            _folders,
+            _settings,
             clock);
 
         model.Progress = new DownloadProgress
@@ -698,4 +736,219 @@ public sealed class GameDetailViewModelTests
         Assert.True(model.CanPlay);
         Assert.False(model.IsRunning);
     }
+
+    // Installing a game is deciding to own it, and a library that did not list it afterwards
+    // is the kind of gap people report as a bug.
+    [Fact]
+    public async Task InstallingAGameAddsItToTheLibrary()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        Assert.False(model.InLibrary);
+
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _library.Received(1).AddAsync("g1", Arg.Any<CancellationToken>());
+        Assert.True(model.InLibrary);
+    }
+
+    [Fact]
+    public async Task AGameAlreadyInTheLibraryIsNotAddedToItAgain()
+    {
+        CanDownload();
+        Returns(DetailWith(inLibrary: true, builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _library.DidNotReceive().AddAsync("g1", Arg.Any<CancellationToken>());
+    }
+
+    // The install really did happen, so it keeps saying so. The failure to record the
+    // ownership is its own sentence rather than a replacement for that one.
+    [Fact]
+    public async Task AFailureToRecordOwnershipDoesNotUndoAFinishedInstall()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+        _library
+            .AddAsync("g1", Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Conflict, "no"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        Assert.True(model.IsInstalled);
+        Assert.Equal("Ready to play.", model.StatusMessage);
+        Assert.False(model.InLibrary);
+        Assert.NotNull(model.ErrorMessage);
+    }
+
+    // Leaving the library while the files are here would leave an install the account no
+    // longer owns, which cannot be updated and cannot be repaired.
+    [Fact]
+    public async Task AGameCannotLeaveTheLibraryWhileItIsInstalled()
+    {
+        Returns(DetailWith(inLibrary: true, builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.InLibrary);
+        Assert.False(model.CanRemoveFromLibrary);
+        Assert.True(model.CanUninstall);
+    }
+
+    [Fact]
+    public async Task AGameThatIsNotInstalledCanLeaveTheLibrary()
+    {
+        Returns(DetailWith(inLibrary: true, builds: WindowsBuild()));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanRemoveFromLibrary);
+    }
+
+    [Fact]
+    public async Task TheInstallFolderIsOnlyOfferedOnceThereIsOne()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        _files.Reveal(Arg.Any<string>()).Returns(true);
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        Assert.False(model.CanOpenFolder);
+
+        AlreadyInstalled(InstalledAt("win"));
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanOpenFolder);
+        model.OpenFolderCommand.Execute(null);
+
+        _files.Received(1).Reveal("/games/orbital-drift");
+        Assert.Null(model.ErrorMessage);
+    }
+
+    // A desktop with nothing to open a folder with is a button that would otherwise do
+    // nothing at all, with no way for anybody to tell whether it had been pressed.
+    [Fact]
+    public async Task AFolderThatWillNotOpenSaysSo()
+    {
+        Returns(DetailWith(builds: WindowsBuild()));
+        AlreadyInstalled(InstalledAt("win"));
+        _files.Reveal(Arg.Any<string>()).Returns(false);
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        model.OpenFolderCommand.Execute(null);
+
+        Assert.Equal("The install folder could not be opened.", model.ErrorMessage);
+    }
+
+    // --- where a game is installed ----------------------------------------------------------
+
+    [Fact]
+    public async Task ByDefaultNobodyIsAskedWhereToInstall()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _folders.DidNotReceive().PickAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.NotNull(LastRequest);
+        Assert.Null(LastRequest.InstallRoot);
+    }
+
+    // The picked directory is a root the launcher makes the game's own directory inside, never
+    // the directory the build is unpacked into: uninstalling deletes that one recursively.
+    [Fact]
+    public async Task WithTheSettingOnTheChosenDirectoryIsPassedAsARoot()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+        AsksWhereToInstall();
+        _folders.PickAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns("D:/Games");
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _folders.Received(1).PickAsync(
+            "Where should Orbital Drift be installed?", Arg.Any<CancellationToken>());
+        Assert.Equal("D:/Games", LastRequest?.InstallRoot);
+        Assert.True(model.IsInstalled);
+    }
+
+    // Falling back to the default here would install the game somewhere the player has just
+    // declined to confirm.
+    [Fact]
+    public async Task CancellingTheQuestionCancelsTheInstall()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild()));
+        Installs(InstalledAt("win"));
+        AsksWhereToInstall();
+        _folders.PickAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((string?)null);
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _installations.DidNotReceive().InstallAsync(
+            Arg.Any<InstallRequest>(),
+            Arg.Any<IProgress<DownloadProgress>>(),
+            Arg.Any<CancellationToken>());
+
+        Assert.False(model.IsInstalled);
+        Assert.Null(model.ErrorMessage);
+        Assert.Null(model.Progress);
+    }
+
+    // An update goes where the game already lives (D33), so asking again would invite an
+    // answer the first install is not in.
+    [Fact]
+    public async Task AnUpdateNeverAsksWhereTheGameShouldGo()
+    {
+        CanDownload();
+        Returns(DetailWith(builds: WindowsBuild("win-2")));
+        AlreadyInstalled(InstalledAt("win-1"));
+        Installs(InstalledAt("win-2"));
+        AsksWhereToInstall();
+
+        GameDetailViewModel model = CreateViewModel();
+        await model.LoadAsync("orbital-drift", TestContext.Current.CancellationToken);
+        await model.InstallCommand.ExecuteAsync(null);
+
+        await _folders.DidNotReceive().PickAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        Assert.Null(LastRequest?.InstallRoot);
+    }
+
+    private void AsksWhereToInstall() => _settings
+        .LoadAsync(Arg.Any<CancellationToken>())
+        .Returns(new UserSettings { AskWhereToInstall = true });
+
+    /// <summary>The request the install service was last handed, for asserting on.</summary>
+    private InstallRequest? LastRequest { get; set; }
+
+    private void Installs(InstalledGame result) => _installations
+        .InstallAsync(
+            Arg.Do<InstallRequest>(request => LastRequest = request),
+            Arg.Any<IProgress<DownloadProgress>>(),
+            Arg.Any<CancellationToken>())
+        .Returns(new InstallResult { Install = result });
 }

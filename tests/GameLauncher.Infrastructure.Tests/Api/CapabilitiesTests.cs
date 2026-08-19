@@ -25,7 +25,8 @@ public sealed class CapabilitiesApiClientTests
           "manifest": { "maxPathLength": 512, "maxFiles": 1000 },
           "media": { "maxBytes": 1048576, "maxScreenshotsPerGame": 6, "maxAltTextLength": 120,
                      "contentTypes": ["image/png", "image/webp"] },
-          "catalog": { "maxPageSize": 50, "defaultPageSize": 10, "maxPatchNotePageSize": 25 }
+          "catalog": { "maxPageSize": 50, "defaultPageSize": 10, "maxPatchNotePageSize": 25 },
+          "mail": { "enabled": false }
         }
         """;
 
@@ -47,6 +48,25 @@ public sealed class CapabilitiesApiClientTests
         Assert.Equal(6, capabilities.Media.MaxScreenshotsPerGame);
         Assert.Equal(["image/png", "image/webp"], capabilities.Media.ContentTypes);
         Assert.Equal(25, capabilities.Catalog.MaxPatchNotePageSize);
+        Assert.False(capabilities.Mail.Enabled);
+    }
+
+    // The one capability whose fallback is *true*: a server too old to carry the key does send
+    // mail, and reading its silence as "no mail" would hide the way back into an account on
+    // every deployment that predates the field.
+    [Fact]
+    public async Task ADocumentWithNoMailSectionStillOffersTheResetLink()
+    {
+        var handler = StubHttpMessageHandler.RespondingWith(
+            HttpStatusCode.OK, """{"apiVersion":"v1"}""");
+        var client = new CapabilitiesApiClient(
+            new HttpClient(handler) { BaseAddress = BaseAddress });
+
+        ServerCapabilities capabilities = await client.GetAsync(
+            TestContext.Current.CancellationToken);
+
+        Assert.True(capabilities.Mail.Enabled);
+        Assert.True(ServerCapabilities.Fallback.Mail.Enabled);
     }
 
     // The route needs no token, and asking for one would mean refreshing a session before the

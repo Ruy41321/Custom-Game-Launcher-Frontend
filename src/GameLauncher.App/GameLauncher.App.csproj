@@ -53,6 +53,12 @@
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.Fonts.Inter" />
     <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="LibVLCSharp" />
+    <PackageReference Include="LibVLCSharp.Avalonia" />
+    <!-- Windows only, because it is the only platform VideoLAN publishes a native package for.
+         On Linux libvlc comes from the distribution and playback is unavailable without it. -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows"
+                      Condition="$(RuntimeIdentifier.StartsWith('win')) or ('$(RuntimeIdentifier)' == '' and '$(OS)' == 'Windows_NT')" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
     <PackageReference Include="Microsoft.Extensions.Logging" />
     <PackageReference Include="Serilog" />

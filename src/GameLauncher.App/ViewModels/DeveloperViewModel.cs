@@ -25,7 +25,7 @@ namespace GameLauncher.App.ViewModels;
 /// Every rule this page appears to enforce is enforced again server-side. What it does here is
 /// avoid offering an action that would be refused (D8).
 /// </summary>
-public sealed partial class DeveloperViewModel : ViewModelBase
+public sealed partial class DeveloperViewModel : ViewModelBase, IAccountScopedPage
 {
     private readonly ICatalogApi _catalog;
     private readonly IPublishingApi _publishing;
@@ -59,7 +59,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
     private GameDetail? _selected;
 
     [ObservableProperty]
-    private GameVersion? _selectedVersion;
+    private VersionRowViewModel? _selectedVersion;
 
     [ObservableProperty]
     private PublishProgress? _progress;
@@ -87,6 +87,9 @@ public sealed partial class DeveloperViewModel : ViewModelBase
     private bool _publishVersionImmediately = true;
 
     // --- the publish form ----------------------------------------------------------------
+
+    [ObservableProperty]
+    private string _buildName = string.Empty;
 
     [ObservableProperty]
     private string _buildDirectory = string.Empty;
@@ -129,6 +132,13 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         Architecture = platform.Architecture;
     }
 
+    /// <summary>
+    /// Raised when the publisher asks to see the selected game the way a player sees it. The
+    /// shell listens, exactly as it listens to Explore and the library (D17) — this page does
+    /// not know the game page exists.
+    /// </summary>
+    public event EventHandler<string>? GameSelected;
+
     /// <summary>The selected game's own fields — title, summary, release date, visibility.</summary>
     public GameEditorViewModel Editor { get; }
 
@@ -138,7 +148,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
 
     public ObservableCollection<Game> Games { get; } = [];
 
-    public ObservableCollection<GameVersion> Versions { get; } = [];
+    public ObservableCollection<VersionRowViewModel> Versions { get; } = [];
 
     public ObservableCollection<GameBuild> Builds { get; } = [];
 
@@ -178,6 +188,13 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         && !IsPublishing
         && BuildDirectory.Trim().Length > 0
         && Entrypoint.Trim().Length > 0;
+
+    /// <summary>
+    /// Available for a draft too, which is the case worth stating: the server serves a game's
+    /// detail to whoever may edit it whatever its visibility, so a publisher can read their own
+    /// unreleased page. Nothing else on this launcher can.
+    /// </summary>
+    public bool CanOpenGamePage => SelectedGame is not null;
 
     public string PublishPhaseText => Progress is { } report
         ? _localization.Translate("Publish." + report.Phase)
@@ -288,8 +305,9 @@ public sealed partial class DeveloperViewModel : ViewModelBase
                 },
                 cancellationToken).ConfigureAwait(true);
 
-            Versions.Insert(0, created);
-            SelectedVersion = created;
+            VersionRowViewModel row = new(created, []);
+            Versions.Insert(0, row);
+            SelectedVersion = row;
             NewVersionSemver = string.Empty;
             NewVersionNotes = string.Empty;
             StatusMessage = _localization.Translate("Publish.VersionCreated", created.Semver);
@@ -353,6 +371,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
                     VersionId = SelectedVersion.Id,
                     Platform = BuildPlatform,
                     Architecture = Architecture,
+                    Name = BuildName.Trim(),
                     Directory = BuildDirectory.Trim(),
                     Entrypoint = Entrypoint.Trim(),
                     LaunchArgs = LaunchArgs.Trim(),
@@ -361,6 +380,12 @@ public sealed partial class DeveloperViewModel : ViewModelBase
                 cancellation.Token).ConfigureAwait(true);
 
             Builds.Insert(0, result.Build);
+            BuildName = string.Empty;
+
+            // The row above has just gained a build, and it is the thing the publisher is
+            // looking at. Refreshed in place rather than by rebuilding the list, which would
+            // drop the selection they are in the middle of using.
+            VersionRowFor(result.Build.VersionId)?.RefreshBuilds(BuildsOf(result.Build.VersionId));
             StatusMessage = _localization.Translate(
                 "Publish.BuildReady",
                 ByteSize.Format(result.UploadedBytes, CultureInfo.CurrentCulture),
@@ -381,6 +406,82 @@ public sealed partial class DeveloperViewModel : ViewModelBase
 
     [RelayCommand]
     private void CancelPublish() => _publishCancellation?.Cancel();
+
+    /// <summary>
+    /// Opens the selected game's own page — the one a player lands on — so that a publisher can
+    /// see what they have made rather than inferring it from the boxes they filled in. The
+    /// dashboard shows fields and lists; whether the banner is the right way round, whether the
+    /// summary reads as a sentence and whether the screenshots are in a sensible order are all
+    /// questions only that page answers.
+    ///
+    /// The slug is preferred over the id because it is what a URL and a support message would
+    /// carry, and the id is the fallback for a game whose slug the server has not derived yet.
+    /// </summary>
+    [RelayCommand]
+    private void OpenGamePage()
+    {
+        if (SelectedGame is not { } game)
+        {
+            return;
+        }
+
+        GameSelected?.Invoke(this, game.Slug.Length > 0 ? game.Slug : game.Id);
+    }
+
+    /// <summary>
+    /// Publishes a version that was created without "publish it now", or withdraws one that was.
+    ///
+    /// This is a command and not a checkbox because it is a request to the server that can be
+    /// refused, and a checkbox that silently springs back is worse than a button that reports
+    /// why. Publishing is safe to press twice — the server keeps the original date — and
+    /// withdrawing is offered because it is the reversible thing standing next to Delete: a
+    /// version published by mistake can be taken back out of sight without taking its builds,
+    /// its uploads and its devlog links with it.
+    ///
+    /// No confirmation prompt (D43 is about deletions): both directions are undone by pressing
+    /// the other button, and nothing is destroyed either way.
+    /// </summary>
+    [RelayCommand]
+    private async Task SetVersionPublishedAsync(VersionRowViewModel row)
+    {
+        if (Selected is null)
+        {
+            return;
+        }
+
+        ErrorMessage = null;
+        StatusMessage = null;
+        IsBusy = true;
+        RaiseDerived();
+
+        bool publishing = !row.Published;
+
+        try
+        {
+            GameVersion updated = await _publishing.UpdateVersionAsync(
+                Selected.Game.Id,
+                row.Id,
+                new VersionChanges { Published = publishing }).ConfigureAwait(true);
+
+            row.Version = updated;
+            StatusMessage = _localization.Translate(
+                publishing ? "Publish.VersionPublished" : "Publish.VersionWithdrawn",
+                updated.Semver);
+        }
+        catch (ApiException exception)
+        {
+            ErrorMessage = _errors.Describe(exception);
+        }
+        finally
+        {
+            IsBusy = false;
+            RaiseDerived();
+        }
+    }
+
+    /// <summary>The builds hanging off one version, in the order the server listed them.</summary>
+    private IEnumerable<GameBuild> BuildsOf(string versionId) => Builds
+        .Where(build => string.Equals(build.VersionId, versionId, StringComparison.Ordinal));
 
     /// <summary>
     /// A packaging failure is local and specific, and saying which rule was broken is the
@@ -411,6 +512,8 @@ public sealed partial class DeveloperViewModel : ViewModelBase
 
     partial void OnSelectedGameChanged(Game? value)
     {
+        OnPropertyChanged(nameof(CanOpenGamePage));
+
         if (value is not null && !_suppressSelectionReload)
         {
             _ = LoadSelectedAsync(value);
@@ -426,16 +529,19 @@ public sealed partial class DeveloperViewModel : ViewModelBase
             GameDetail detail = await _catalog.GetGameAsync(game.Id).ConfigureAwait(true);
 
             Selected = detail;
-            Versions.Clear();
-            foreach (GameVersion version in detail.Versions)
-            {
-                Versions.Add(version);
-            }
 
             Builds.Clear();
             foreach (GameBuild build in detail.Builds)
             {
                 Builds.Add(build);
+            }
+
+            // Builds first: a row is built from its own builds, and the list it reads has to be
+            // the new game's rather than the previous one's.
+            Versions.Clear();
+            foreach (GameVersion version in detail.Versions)
+            {
+                Versions.Add(new VersionRowViewModel(version, BuildsOf(version.Id)));
             }
 
             SelectedVersion = Versions.FirstOrDefault();
@@ -467,10 +573,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         ErrorMessage = null;
         StatusMessage = null;
 
-        string version = Versions
-            .FirstOrDefault(candidate =>
-                string.Equals(candidate.Id, build.VersionId, StringComparison.Ordinal))
-            ?.Semver ?? build.VersionId;
+        string version = VersionRowFor(build.VersionId)?.Semver ?? build.VersionId;
 
         PendingDeletion = new PendingDeletion(
             _localization.Translate(
@@ -484,6 +587,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
                     .ConfigureAwait(true);
 
                 Builds.Remove(build);
+                VersionRowFor(build.VersionId)?.RefreshBuilds(BuildsOf(build.VersionId));
                 StatusMessage = _localization.Translate("Publish.BuildDeleted");
             });
 
@@ -496,7 +600,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
     /// the part somebody clicking a row labelled "0.3.0" would not otherwise be told.
     /// </summary>
     [RelayCommand]
-    private void AskToDeleteVersion(GameVersion version)
+    private void AskToDeleteVersion(VersionRowViewModel row)
     {
         if (Selected is null)
         {
@@ -506,24 +610,20 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         ErrorMessage = null;
         StatusMessage = null;
 
-        int builds = Builds.Count(build =>
-            string.Equals(build.VersionId, version.Id, StringComparison.Ordinal));
+        int builds = BuildsOf(row.Id).Count();
 
         PendingDeletion = new PendingDeletion(
             _localization.Translate(
                 "Publish.ConfirmDeleteVersion",
-                version.Semver,
+                row.Semver,
                 builds.ToString(CultureInfo.CurrentCulture)),
             async cancellationToken =>
             {
                 await _publishing.DeleteVersionAsync(
-                    Selected.Game.Id, version.Id, cancellationToken).ConfigureAwait(true);
+                    Selected.Game.Id, row.Id, cancellationToken).ConfigureAwait(true);
 
-                Versions.Remove(version);
-                foreach (GameBuild build in Builds
-                    .Where(build =>
-                        string.Equals(build.VersionId, version.Id, StringComparison.Ordinal))
-                    .ToList())
+                Versions.Remove(row);
+                foreach (GameBuild build in BuildsOf(row.Id).ToList())
                 {
                     Builds.Remove(build);
                 }
@@ -604,6 +704,56 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         Builds.Clear();
 
         Editor.Show(null);
+
+        // The three tabs are one selection: leaving the artwork and the devlog of a game that
+        // is no longer selected — deleted, in the caller above — is how a publisher ends up
+        // editing the alt text of a picture belonging to a game that is gone.
+        Artwork.Clear();
+        Devlog.Clear();
+    }
+
+    /// <summary>
+    /// The page this was found on: after a sign-out and a sign-in the dashboard was still
+    /// showing the previous account's game, selection and all — every field of it fetched with
+    /// a token that no longer exists. <see cref="ClearSelection"/> was already the right shape
+    /// and nothing called it when the session changed.
+    ///
+    /// The list goes with the selection, and so do the three forms. A half-typed new game and
+    /// a build directory chosen on the previous account's behalf are that account's work: the
+    /// next person's dashboard opens empty, as it does on a launcher that has just started.
+    /// The platform and architecture go back to what this machine is, which is where the
+    /// constructor puts them, because those describe the computer rather than the publisher.
+    /// </summary>
+    public void ResetForAccountChange()
+    {
+        _publishCancellation?.Cancel();
+
+        ClearSelection();
+        Games.Clear();
+
+        PendingDeletion = null;
+        Progress = null;
+        IsBusy = false;
+        ErrorMessage = null;
+        StatusMessage = null;
+
+        NewGameTitle = string.Empty;
+        NewGameSummary = string.Empty;
+        NewGameVisibility = GameVisibility.Draft;
+
+        NewVersionSemver = string.Empty;
+        NewVersionStage = BuildStage.Beta;
+        NewVersionNotes = string.Empty;
+        PublishVersionImmediately = true;
+
+        BuildName = string.Empty;
+        BuildDirectory = string.Empty;
+        Entrypoint = string.Empty;
+        LaunchArgs = string.Empty;
+        BuildPlatform = _platform.Platform;
+        Architecture = _platform.Architecture;
+
+        RaiseDerived();
     }
 
     [RelayCommand]
@@ -675,9 +825,12 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         }
     }
 
+    private VersionRowViewModel? VersionRowFor(string versionId) => Versions
+        .FirstOrDefault(row => string.Equals(row.Id, versionId, StringComparison.Ordinal));
+
     partial void OnProgressChanged(PublishProgress? value) => RaiseDerived();
 
-    partial void OnSelectedVersionChanged(GameVersion? value) => RaiseDerived();
+    partial void OnSelectedVersionChanged(VersionRowViewModel? value) => RaiseDerived();
 
     partial void OnNewGameTitleChanged(string value) => OnPropertyChanged(nameof(CanCreateGame));
 
@@ -695,6 +848,7 @@ public sealed partial class DeveloperViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanCreateGame));
         OnPropertyChanged(nameof(CanCreateVersion));
         OnPropertyChanged(nameof(CanPublish));
+        OnPropertyChanged(nameof(CanOpenGamePage));
         OnPropertyChanged(nameof(PublishPhaseText));
         OnPropertyChanged(nameof(PublishFraction));
         OnPropertyChanged(nameof(IsPublishProgressIndeterminate));

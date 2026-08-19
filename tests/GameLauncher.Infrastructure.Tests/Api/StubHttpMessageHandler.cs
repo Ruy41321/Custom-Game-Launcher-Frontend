@@ -12,8 +12,15 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
 {
     private readonly Func<HttpRequestMessage, HttpResponseMessage> _respond;
 
-    private StubHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) =>
+    /// <summary>How long the answer is withheld. A stopped backend behind a proxy does this.</summary>
+    private readonly TimeSpan _silence;
+
+    private StubHttpMessageHandler(
+        Func<HttpRequestMessage, HttpResponseMessage> respond, TimeSpan? silence = null)
+    {
         _respond = respond;
+        _silence = silence ?? TimeSpan.Zero;
+    }
 
     /// <summary>Every request that reached the handler, in order.</summary>
     public List<RecordedRequest> Requests { get; } = [];
@@ -49,6 +56,19 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
     public static StubHttpMessageHandler Throwing(Exception exception) =>
         new(_ => throw exception);
 
+    /// <summary>Accepts the request and never answers, until somebody gives up.</summary>
+    public static StubHttpMessageHandler Hanging() =>
+        HangingFor(Timeout.InfiniteTimeSpan);
+
+    /// <summary>Answers, eventually.</summary>
+    public static StubHttpMessageHandler HangingFor(TimeSpan silence) =>
+        new(
+            _ => new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+            },
+            silence);
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -73,6 +93,11 @@ internal sealed class StubHttpMessageHandler : HttpMessageHandler
             headers,
             request.Content?.Headers.ContentType?.MediaType,
             bytes));
+
+        if (_silence != TimeSpan.Zero)
+        {
+            await Task.Delay(_silence, cancellationToken).ConfigureAwait(false);
+        }
 
         return _respond(request);
     }

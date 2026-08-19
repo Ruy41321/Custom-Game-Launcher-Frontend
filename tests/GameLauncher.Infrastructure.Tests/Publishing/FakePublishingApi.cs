@@ -201,6 +201,13 @@ internal sealed class FakePublishingApi : IPublishingApi
     public Task DeleteBuildAsync(string buildId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException(NotPartOfTheUploadFlow);
 
+    public Task<GameVersion> UpdateVersionAsync(
+        string idOrSlug,
+        string versionId,
+        VersionChanges changes,
+        CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException(NotPartOfTheUploadFlow);
+
     public Task DeleteVersionAsync(
         string idOrSlug, string versionId, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException(NotPartOfTheUploadFlow);

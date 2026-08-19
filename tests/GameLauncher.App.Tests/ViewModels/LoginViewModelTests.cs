@@ -1,7 +1,10 @@
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Authentication;
+using GameLauncher.Core.Installs;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -12,17 +15,168 @@ public sealed class LoginViewModelTests
     private readonly IAuthenticationService _authentication =
         Substitute.For<IAuthenticationService>();
 
+    private readonly IServerCapabilityProvider _capabilities =
+        Substitute.For<IServerCapabilityProvider>();
+
+    private readonly ServerReachability _reachability = new(TimeProvider.System);
+
+    private readonly IInstallStore _installs = Substitute.For<IInstallStore>();
+
     private readonly ResourceManagerLocalizationService _localization =
         new("en");
 
+    public LoginViewModelTests() =>
+        // Arranged here rather than in the factory: an unconfigured Task<T> member yields null,
+        // and the sign-in screen now reads this on every load (§7).
+        _capabilities.GetAsync(Arg.Any<CancellationToken>())
+            .Returns(ServerCapabilities.Fallback);
+
     private LoginViewModel CreateViewModel() =>
-        new(_authentication, new ApiErrorPresenter(_localization), _localization);
+        new(
+            _authentication,
+            _capabilities,
+            _reachability,
+            _installs,
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
+            _localization);
 
     private static LoginViewModel WithCredentials(LoginViewModel model)
     {
         model.Email = "luigi@example.com";
         model.Password = "correct horse";
         return model;
+    }
+
+    // Signing in offline cannot work — only a server knows whether a password is right — so
+    // the screen says so before a password is typed rather than after one has been waited on.
+    [Fact]
+    public async Task AMissingServerIsSaidOnTheScreenRatherThanDiscoveredByTyping()
+    {
+        _reachability.ReportUnreachable();
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsServerUnreachable);
+    }
+
+    [Fact]
+    public async Task TheNoticeGoesAwayWhenTheServerAnswersAgain()
+    {
+        _reachability.ReportUnreachable();
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.IsServerUnreachable);
+
+        _reachability.ReportReachable();
+
+        Assert.False(model.IsServerUnreachable);
+    }
+
+    // A door is only worth showing where it leads somewhere. Signing in needs a server;
+    // playing what is already on this disk does not.
+    [Fact]
+    public async Task WithNoServerAndAGameOnThisDiskThereIsAWayIn()
+    {
+        _installs.GetAllAsync(Arg.Any<CancellationToken>()).Returns([InstalledGame()]);
+        _reachability.ReportUnreachable();
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.CanContinueOffline);
+    }
+
+    [Fact]
+    public async Task WithNothingInstalledTheOfferWouldLeadToAnEmptyPage()
+    {
+        _installs.GetAllAsync(Arg.Any<CancellationToken>()).Returns([]);
+        _reachability.ReportUnreachable();
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsServerUnreachable);
+        Assert.False(model.CanContinueOffline);
+    }
+
+    // While the server is answering, the way in is to sign in.
+    [Fact]
+    public async Task AnAnsweringServerIsNoPlaceForTheOffer()
+    {
+        _installs.GetAllAsync(Arg.Any<CancellationToken>()).Returns([InstalledGame()]);
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(model.CanContinueOffline);
+    }
+
+    [Fact]
+    public async Task TheOfferGoesAwayWhenTheServerAnswersAgain()
+    {
+        _installs.GetAllAsync(Arg.Any<CancellationToken>()).Returns([InstalledGame()]);
+        _reachability.ReportUnreachable();
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        Assert.True(model.CanContinueOffline);
+
+        _reachability.ReportReachable();
+
+        Assert.False(model.CanContinueOffline);
+    }
+
+    // The page says what happened; the shell decides where that leads (D17).
+    [Fact]
+    public void ContinuingOfflineIsAnnouncedRatherThanNavigated()
+    {
+        LoginViewModel model = CreateViewModel();
+        bool asked = false;
+        model.ContinueOfflineRequested += (_, _) => asked = true;
+
+        model.ContinueOfflineCommand.Execute(null);
+
+        Assert.True(asked);
+    }
+
+    // A database this launcher cannot read is one fewer offer, not a sign-in screen that fails.
+    [Fact]
+    public async Task AnUnreadableInstallStoreOnlyCostsTheOffer()
+    {
+        _installs.GetAllAsync(Arg.Any<CancellationToken>())
+            .Throws(new IOException("the database is locked"));
+        _reachability.ReportUnreachable();
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(model.IsServerUnreachable);
+        Assert.False(model.CanContinueOffline);
+    }
+
+    private static InstalledGame InstalledGame() => new()
+    {
+        GameId = "g1",
+        GameSlug = "makhia",
+        GameTitle = "Makhia",
+        BuildId = "b1",
+        VersionSemver = "0.1",
+        InstallDirectory = "/games/makhia",
+        Entrypoint = "Game.exe",
+        State = InstallState.Installed,
+    };
+
+    // A deliberate press is always allowed to find out for itself.
+    [Fact]
+    public async Task RetryingAsksTheServerAgainAtOnce()
+    {
+        _reachability.ReportUnreachable();
+        LoginViewModel model = CreateViewModel();
+
+        await model.RetryCommand.ExecuteAsync(null);
+
+        Assert.True(_reachability.AllowsRequests);
+        await _capabilities.Received().GetAsync(Arg.Any<CancellationToken>());
     }
 
     // The button is a courtesy, not a validator: it only refuses a form that obviously has
@@ -110,9 +264,10 @@ public sealed class LoginViewModelTests
         Assert.Equal(_localization.Translate("Error.Network"), model.ErrorMessage);
     }
 
-    // The request id is what makes a support report actionable, so it survives into the text.
+    // The sign-in screen is where the maintainer met the reference, so it is asserted here as
+    // well as in the presenter's own tests: it goes to the log and never onto the screen (D67).
     [Fact]
-    public async Task TheRequestIdIsShownWhenTheServerSentOne()
+    public async Task TheRequestIdIsNeverShownOnTheSignInScreen()
     {
         _authentication.SignInAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Throws(new ApiException(
@@ -121,7 +276,8 @@ public sealed class LoginViewModelTests
 
         await model.SubmitCommand.ExecuteAsync(null);
 
-        Assert.Contains("01HZY", model.ErrorMessage!, StringComparison.Ordinal);
+        Assert.DoesNotContain("01HZY", model.ErrorMessage!, StringComparison.Ordinal);
+        Assert.Equal(_localization.Translate("Error.Generic"), model.ErrorMessage);
     }
 
     // Signing in immediately would only earn a rejection, so the form says what comes first.
@@ -460,6 +616,62 @@ public sealed class LoginViewModelTests
         await model.SubmitCommand.ExecuteAsync(null);
 
         model.ToggleModeCommand.Execute(null);
+
+        Assert.False(model.CanResendVerification);
+    }
+
+    // --- a deployment that sends nothing (D40) ------------------------------------------
+
+    // The offer would be a button whose only outcome is a 404: the routes that send are
+    // switched off with the transport. What replaces it is a sentence naming who to ask.
+    [Fact]
+    public async Task AServerThatSendsNoMailTakesTheResetOfferAway()
+    {
+        _capabilities.GetAsync(Arg.Any<CancellationToken>()).Returns(
+            ServerCapabilities.Fallback with { Mail = new MailCapabilities { Enabled = false } });
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        model.Email = "luigi@example.com";
+
+        Assert.False(model.MailAvailable);
+        Assert.False(model.RequestPasswordResetCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public async Task AServerThatSendsMailKeepsIt()
+    {
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        model.Email = "luigi@example.com";
+
+        Assert.True(model.MailAvailable);
+        Assert.True(model.RequestPasswordResetCommand.CanExecute(null));
+    }
+
+    // True until told otherwise, which is also how a server too old to carry the key reads:
+    // guessing wrong here costs one refusal the screen already explains, and guessing wrong
+    // the other way hides the way back into an account.
+    [Fact]
+    public void TheOfferIsThereBeforeTheServerHasAnswered()
+    {
+        Assert.True(CreateViewModel().MailAvailable);
+    }
+
+    // The resend is the same button on the same reasoning: after a 403 there is nothing to
+    // offer on a server that cannot send.
+    [Fact]
+    public async Task NoResendIsOfferedWhereNothingCanBeSent()
+    {
+        _capabilities.GetAsync(Arg.Any<CancellationToken>()).Returns(
+            ServerCapabilities.Fallback with { Mail = new MailCapabilities { Enabled = false } });
+        _authentication
+            .SignInAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .ThrowsAsync(new ApiException(ApiErrorCode.Forbidden, "confirm your address"));
+
+        LoginViewModel model = CreateViewModel();
+        await model.LoadAsync(TestContext.Current.CancellationToken);
+        await WithCredentials(model).SubmitCommand.ExecuteAsync(null);
 
         Assert.False(model.CanResendVerification);
     }

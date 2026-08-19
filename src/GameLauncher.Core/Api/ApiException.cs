@@ -30,6 +30,15 @@ public enum ApiErrorCode
     InvalidInput,
     Unauthenticated,
     Forbidden,
+
+    /// <summary>
+    /// The session is valid and the account is holding a password somebody else chose for it.
+    /// A 403 like <see cref="Forbidden"/>, and its own code because it is the one refusal with
+    /// a single thing to do about it: every route but the password change answers this until
+    /// the password is replaced. Told apart from a plain refusal by the category rather than
+    /// by its prose, which is what lets the shell send somebody to the screen that fixes it.
+    /// </summary>
+    PasswordChangeRequired,
     NotFound,
     Conflict,
     QuotaExceeded,
@@ -62,12 +71,23 @@ public sealed class ApiException : Exception
 
     public ApiErrorCode Code { get; }
 
+    /// <summary>
+    /// The server's <c>rule</c>: which rule refused, where <see cref="Code"/> says only what
+    /// kind of refusal it was. Null whenever the server named none, which every server does
+    /// for most failures and an older one does for all of them. Only validation failures carry
+    /// one today, and <see cref="ApiErrorPresenter"/> only consults it for those.
+    /// </summary>
+    public string? Rule { get; init; }
+
+    /// <summary>The rule's arguments, in order — usually the limit that was exceeded.</summary>
+    public IReadOnlyList<string> RuleArgs { get; init; } = [];
+
     /// <summary>Null when the request never produced a response.</summary>
     public int? StatusCode { get; }
 
     /// <summary>
-    /// The server's <c>X-Request-Id</c>. Showing it to the user is what makes a support
-    /// report actionable: it is the one string that finds the request in the server's logs.
+    /// The server's <c>X-Request-Id</c>: the one string that finds the request in the server's
+    /// logs. It is written to this launcher's log and never shown to the user (D67).
     /// </summary>
     public string? RequestId { get; }
 

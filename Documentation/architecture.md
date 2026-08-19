@@ -179,6 +179,31 @@ decision, and having it in one place is what stops each page inventing its own w
 takes an override for the single case where one code means two things: on the sign-in form a
 401 means the password was wrong, not that a session aged out.
 
+### Validation failures are the exception, twice over
+
+An `invalid_input` is the one refusal the person reading can fix, and it is handled differently
+in two ways.
+
+It is **named**. The envelope may carry `rule` — `password_too_short` — and `ruleArgs`, the
+values that rule's sentence needs, which is nearly always the limit. `ValidationKeyFor` maps
+the rule to an `Error.Validation.*` key and the arguments fill its placeholders, so somebody
+who typed a short password is told how long one has to be. The names come from the backend's
+`domain/ValidationRules.h`, which is frozen for exactly this reason: the alternative was
+matching on the server's English `detail`, which makes rewording a message a broken client. A
+rule this launcher does not know — a newer server — falls back to the generic sentence, which
+is what it said for every validation failure before, so a server adding a rule never breaks a
+client. So does a sentence that wants an argument and did not get one: a raw `{0}` on screen is
+a launcher that looks broken.
+
+And it **does not show the request id** — which since 2026-08-17 is true of every failure, not
+only this one (D67). The reference exists so an operator can find the request in a log, and the
+person reading the message is never that operator: a UUID in a sentence is a string the one
+person who can see it cannot use. It is not thrown away, it is moved — `ApiErrorPresenter`
+writes it to this launcher's own log as a warning naming the code, the status and the
+reference, which is where somebody asked for a log will find it. A validation failure is not
+logged either, for the reason it never showed the reference: the server did exactly what it
+should have, so there is nothing to correlate.
+
 **Two rules the client must not break**, inherited from the server:
 
 - **A 404 is shown as "not available", never as "you do not have permission."** The server
@@ -214,6 +239,7 @@ client would keep enforcing it against a server that stopped.
 | `GameLauncher.Core.Tests` | domain and service logic with no I/O, localization, repository-wide conventions |
 | `GameLauncher.Infrastructure.Tests` | API clients against a stub `HttpMessageHandler`, the download engine, the SQLite store, config loading, the image cache |
 | `GameLauncher.App.Tests` | view models, exercised as plain objects |
+| `GameLauncher.Views.Tests` | one question per page: can this view be constructed? The only project with a running (headless) Avalonia — D68 |
 
 Stack: **xUnit v3 + NSubstitute**, with xUnit's built-in `Assert` and no fluent-assertion
 library (D11). Async tests take `TestContext.Current.CancellationToken`.

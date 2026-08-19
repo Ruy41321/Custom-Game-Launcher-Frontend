@@ -58,6 +58,21 @@ public interface IAuthenticationService
     Task RequestPasswordResetAsync(string email, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Takes over a session somebody else's call produced, persisting it and announcing it as
+    /// though it had been signed in for.
+    ///
+    /// It exists for exactly one caller: the password change, which is a route on the
+    /// *authenticated* client and therefore cannot live on this service at all (D47), yet
+    /// answers with a whole session because the server has just revoked every other one. Without
+    /// this seam the launcher would hold a live session it never stored and never announced —
+    /// signed out by succeeding.
+    ///
+    /// Deliberately narrow: it does not sign anybody in, because the session it takes already
+    /// belongs to the account that is signed in.
+    /// </summary>
+    Task AdoptAsync(AuthSession session, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Revokes the session server-side and forgets it locally. The local half happens even if
     /// the server cannot be reached — a user who asks to sign out is signed out.
     /// </summary>

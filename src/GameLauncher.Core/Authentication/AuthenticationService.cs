@@ -18,6 +18,7 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
 
     private readonly IAuthApi _api;
     private readonly ITokenStore _tokenStore;
+    private readonly IServerReachability _reachability;
     private readonly ILogger<AuthenticationService> _logger;
     private readonly TimeProvider _time;
 
@@ -29,11 +30,13 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
     public AuthenticationService(
         IAuthApi api,
         ITokenStore tokenStore,
+        IServerReachability reachability,
         ILogger<AuthenticationService> logger,
         TimeProvider? timeProvider = null)
     {
         _api = api;
         _tokenStore = tokenStore;
+        _reachability = reachability;
         _logger = logger;
         _time = timeProvider ?? TimeProvider.System;
     }
@@ -90,6 +93,12 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
     public async Task<AuthSession> SignInAsync(
         string email, string password, CancellationToken cancellationToken = default)
     {
+        // A typed password is a deliberate act, and it always earns a real attempt: the
+        // circuit is there to stop the launcher retrying by itself, never to answer for
+        // somebody who has just pressed Sign in. If the server is still missing, this attempt
+        // is the one that says so — and holds the circuit open for the next twenty seconds.
+        _reachability.RetryNow();
+
         AuthSession session = await _api
             .LoginAsync(email, password, cancellationToken)
             .ConfigureAwait(false);
@@ -97,6 +106,13 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
         await _tokenStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
         Publish(session);
         return session;
+    }
+
+    public async Task AdoptAsync(
+        AuthSession session, CancellationToken cancellationToken = default)
+    {
+        await _tokenStore.SaveAsync(session, cancellationToken).ConfigureAwait(false);
+        Publish(session);
     }
 
     public Task<RegistrationResult> RegisterAsync(
@@ -184,6 +200,17 @@ public sealed class AuthenticationService : IAuthenticationService, IDisposable
     private async Task<AuthSession> RotateAsync(
         string refreshToken, CancellationToken cancellationToken)
     {
+        // Asked before the token is spent, because the answer is already known. A rotation
+        // against a server that was unreachable a moment ago costs a full connection attempt
+        // and cannot succeed, and every authenticated request in the launcher funnels through
+        // here — which is how one dead server turned into one timeout per card on a page.
+        // The circuit half-opens on its own, so the first call after the window is a real
+        // attempt and the session rotates the moment the server is back.
+        if (!_reachability.AllowsRequests)
+        {
+            throw new ApiException(ApiErrorCode.Network, "The server could not be reached.");
+        }
+
         AuthSession session = await _api
             .RefreshAsync(refreshToken, cancellationToken)
             .ConfigureAwait(false);

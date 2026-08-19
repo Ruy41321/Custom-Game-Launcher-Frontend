@@ -502,7 +502,7 @@ Stated so you do not go looking:
 | The server will not start and names a variable | It is telling you the truth. Read the line |
 | Everybody is throttled at once after adding TLS | `TRUSTED_PROXIES` is empty — §1.4 |
 | Registrations succeed but no mail arrives | The relay accepted it and a spam filter did not — SPF/DKIM, §1.5 |
-| The launcher shows a sign-in screen that refuses every password | It cannot reach the server at all. Check `apiBaseUrl` and that it ends in `/api/v1/` |
+| The launcher shows a sign-in screen saying the server cannot be reached | It cannot reach the server at all. Check `apiBaseUrl` and that it ends in `/api/v1/` |
 | No update is ever offered | The public key is empty in the build, or the version in the document is not strictly newer, or the release is for another platform |
 | `--publish-release` refuses the document | A trailing newline, usually. Use `printf` |
 | The update downloads and then fails | The archive has `\` in its entry names, or no `updater/` in the build |

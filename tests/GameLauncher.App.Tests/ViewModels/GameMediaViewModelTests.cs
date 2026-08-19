@@ -1,8 +1,10 @@
+using Avalonia.Media.Imaging;
 using GameLauncher.App.Services;
 using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -15,6 +17,7 @@ public sealed class GameMediaViewModelTests
     private readonly IServerCapabilityProvider _capabilities =
         Substitute.For<IServerCapabilityProvider>();
     private readonly IFilePicker _files = Substitute.For<IFilePicker>();
+    private readonly IImageProvider _images = Substitute.For<IImageProvider>();
     private readonly ResourceManagerLocalizationService _localization = new("en");
 
     /// <summary>
@@ -69,9 +72,10 @@ public sealed class GameMediaViewModelTests
         new(_catalog,
             _publishing,
             _capabilities,
-            new ApiErrorPresenter(_localization),
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
             _localization,
-            _files);
+            _files,
+            _images);
 
     private async Task<GameMediaViewModel> ShowingAsync(params GameMedia[] media)
     {
@@ -200,6 +204,56 @@ public sealed class GameMediaViewModelTests
         Assert.Null(model.ErrorMessage);
         await _publishing.DidNotReceive().UploadMediaAsync(
             Arg.Any<string>(), Arg.Any<MediaUpload>(), Arg.Any<CancellationToken>());
+    }
+
+    // --- the pictures themselves ---------------------------------------------------------------
+
+    // The complaint this answers: a publisher arranging their own artwork saw a list of the alt
+    // text they had typed and nothing else, and had to remember which description was which
+    // picture. A decoded bitmap cannot be asserted on without an initialised Avalonia (D37), so
+    // what is asserted is the URL each row asked for — which is the part that can be wrong.
+    [Fact]
+    public async Task EveryRowFetchesItsOwnPicture()
+    {
+        GameMediaViewModel model = await ShowingAsync(
+            Shot("m1", 0),
+            Shot("m2", 1),
+            new GameMedia { Id = "c1", Kind = MediaKind.Cover, Url = "http://files.example/c1.png" });
+
+        await _images.Received(1).GetAsync(
+            "http://files.example/media/ab/cd/m1.png", Arg.Any<CancellationToken>());
+        await _images.Received(1).GetAsync(
+            "http://files.example/media/ab/cd/m2.png", Arg.Any<CancellationToken>());
+        await _images.Received(1).GetAsync(
+            "http://files.example/c1.png", Arg.Any<CancellationToken>());
+    }
+
+    // The loader answers null for an unreachable host, a refused request or bytes that are not
+    // an image. A gallery that lost one thumbnail is not a page that failed: the row stays, with
+    // its description and its buttons, and the frame is simply empty.
+    [Fact]
+    public async Task APictureThatDoesNotArriveStillLeavesItsRow()
+    {
+        _images.GetAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((Bitmap?)null);
+
+        GameMediaViewModel model = await ShowingAsync(Shot("m1", 0, "the docking bay"));
+
+        MediaCardViewModel card = Assert.Single(model.Gallery);
+        Assert.False(card.HasImage);
+        Assert.Equal("the docking bay", card.AltText);
+    }
+
+    // A picture is never replaced in place, so a card's record is the one it was built with —
+    // which is what the delete and reorder commands act on.
+    [Fact]
+    public async Task ACardCarriesTheRecordItCameFrom()
+    {
+        GameMediaViewModel model = await ShowingAsync(Shot("m1", 0, "the docking bay"));
+
+        MediaCardViewModel card = Assert.Single(model.Gallery);
+        Assert.Equal(MediaKind.Screenshot, card.Kind);
+        Assert.Equal("http://files.example/media/ab/cd/m1.png", card.Url);
+        Assert.Equal("m1", card.Media.Id);
     }
 
     // --- describing and reordering -------------------------------------------------------------

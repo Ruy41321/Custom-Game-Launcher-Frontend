@@ -134,6 +134,27 @@ belongs in Infrastructure behind an interface declared in Core.
 | D57 | **The swap's decision is a pure function of (exit code, elapsed time), and the old installation is renamed rather than deleted** | The hardest thing in this repository to test is a process replacing the files of the process that started it, and every design that would have made it *observable* — a marker file, an IPC channel, a watchdog outliving its purpose — needs two processes to agree on a protocol while one of them is the thing under suspicion. Reduced to two numbers it is `RelaunchWatch.Judge`, and a test substitutes the one interface that produces them. The rename is the other half: a sibling directory is on the same filesystem, so putting a self-contained build aside is one atomic operation needing no second copy — the reasoning the download's staging tree already follows — and it is a rename rather than a delete because *a rollback with nothing to roll back to is not a rollback*. A `previous` left by an attempt that never resolved is discarded, and that is safe by proof rather than assumption: the updater only runs because a launcher asked it to, so what is installed right now works, and keeping the older copy would make the *next* rollback restore a version two updates behind. **The hole is declared**: a launcher that starts, survives thirty seconds and then crashes is not rolled back, because from here that is indistinguishable from somebody opening the new version and closing it. Nothing remembers a failed release either — the same one is offered again next start. | A marker file or IPC (a protocol between a process and the one it suspects, and untestable); deleting the old installation (nothing to roll back to); keeping a stale `previous` (the next rollback goes two versions back); watching until the launcher exits however long that takes (a helper that lives as long as the application it started); remembering failed releases (state the update process writes about itself, and then a rule for when it stops applying) |
 | D58 | **The launcher unpacks the archive and copies the updater out of the installation; the updater is published self-contained inside it** | Three forced answers to one question — what has to happen between a verified zip and a running helper. **The launcher unpacks**, because a zip can carry names that escape the directory it is opened into and the hash proves nothing about names: an archive *correctly signed and hostile in its entry names* is a real and separate case, and the rules that refuse it (`ManifestPathRules`, `PathSafety`, behind `UpdateArchiveRules`) already live in Core for D24's reason and already cover every file of every build. A second copy of a security rule in the updater is a rule that eventually disagrees with itself — and the updater is the one program with nothing behind it to fix its bugs, so it stays small. **The copy out is not a convenience**: on Windows a running executable can be neither renamed nor deleted, so a helper left inside the directory it is about to rename makes that rename fail for a reason nothing reports. It goes to `<user data>/updates/<version>/updater/` rather than the system temp directory, because that directory is known writable and the existing one-version-at-a-time sweep is what eventually removes it — the helper cannot delete its own running image. **Self-contained** because a machine running a self-contained launcher may have no .NET at all; trimmed and invariant-globalized, it costs about 19 MB inside every installation. | Unpacking in the updater (a second implementation of a path rule, in the program that cannot afford bugs); running the updater from the installation (the rename fails, invisibly); the system temp directory (a path outside `IPathProvider`, and nothing sweeps it); a framework-dependent updater (missing exactly when the launcher is self-contained, which is always); the updater deleting its own copy (impossible while it is running) |
 | D59 | **The client targets Windows and Linux; the server targets Linux. macOS was dropped on 2026-08-07** | It was never a *supported* platform, only a green CI leg: §7 has said since day one that no macOS machine exists here, so every osx claim in this repository was a claim that a runner compiled something — never that it started, never that anybody looked at a window on it. Two things made keeping it dishonest rather than merely optimistic. A `.app` needs an Apple Developer ID to be signed and notarized or Gatekeeper refuses it, and nothing in this repository does that, so the artifact CI produced could not be installed by anybody. And the **self-update cannot be verified there at all**: replacing an installation and restarting it is exactly the kind of thing that behaves differently per platform, and §7's rule is that a piece like that is verified on real hardware. Two RIDs that somebody can actually run beat four where two are decoration. The server was already Linux-only in practice — it ships as a `docker compose` stack — and now says so. What this does **not** change: `GamePlatform` still carries `MacOS`, because a *publisher* may distribute a macOS build of their game through this launcher, and the platform of a game is a different question from the platform of the launcher. | Keeping macOS as a target (a claim nobody can check, and an unsigned artifact Gatekeeper refuses); deleting the macOS branches from `PathProvider` and `RuntimePlatform` (a fork that wants to add it back would have to rediscover them, for no gain today); dropping `MacOS` from `GamePlatform` (a migration, and it would stop publishers distributing what they like) |
+| D60 | **The devlog is Markdown after all, parsed in Core by something that produces text and nothing else — D38's second half is superseded as of 2026-08-17** | D38 refused to render Markdown on the grounds that rendering remote Markdown is rendering remote markup, and that reasoning is sound *about a general renderer*: the danger in Markdown is the parts that reach outside the text — embedded HTML, remote images, and links that navigate. `MarkdownParser` produces none of them. HTML is text, the image syntax stays as typed, and a link becomes `label [url]` rather than something pressable, because navigating to an address a publisher wrote is a capability and this is a text renderer. What is left — headings, emphasis, lists, code — is what the publisher was writing anyway and what arrived on screen with the asterisks still in it, which is the bug. It is hand-written rather than a dependency for the reason D11 refused a fluent-assertion library, and it sits in Core with no Avalonia near it so the meaning is unit-tested and only the *look* needs a toolkit (D37). The one shape it does not reach is emphasis whose runs end together (`**bold *and italic***`), which CommonMark solves with delimiter runs — a parser several times this size for a case a devlog can write the other way round; the limitation is a comment on `Markers` and a test asserts the shapes that do work. | A Markdown package (a dependency, and every one of them renders links and images because that is what Markdown is); leaving the raw text (the complaint this fixes); rendering links as clickable (a capability, granted to whatever a publisher typed); a full CommonMark implementation by hand (weeks, for a devlog) |
+| D61 | **The game page hides a button rather than disabling it, and says where it went — and two of them now depend on the install** | Three rules, one shape. **Play disappears while an update is pending**, because an update is not optional: a player who starts an old build talks to a server, saves in a format or joins a session the new one changed, and every one of those failures arrives later looking like a broken game rather than a skipped update. **Remove-from-library disappears while the game is installed**, because leaving the library with the files still here leaves an install the account no longer owns — it cannot be updated and cannot be repaired, and nothing on the page would explain why; uninstalling first is the order that works, and the same rule is on the library card, which knows whether the game is here even though it deliberately knows nothing about updates. And **a game is added to the library when its install finishes**, after rather than before, so a download that never completed leaves no entitlement nobody asked for — with the failure of *that* call reported without taking the install's success away, because the files really are on the disk either way. A disabled button with no explanation is the same dead end with worse manners, so the sentence that replaces Play is part of the change and is asserted on. | Disabling instead of hiding (a grey button that never says why); letting an old build launch (failures that arrive later and blame the game); adding to the library before the download (an entitlement for a game that never arrived); removing from the library with files on disk (an unmanageable install); a badge saying "update available" and Play still there (the badge is advice, and the failure is not) |
+| D62 | **A directory chosen for one install is a *root*, and cancelling the question cancels the install** | `InstallRequest` gained `InstallRoot` beside `InstallDirectory`, and the difference is a safety property rather than a convenience: uninstalling deletes the install directory **recursively**, so a build unpacked loose into a folder somebody picked in a dialog would make removing that game a recursive delete of that folder and of everything else they keep in it. The launcher therefore names the game's own directory inside whatever root it is given, by the same `InstallPaths.DefaultInstallDirectory` the default root goes through — one naming rule, in Infrastructure, where the view model cannot reinvent it. The question is asked only for a game that is not here yet, because an update goes where the game already lives (D33) and asking again would invite an answer the first install is not in. And a cancelled dialog aborts: falling back to the default would install the game somewhere the player has just declined to confirm. `UserSettings.AskWhereToInstall` is off by default — a folder dialog in front of every install is one people turn off after the second game, and `InstallDirectory` already covers wanting games somewhere specific. | Passing the picked path as `InstallDirectory` (uninstall becomes a recursive delete of a folder the user chose); the view model composing the directory name (a second copy of the naming rule, in the layer least able to hold it); asking on every install including updates (an answer that contradicts where the game is); cancelling falling back to the default (installing somewhere just declined); the setting on by default (a dialog between every player and every game) |
+| D63 | **The install directory has a button, behind `IFileBrowser`** | Saves, screenshots, logs and mods are all in the install directory and none of them is anywhere the launcher would think to look, so the way there is worth a button rather than a support answer. It is an interface for the reason every other shell-out is (D27, D32) — `Process.Start` is not something a view-model test can be made to do, while deciding *whether* to start one is exactly what a test should press — and it returns a bool rather than throwing, because a page that stopped working because a folder would not open would be worse than the folder not opening. The two platforms are spelled out rather than left to `UseShellExecute`, which resolves differently on each and to nothing on a machine with no desktop session. | `Process.Start` at the use site (untestable, and the DI test cannot catch it); throwing on failure (a page broken by a folder); `UseShellExecute = true` for both (one line, and a different meaning per platform) |
+| D64 | **A validation failure is the one refusal that names its rule and the one that drops the request id** | Two halves of the same observation: `invalid_input` is the only refusal the person reading can fix themselves. So it is the only one worth *naming* — the server now sends `rule` and `ruleArgs` (its D60) and `ValidationKeyFor` turns them into `Error.Validation.*` with the limit filled in, which is how "some of what you entered was not accepted" becomes "the password must be at least 8 characters" — with the number coming off the wire, so lowering the server's minimum needed no client release. The mapping is an explicit switch rather than `"Error.Validation." + rule` because the switch **is** the list of what this launcher can say: a missing resource key shows up as a fallback instead of `!Error.Validation.foo!` on somebody's screen, and a test can walk every arm in all three languages. And it is the only one where the request id is **noise**: that reference exists so an operator can find the request in a log, and there is nothing in the log to find, because the server behaved correctly — somebody who typed a short password needs the number, not a UUID. Every other failure keeps it. Two fallbacks make the wire contract additive: a rule this launcher has never heard of, and a sentence whose placeholder arrived without its argument, both give the generic sentence, so a newer server improves messages and can never break one. | Matching on the server's English `detail` (rewording a server message breaks the client); deriving the key from the rule name (a typo becomes `!Error.Validation.x!` in the UI, and nothing enumerates what the client knows); showing `detail` when no key is known (English in the middle of an Italian screen); keeping the reference on validation failures (the complaint this fixes); reading the limits from `/capabilities` instead of the refusal (an async lookup inside a synchronous `Describe`, and the client would have to know which limit each rule meant) |
+| D65 | **The version list gets a row view model, and Publish is a button rather than a checkbox** | The row has to say two things a `GameVersion` cannot. **Which builds hang off it** — the server sends versions and builds as two flat lists, so joining them is the page's job, and doing it in a view model is what lets a test read the join instead of inferring it from a template; a build shows its name and falls back to platform and architecture when it has none, which is the same information the list below carries but is the only thing that tells two rows of "0.3.0 beta published" apart. And **whether it is published, as something that changes**, which is the new part: the row is now the thing a button acts on, so it has to be able to say so without the list being rebuilt under the cursor. `VersionRowViewModel` costs one type and rippled into `SelectedVersion`; a converter or a `MultiBinding` would have put the same join in XAML where nothing can press it (D32, D46, D51 all spend this budget the same way). Publishing is a **command, not a checkbox**, because it is a request the server can refuse and a checkbox that springs back is a UI lying about state it does not own — and there is no confirmation prompt, because D43 is about deletions and this one is undone by pressing the other button. | A converter over two collections (the join lands in XAML, untestable); rebuilding the list after each publish (drops the selection somebody is using); a checkbox bound two-way (a refused request leaves the tick where the server did not put it); a confirmation prompt (nothing is destroyed, and D43's budget is for the things that are); putting the build names on `GameVersion` (a wire record inventing a field the server does not send) |
+| D66 | **One `MediaCardViewModel` for both screens, and the dashboard's way to the game page is a navigation event, not a page of its own** | Two halves of "the publisher cannot see what they made". The artwork tab listed **alt text and nothing else**, so somebody reordering their own screenshots was reading descriptions they had typed and remembering which picture each belonged to — and the fix was not new machinery, because `ScreenshotViewModel` on the game page was already exactly "a `GameMedia` and its decoded `Bitmap`". Making it *one* type rather than adding a second is the decision: two view models with that same meaning is one shape maintained in two places, which is the argument the server's D30 makes about `mayViewGame`, and the cost is one property (`Media`, which the dashboard's commands act on and the game page never reads). The **preview is fetched after the rows exist**, in the order they are shown, so the list appears at once and fills in; a picture that never arrives leaves its row and an empty frame, because `IImageLoader` reports every failure as null (D36) and a gallery that lost a thumbnail is not a page that failed. The other half is the button to the game's own page, which is a `GameSelected` event the shell listens to exactly as it listens to Explore and the library (D17) — the dashboard does not know the game page exists, and "back" already works because showing the dashboard records it as the list to return to. It is offered **for a draft**, which is not an assumption: `CatalogService::gameDetail` serves a game to whoever may edit it whatever its visibility, checked against the running server before this was built. | A second card type for the dashboard (the same shape in two places, and two ways for a picture to fail); a converter from `GameMedia` to `Bitmap` in XAML (decoding in the layer nothing can test, and no way to express "not yet"); awaiting every picture before showing the list (a page that waits on a dozen downloads to show text it already has); a preview *page* inside the dashboard (a second renderer of the game page, guaranteed to drift from the real one); a command on the shell instead of an event (the child would have to know the shell, which is the one direction D17 forbids) |
+| D67 | **The request id leaves every user-facing sentence and goes to the launcher's log instead — half of D64 is superseded as of 2026-08-17** | D64 dropped the reference from validation failures on the grounds that there was nothing in a log to find, and kept it everywhere else on the grounds that an operator needs it. The second half was wrong about *who is reading*. The reference is for somebody with access to the server's logs, and the person in front of the message is the one person on the machine who cannot use it — what they saw was «Email e password non corrispondono a nessun account. (riferimento c832048e…)», where a UUID is noise attached to the one sentence that had already said everything actionable. The need behind it is real, so it is **moved rather than deleted**: `ApiErrorPresenter` writes a warning naming the code, the status and the reference through `ILogger`, so an operator handed a launcher log still finds the request. It logs where it used to append, which keeps the swap exact — a validation failure is still neither shown nor logged, because the server behaved correctly and there is nothing to correlate. `Error.WithReference` is gone from the three resx files, since no code path can produce it and leaving it invites its return. | Keeping it in the sentence (the complaint this fixes); deleting the id outright (throws away the only thing that finds a request in a server log, to fix a presentation problem); logging in `ApiTransport` where the exception is built (it would log the failures this client handles silently by design — a 404 read as "you are up to date" (D55), a capabilities lookup that falls back — turning deliberate silence into warnings); showing it behind a "details" affordance (a second surface, for a string that helps nobody who can see it) |
+| D68 | **One test project has a running Avalonia, and it asks every view a single question: does it build?** | The Settings page rendered **nothing** — not a broken control, the whole page — because `Settings.axaml` passed a `{loc:Tr}`, which is a `Binding`, as a `StringFormat`, which is a `string`. Constructing the view threw `InvalidCastException`, the shell's `ContentControl` swallowed it, and what a person saw was an empty rectangle where the install directory, the theme, the crash-report consent and the account deletion all live. Nothing anywhere said so: the launcher ran, 926 tests were green, and the maintainer reported the install-path settings as missing when they had been implemented and documented (D62) for a day. That failure mode — a view that cannot be constructed — is invisible to every test this repository had, because D37 deliberately keeps Avalonia out of view-model tests and it is right to. So it gets its own project rather than a package added to `GameLauncher.App.Tests`: `Avalonia.Headless` sets a process-wide platform up, and letting it into the project that holds 271 view-model tests would put a UI thread underneath the tests written specifically not to need one. Seven views, seven assertions, one dependency, in a project nothing else references — and it fails against the bug, checked by reverting the line. | A package added to `GameLauncher.App.Tests` (a running Avalonia under every view-model test, which is what D37 spends effort avoiding); asserting on the XAML as text (a parser of a parser, and it would not have caught this — the file is valid XAML); leaving it to the window (the status quo: found by a person, a day later, described as a missing feature); a full UI test framework (a headless renderer and a driver, to answer a question a constructor answers) |
+| D69 | **The library card asks whether an update is pending — one request per *installed* game, after the list is drawn, and a question it could not ask leaves Play alone. Half of D61 is superseded as of 2026-08-18** | D61 hid Play on the game page and said in as many words that the library card knows the game is here while knowing nothing about updates. That was the bug the maintainer found: the page refused to start a stale build and the list two clicks away offered it. Teaching the card was a change of decision, and the part to design was the cost. **One call per installed game**, not per row and not one bulk call: a library is everything an account has ever been given and grows without bound, while what is installed is bounded by the disk, and a card with nothing on this machine has no Play button to take away. It runs where the covers already run — after the list is on screen, in the order the cards are shown — so the page never waits for it, and it compares exactly what the game page compares, `BuildFor(platform, architecture)` against the install's `BuildId`. The rule that is copied word for word is the shape: the button **disappears** and `Detail.UpdateBeforePlaying` takes its place, the same sentence because it is the same rule, and `PlayAsync` refuses as well, because the check can land between a press and the click. The one place this is deliberately *not* the game page is the unanswered question: **offline no check is made, a refused check leaves its card untouched, and Play stays** — refusing to start a game already on this disk because no server could be reached is what D29's offline library exists to prevent, and the price is a card that can offer Play for the length of one request and then withdraw it. | Gating Play on the check having *answered* (measured against the suite: it makes the offline library unplayable, which is the rule D29 spends the most effort on); one bulk call (no route serves it, and inventing one puts a server release in front of a client bug); a check deferred to the press (the button stays, so the rule that a hidden button is an explained one cannot be kept); a badge saying "update available" with Play still there (D61's own rejected alternative: the badge is advice and the failure is not); one call per row (the same answer at library-sized cost, for cards with nothing to play) |
+| D70 | **What a page keeps across a change of account is one rule for every page, and it is keyed on *who*, not on the session event** | The dashboard showed the previous account's game after a sign-out and a sign-in, and `DeveloperViewModel.ClearSelection` already existed with nothing calling it. Fixing that page alone would have left the same bug in four others, so the rule is written once: every page implements `IAccountScopedPage.ResetForAccountChange()`, the shell holds them in `Pages`, and a reflection test over the shell's page properties fails when one is missing from that list — a page absent from it is a page that keeps somebody else's data. Two halves make the rule. **It is the account that is compared, not the event that is trusted**: `SessionChanged` also fires on every token rotation, several times an hour, with the same person behind it, so `_accountId` is compared and a rotation changes nothing on screen. And **the line is the account's data, not the page's state**: what an account's token fetched goes — the library, the search and its results, the game page, the publisher's list, selection and forms, the password in the account-deletion box, the address left in the sign-in form — while what belongs to this machine stays, because the install directory, the theme, the language, the crash-report consent and the install rows on disk do not change because a different person signed in on the same computer. Three consequences worth naming: the dashboard's artwork and devlog tabs are cleared by `ClearSelection` itself, which also fixes the game *deletion* path that left a deleted game's pictures on screen; Explore's query is emptied under a suppression flag, because both of its setters mean "somebody changed the query" and one of them would start a request with nobody signed in; and a download in flight on the game page is cancelled, because it is running with credentials that no longer exist. | Resetting on every `SessionChanged` (empties the library on a token rotation — the trap this is shaped around); a fix on `DeveloperViewModel` alone (the page it was noticed on, leaving four pages with the same bug); rebuilding the pages from the DI container on sign-in (throws away event subscriptions the shell made in its constructor, for state a method can clear); a virtual no-op `Reset` on `ViewModelBase` (a new page inherits the wrong answer silently, which is exactly what the convention test is there to catch); clearing the machine's preferences too (a sign-out that forgets where games install, for a privacy problem that does not exist between two people at one computer) |
+| D71 | **A build under an unpublished version is not a candidate for anybody, its publisher included — which supersedes half of D69 and half of D61 as of 2026-08-18** | `BuildFor` filtered on status and platform and knew nothing about the version a build belongs to, which was invisible because the server hides an unpublished version from everybody *except* its publisher (the backend's D62 seen from this side). So the one account it could bite was the one that owns the game: their own untested build was the newest thing in the document, the library card decided an update was pending, and Play disappeared from a game they could play — permanently, since the way to make it come back was to publish. Found by looking at the window, which is the only place it shows: every test fixture happened to describe a published version. The rule is now one rule rather than two, because `BuildFor` answers both *what to install* and *what would replace what is installed*, and splitting them would offer an install whose completion the update check then reads as another update pending — `HasUpdate` compares build ids for inequality, not recency, so installing the draft would flag an 'update' back to the released build. A publisher who wants to try a build therefore publishes its version, which is the same gate every other account is already behind. A build whose version is missing from the listing counts as unpublished, deliberately the same direction the server's `versionPublished` defaults in: a document that forgot to carry a version withholds a build rather than offering one nobody may download. | Filtering only in the update check and not in the install path (two rules for one question, and an install that immediately reads as needing an update); filtering server-side for the publisher too (that would take away the dashboard's whole reason to serve a draft — D66); leaving it (a publisher whose own game is unplayable from the library, which is what the maintainer's machine showed) |
+| D72 | **The launcher asks whether the server can send anything, and the way back in without it is a screen the shell will not let go of** | Three pieces of one answer to the deployment that sets `MAIL_TRANSPORT=none`. **`mail.enabled` off `/capabilities`** decides whether "forgotten your password?" is offered at all — `ReportMailFailure` already read the 404 as "this server sends no mail", which is the right sentence *after* a press nobody should have been invited to make; a sentence naming the administrator to ask replaces the button. Its fallback is **true**, the opposite of `crashReports.enabled`, and the asymmetry is the decision: that one is permission to send something about the user, so silence means no, while this one is a feature somebody needs — a server too old to carry the key does send mail, and reading its silence as "no mail" would hide the way back into an account on every deployment that predates the field. Guessing wrong here costs one refusal the screen already explains. **`ChangePasswordViewModel` is one page for both cases**, forced and ordinary, because the flow is identical and the only thing the forced case adds is that there is no way out — `CanCancel` is `!IsForced`, and a "later" button would lead to a launcher where every request answers 403 and nothing says why. The password rules are deliberately **not** copied into it: the server owns them and names the rule it refused (D64), so the only local check is that the two new passwords match, which is the one mistake no server can see because only one of them is sent. And **the shell routes on the session, not on a refusal**: `passwordChangeRequired` rides on the session document, so `AfterSignInAsync` — one method both the start-up restore and the sign-in button go through — sends somebody to that screen instead of to a library whose first request comes back 403. The tabs go with it (`CanNavigate`), because a tab that only ever produces a refusal is the dead end D61 removes from buttons. | Inferring the deployment from the 404 (the offer is made, then fails, on the screen somebody is already stuck on); a `mail.enabled` fallback of false (hides the reset link on every server older than the field); a separate page for the forced and the ordinary change (one flow, two implementations, and the forced one is the untested one); copying the password policy into the page (a second definition of a rule the server states, which D64 exists to end); reacting to the first 403 instead of reading the session (a page fails, and then the launcher explains itself); leaving the tabs visible (three buttons that answer 403) |
+| D73 | **The shell applies a change of session on the UI thread, because the event does not arrive on one** | Found by signing in through the real window, and it is the whole feature D70 shipped: `AuthenticationService.SignInAsync` awaits its token store with `ConfigureAwait(false)`, so `Publish` — and therefore `SessionChanged`, and therefore `ResetForAccountChange` on every page — runs on the thread pool. `LoginViewModel.Email = ""` re-evaluates a bound command, `Button.get_Command()` calls `VerifyAccess`, and Avalonia throws "the calling thread cannot access this object" on a pool thread — which is not an error message, it is the process ending. **Every sign-in closed the launcher**, from the moment D70 landed until this was found, because the session on this machine was already restored and no session since had typed a password. The fix is one `OnUiThread` around the handler's body rather than one at each of the things it touches: the marshalling belongs where the thread changes, and a rule applied at the callees is a rule the next callee forgets. The general lesson is in §7: anything reached from an event a *service* raises is running wherever that service happened to be. | Marshalling inside each page's `ResetForAccountChange` (six places to remember, and the shell's own property writes still unprotected); `ConfigureAwait(true)` in `AuthenticationService` (Core deciding it runs under a UI framework, which is exactly what the layering forbids); catching it (the launcher would survive with pages half reset) |
+| D74 | **A server that says nothing about video is a server with none, which is the opposite reading from `mail.enabled` — and the size limit is one the client must enforce itself** | `media.maxVideoBytes`, `maxVideosPerGame` and `videoContentTypes` are three new keys on `/capabilities`, and `SupportsVideo` demands **all three**: half a description is a server describing itself incompletely, and the safe reading of that is the same as silence. The fallback is *no video*, and the asymmetry with D72's `mail.enabled` is the whole decision. Mail is a feature every server older than its key still had, so reading silence as "no" there would hide the way back into an account; **video did not exist before these keys existed**, so reading silence as "yes" here would offer an upload that cannot succeed and a kind the server would refuse. The *conservative* answer is not a constant direction — it is whichever way makes an old server behave the way it actually behaves. And the size check is the one client-side rule in this repository that is not merely an optimisation: an oversized picture comes back as a 422 naming its limit, but an oversized **video** is refused by the server's web framework before any handler runs, as a bare 413 with **no RFC 7807 body at all** (measured against the running stack). If `MediaUploadRules` does not catch it, nothing downstream has anything to say. | A single `maxBytes` for both (a trailer refused at the picture limit, or a picture limit large enough to be a video one); `SupportsVideo` from any one key (a server that carries a limit and no format list would be believed); a fallback of "video works" (every server predating the keys offers an upload that 422s or 413s); relying on the server's refusal for size (the one refusal that carries no message); a constant in the client for the limit (D39, and this time the failure is unexplainable rather than merely unexplained) |
+| D75 | **Playback is `IVideoPlayback`, one player for the launcher, and "this machine cannot play" is an ordinary answer rather than an error** | LibVLCSharp plus `VideoLAN.LibVLC.Windows` is the **first native dependency in this repository**, and two facts about it shape the design more than the API does. It is **~100 MB per RID** — measured, 102 MB for `win-x64` — which is the cost the maintainer accepted on 2026-08-17. And **there is no Linux package**: VideoLAN publishes native packages for Windows, Android, iOS, macOS and UWP and none for Linux, where libvlc comes from the distribution — so on one of this project's two supported platforms playback depends on whether VLC is installed. That is why `IsAvailable` exists, why it is *lazy* (a session that never opens a trailer never loads the library, and `ShowVideoUnavailable` short-circuits on `HasVideos` so a page without one never asks), and why every layer above treats false as a sentence rather than a failure — the same reasoning D29 applies to an offline library. `Player` is typed `object` because nothing above the view has business naming a LibVLCSharp type and a substitute has nothing to hand back otherwise. The interface is a **state machine and nothing else**, because playback is the one surface whose behaviour no view-model test reaches: what is tested is that a machine that cannot play is never asked, that a refusal produces a sentence, and that every way of leaving the page — Stop, Back, loading another game, losing the account — stops the sound. The picture itself is checked by hand, and was: an MP4 and a WebM played from the real server in the real window on 2026-08-18. | `Process.Start` on the URL (rejected by the maintainer on 2026-08-17: the system player is a different application, and the launcher would be handing a URL to whatever is registered); a player per page (two native surfaces, and a trailer still playing behind another one); exposing `MediaPlayer` in the view-model layer (a native type above the view, and untestable); eager initialisation (~100 MB loaded at start-up for every session, most of which never open a trailer); treating an unavailable library as an error (every Linux machine without VLC would report a broken launcher) |
+| D76 | **The native surface is created only while something is playing, and `IsVisible` is not what does it** | `NativeControlHost` creates its child window when it is **attached to the visual tree**, and `IsVisible="False"` does not detach anything — so a `VideoView` sitting hidden on the game page created a native window on every visit, and on a manifest with no `supportedOS` list that is `InvalidOperationException: Unable to create child window for native control host` on the layout pass, which is **the launcher closing** rather than a missing picture. Two changes, and both are worth keeping. The manifest gained its compatibility block, which is the actual fix. And the view holds a `ContentControl` whose `Content` is `VideoPlayer` — null until `IsPlayingVideo` — with a `DataTemplate` that turns a player into a `VideoView`, so on a page nobody has pressed play on there is no native window, no libvlc, and nothing for a machine that cannot host one to fail at. Found by opening the window, which is the third bug in this project found that way and none of which a green suite could see: a headless view test constructs the control without ever attaching it to a real window. | `IsVisible` on the `VideoView` (what crashed); creating the player eagerly and hiding it (a native window per game page, on every platform, for a page that may have no video at all); fixing only the manifest (the crash goes, but every game page still pays for a native surface it is not using); a converter (the same lifetime problem with the decision hidden in XAML) |
+| D77 | **One shared answer to "is the server there?", and no request is made against a server that was missing a moment ago** | D29 said an unreachable server keeps the session and the library falls back to disk, and that decision was right and unimplementable as written, because **nothing wrote the answer down**. Every caller discovered the dead server for itself and discovered it again on the next request: with the backend stopped, the maintainer's start-up spent 23 seconds on a token rotation that could not succeed — showing the *sign-in screen* the whole time, with a valid session on disk — then 23 more on `GET /library`, and one per cover and per update check after that. `IServerReachability` is that answer, as pure state over a `TimeProvider` in Core: a failure holds the circuit shut for 20 seconds, one request is then allowed through to find out, and its outcome decides the next window. It is reported by a `ReachabilityHandler` on **every API client** — the same reasoning as `BearerTokenHandler` (D14), so a resource client added tomorrow cannot forget it — and read in two places: `AuthenticationService.RotateAsync`, which refuses to spend a round trip on a rotation that cannot work, and the UI, which now has something true to say. Two properties rather than one, because they answer different questions: `IsOnline` is what the banner shows and stays false until something actually succeeds, while `AllowsRequests` half-opens on its own. `SignInAsync` and both Retry buttons call `RetryNow()`: the circuit exists to stop the launcher retrying by itself, never to answer for somebody who has just pressed a button. | Leaving each caller to find out (the bug: one connection timeout per request, forever); a shorter or longer window (a page of a dozen cards costs one failed attempt at 20s and a launcher left open recovers by itself; a minute would strand somebody whose network came back); one property for both questions (either the banner flickers off during the retry probe, or the probe never happens); polling the server on a timer (a request per interval on a machine that may be on a train, to learn something the next real request learns for free); putting the check in `ApiTransport` (it is constructed per client with `new`, so the dependency would thread through nine constructors) |
+| D78 | **The deadline that catches a hung server applies only while the server is unproven — and the offline library is the account's, not the disk's** | Two halves of making D77 true against the failure people actually have. **A stopped backend is rarely a refused connection**: behind Docker's port forwarder, nginx, a load balancer or a captive portal it *accepts* in milliseconds and then says nothing — measured here as 0.2s to connect and 21s of silence — so `SocketsHttpHandler.ConnectTimeout` never fires and what a person watches is the client's own 30 seconds. `ReachabilityHandler` therefore gives a request 8 seconds to be answered, and gives up on the server rather than on the request. It applies **only while `IsProven` is false** — the first request of a run, and any after a failure — because once a server has answered, its slow routes deserve their time: the download plan diffs two manifests server-side, and refusing that on a deadline would break a working launcher in order to fix a broken one. A body over 1 MiB is exempt for the same reason, since there the wait is the upload. The second half is `ILibraryCache`: the last successful `GET /library`, one JSON document per account under the user's data directory, read when the server cannot be. Falling back to the install rows alone — which is all D29 ever did — showed an **empty library** to anybody who had not downloaded a game yet, and silently dropped every title an account owns and has not installed here, which for most people is most of them. Installs the stored answer does not mention are appended, so a game installed since the last successful load is still playable. | `ConnectTimeout` alone (does not fire against the failure that actually happens); a shorter client timeout for every API call (a 4 MiB upload chunk on a slow link refused as a network failure); the deadline on every request forever (the download plan, refused at 8 seconds, on a server that is working); the install rows as the offline library (the bug: an empty page for a new account, and owned games hidden); a table in the install database (a migration and a schema, for a copy of something the server can send again); naming the file after the account id (a directory listing of everybody who ever signed in on a shared machine) |
+| D79 | **The sign-in screen offers a way in without signing in, and that visit is a state the shell holds rather than a session it invents** | D77 and D78 fixed the launcher for somebody who is already signed in; somebody who is not was still stopped at a form that cannot succeed, with games sitting on their disk. The offer is on the sign-in screen because that is where they are, and it is guarded by **both** halves of the only case where it means anything: the server is unreachable *and* this machine has a game on it. A door to an empty library is an invitation to look at nothing, and the offer has no business existing while the server answers, because then signing in works and is what somebody wants. What it produces is **not a session**: `MainWindowViewModel.IsOfflineGuest` is a shell state, `IsSignedIn` stays false, and so every account surface — Explore, publishing, settings that talk to a server — stays hidden, exactly as `CanNavigate` already hid them. The library it opens is the *installed* list and never the stored one, because a cached library belongs to an account and handing the last person's list to whoever opens the launcher next is not something an unreachable server excuses. Two smaller rules fall out of it: the header grows a **Sign in** button, because there is no session to sign out of and otherwise the visit has no exit; and the library card's **Details** button disappears while offline, since the game page is built from the catalog and — with nobody signed in — the error it produced was *"your session has expired"*, which is a lie about a session that never existed. | A fake or anonymous session (every `IsSignedIn` check in the shell silently becomes wrong, and the first request would carry no token anyway); offering it whatever the server is doing (a way to skip signing in, which is not what this is for); offering it with nothing installed (a button to an empty page); showing the cached library to a signed-out visitor (the previous account's game list, to whoever opens the launcher); leaving Details in place (a page that can only fail, with the wrong reason); a second, cut-down library page for the visit (two implementations of the page whose whole point is that it already works offline) |
+
 ---
 
 ## 4. Download and install model
@@ -198,8 +219,9 @@ Everything — identifiers, comments, docs, commit messages — is in **English*
 
 `./scripts/dev.ps1` runs the launcher against a local server and adds the two things the bare
 `dotnet run` leaves to be discovered the slow way: it says whether the API is actually
-answering *before* the window opens — the client works offline by design (D29), so a stopped
-backend produces a sign-in screen that refuses every password rather than an error — and
+answering *before* the window opens — the client works offline by design (D29, D77), so a
+stopped backend produces a library restored from disk, or a sign-in screen saying the server
+cannot be reached, rather than an error — and
 `-Reset` clears the per-user state, which is the only way back to a first-run launcher.
 
 ```powershell
@@ -310,6 +332,7 @@ a different key and one holding none.
 | .NET SDK 9.0.310 is installed | Local build and test work out of the box |
 | **macOS is not a target any more** (D59, 2026-08-07) | It used to be, verified only by a green CI leg — which proved a runner compiled it and nothing else, since no macOS machine exists here. The `osx-*` RIDs and the `macos-latest` leg are gone from the workflow. The branches in `PathProvider` and `RuntimePlatform` are deliberately left, so a fork that wants it back starts from something rather than nothing; nothing in this repository claims they work |
 | **`Environment.ProcessPath` belongs on `IPathProvider`, not at the use site** | The self-update needs to know what to restart, and a caller reading it directly is a caller no test can point somewhere else — the same reason every other path is on that interface. `IPathProvider.ExecutablePath` exists for it. A test that substitutes the provider and forgets this property gets an empty string, and the failure shows up as a launcher name that does not match anything in the archive |
+| **A constant array literal passed to a method fails the build** | `Assert.Equal(new[] { "12" }, actual)` is CA1861 — "prefer static readonly fields over constant array arguments" — and with `TreatWarningsAsErrors` (D9) that is an error, in a *test*, for an assertion that reads perfectly well. It is not a rule worth arguing with: `Assert.Equal("12", Assert.Single(actual))` says the same thing and is a better assertion, because it names the count as part of what is being checked |
 | Backend needs Docker Desktop, whose daemon is often stopped | Start it before running the client against a local API |
 | `gh` 2.97 is installed at `C:\Program Files\GitHub CLI` and authenticated as `Ruy41321` | Read CI failures with `gh run view <id> --log-failed` instead of guessing. The installer does not add it to an already-open shell's `PATH`; prepend the directory if `gh` is not found |
 | **The local SDK carries fewer analyzers than the newest 9.0.x** | A clean local build proves nothing about CI unless the SDK matches. `global.json` pins it (D13); do not "modernise" the workflow back to `dotnet-version: '9.0.x'` |
@@ -355,7 +378,24 @@ a different key and one holding none.
 | **A sentence a view model builds itself is not a binding and never follows a language change** | `WelcomeMessage` and the update banner's three lines are `Translate` calls with arguments, so they are ordinary properties: fixing the `{loc:Tr}` half above does nothing for them, and `RefreshLocalizedText` in `MainWindowViewModel` stays exactly as necessary as it was. The rule to keep: **anything built with `Translate(key, args)` must be rebuilt on `LanguageChanged`** |
 | **An `AfterTargets="Publish"` MSBuild target gets an *absolute* `PublishDir` when `-o` is used** | `GameLauncher.App.csproj` publishes the updater into `$(PublishDir)updater\`, and combining that with `$(MSBuildProjectDirectory)` produced `…\src\GameLauncher.App\C:\Users\…\dist\new\updater\` and an MSB3191 that reads like a broken path in the SDK. `$([System.IO.Path]::GetFullPath('$(PublishDir)updater', '$(MSBuildProjectDirectory)'))` is right for both shapes, because that overload leaves a rooted path alone. Plain `dotnet publish` with no `-o` never shows it |
 | **`Compress-Archive` in Windows PowerShell 5.1 can write `\` in zip entry names** | The launcher refuses those — `ManifestPathRules` bans a backslash, which is the same rule that stops `..\` — so an archive built that way is a release nobody can install, refused for a reason that sounds like an attack. It runs on .NET Framework, where `ZipFile` predates the fix. Build a release archive with Python's `zipfile` (or .NET Core's `ZipFile`), and normalise the entry names to `/` yourself |
+| **The Fluent theme paints a button's templated presenter on hover and on press, not only when disabled** | The `Button.link:disabled` row below found half of this; a *cover* used as a button found the other half. A `Background="Transparent"` setter on the button itself is ignored for those states, so a picture used as a control gets a grey wash over it on hover. `Button.bare /template/ ContentPresenter#PART_ContentPresenter` is the fix, and application styles win over the theme's because they are applied after it — which is also why no `:pointerover` variant of the selector is needed |
+| **A `Task<T>`-returning member of an unconfigured substitute yields `default(T)` — and `IUserSettingsStore.LoadAsync` is now on the install path** | Recorded again in a new shape, because it is the row that keeps costing cycles. `GameDetailViewModel` reads the preferences before every install, so every test class that builds it has to arrange `LoadAsync` or the view model dies on a null `UserSettings` inside a command — a crash rather than a failed assertion. Arranged in the **test class constructor**, which runs before the body, so a test wanting other settings arranges over the top |
+| **`IFolderPicker.PickAsync` takes an optional `CancellationToken`, and xUnit1051 is an error here** | `_folders.PickAsync(Arg.Any<string>())` compiles, reads perfectly, and fails the build under `TreatWarningsAsErrors` with an analyzer message about test cancellation — on an NSubstitute *arrangement*, where a token means nothing. Pass `Arg.Any<CancellationToken>()` in stubs and `Received()` calls of anything whose real signature takes one |
 | **`Graphics.CopyFromScreen` photographs whatever is on top of that rectangle** | It captured an unrelated window sitting over the launcher, so the screenshot showed something else entirely. `PrintWindow($hwnd, $hdc, 2)` renders the target window itself, works when it is occluded, and does **not** steal focus from whatever the maintainer is doing. Also: `Add-Type -MemberDefinition` already emits `using System.Runtime.InteropServices;`, so passing `-UsingNamespace` for it fails the compile as a warning-as-error |
+| **A `Button` is aligned `Left` by the Fluent theme, so `HorizontalContentAlignment="Stretch"` on it stretches nothing** | The two content alignments on `Button.bare` were there and looked sufficient; the button itself was still only as wide as what it held. A cover frame with a picture *looks* right anyway, because `UniformToFill` asks for the full width — so the bug only appeared on the placeholder, as a 44px sliver of a 300px card, and on the devlog card whose whole header was supposed to be pressable and was clickable only across the text. Measured rather than reasoned about: a scratch project with `Avalonia.Headless` printed `button 44x150 ha=Left` as shipped and `268x150` with `HorizontalAlignment="Stretch"` added. That is the cheapest way to settle any layout question here, and it takes two minutes |
+| **`{loc:Tr}` is a `Binding`, so it cannot be a `StringFormat` — and the failure takes the whole page** | `Text="{Binding X, StringFormat={loc:Tr Key}}"` compiles, passes `dotnet format`, and throws `InvalidCastException: Unable to cast object of type 'Avalonia.Data.Binding' to type 'System.String'` when the view is **constructed**. The shell's `ContentControl` swallows it and draws an empty rectangle, so the Settings page was blank for a day and was reported as a missing feature rather than a crash. Compose the sentence in the view model. `tests/GameLauncher.Views.Tests` now catches the shape (D68) |
+| **A backing field of `[ObservableProperty]` cannot be written directly — the toolkit's analyzer makes it an error** | MVVMTK0034, and with `TreatWarningsAsErrors` (D9) that is a failed build, not a hint. It comes up whenever a reset has to change a property *without* running the side effect its setter exists for — Explore's `SearchText` arms the debounce, `SelectedSort` reloads at once. The idiom that works is the dashboard's: a `_suppressReload` flag held across the assignment and checked in the `partial void On…Changed`, which also keeps the reason on the page instead of hiding it in a field write |
+| **A page that keeps state is a page that keeps the previous account's state** | The shell owns every page for the lifetime of the window, so signing out and back in as somebody else left the dashboard showing the first account's game (D70). Anything added to a page after this — a list, a form, a selection — has to answer `ResetForAccountChange`, and the reflection test in `MainWindowViewModelTests` only catches a whole *page* that was forgotten, never a field |
+| **An event raised by a Core service runs wherever that service happened to be — and touching a bound command there ends the process** | `AuthenticationService` awaits its token store with `ConfigureAwait(false)`, so `SessionChanged` fires on the thread pool. The shell's handler reset every page, `LoginViewModel.Email = ""` re-evaluated a bound command, and `Button.get_Command()` threw `InvalidOperationException: the calling thread cannot access this object` — on a pool thread, so there is no error banner and no log line the user sees: the launcher **closes**. Every sign-in did this from D70 until 2026-08-18, and nothing in the suite could see it, because a test has no `SynchronizationContext` and `OnUiThread` therefore runs inline. The rule: anything reached from a *service's* event marshals through `OnUiThread` before it touches a bound property (D73). A test can pin it by installing a recording `SynchronizationContext` **before constructing** the view model — `ViewModelBase` captures it in a field initialiser — and then raising the event with none current |
+| **A `NativeControlHost` attaches when it enters the visual tree, and `IsVisible="False"` does not keep it out — and without a `supportedOS` list in the manifest that is a crash** | The first `VideoView` on the game page closed the launcher on every visit to any game, playing or not: `InvalidOperationException: Unable to create child window for native control host. Application manifest with supported OS list might be required.`, thrown inside a layout pass where nothing catches it. `app.manifest` now carries the `compatibility` block (Windows 7 through 11), which is the fix; and the view creates the surface only while something plays, through a `ContentControl` bound to a null-until-playing property (D76). **A headless view test cannot see this**: `GameLauncher.Views.Tests` constructs the control and never attaches it to a real window, so all eight views passed against a launcher that could not open a game page |
+| **There is no `VideoLAN.LibVLC.Linux` package, and the Windows one is 102 MB per RID** | Both measured on 2026-08-18 rather than assumed. VideoLAN publishes native packages for Windows, Android, iOS, macOS and UWP — Linux is expected to get libvlc from its distribution, so `PackageReference` is conditioned on the RID and a Linux launcher plays video only where VLC is installed. The size is the maintainer's accepted ~100 MB: `win-x64` is 102 MB, of which 98 MB is `plugins\`. A `dotnet build` on Windows copies **all three** Windows RIDs (283 MB in `bin\Debug`); a self-contained publish for one RID carries one |
+| **`LibVLCSharp.Avalonia` 3.10.1 declares `Avalonia [11.3.13, )` and does work under Avalonia 12.1.1** | Worth recording because the open-ended range is not evidence of anything — a package compiled against 11 can still break on 12. Measured with a throwaway project before any of this was built on: headless Avalonia 12.1.1 starts, `new VideoView()` constructs, `Core.Initialize()` loads libvlc 3.0.23, and a `MediaPlayer` attaches. That two-minute project is the same technique §7 already recommends for layout questions |
+| **`Core.Initialize()` does not compile in this repository: `Core` resolves to the `GameLauncher.Core` namespace** | `LibVLCSharp.Shared.Core.Initialize()` in full, or the compiler reports a namespace that "does not exist" in `GameLauncher.Core` — which reads like a missing project reference rather than a name collision |
+| **"The server is offline" usually means a proxy accepting the connection and saying nothing** | Measured against this machine's stopped stack: `curl` connected to `localhost:8080` in **0.2s** — Docker Desktop's forwarder is still listening with the container down — and then waited **21 seconds** for a reply that never came. Every design that bounds a *connection* (`ConnectTimeout`, a reachability ping) is useless against it, and `HttpClient.Timeout` is what a person ends up watching. Bound the answer, not the connection (D78) |
+| **A hung backend makes a green suite and a broken launcher look identical** | The offline paths were all present and correct — D29, the install-row fallback, the `ApiErrorCode.Network` catch — and the launcher was still unusable with the server down, because each of them waited 20+ seconds to be reached. Nothing in 1032 tests could see it: a substitute fails instantly. The question a test cannot ask is *how long the wrong answer takes to arrive* |
+| **Killing the launcher by name while somebody is using the machine loses whichever session was last written** | `session.json` is rewritten on every rotation, so `Stop-Process -Name GameLauncher` plus moving that file aside is a race with whatever the maintainer is doing in their own window. Copy it, do the run, and put the copy back — and check *whose* session came back afterwards, because it may not be the one that was set aside |
+| **A launcher started from a stale `bin/Debug` looks exactly like a bug in the code you just wrote** | Half an hour went into "the shell ignores `MustChangePassword`" when the window was running the previous build: `Start-Process` on the exe does not build anything, and the symptoms were a perfectly plausible ordering bug. Build immediately before starting, in the same command, and if a window disagrees with a passing test check `LastWriteTime` on `GameLauncher.dll` before believing the window |
+| **`ValuePattern.SetValue` leaves whatever was already in the box if the launcher put it there** | An address arrived as `aawlocked-out@example.test` — the field was not empty when the script set it. Read the value back through the same pattern after setting it, or set `""` first; asserting on a sign-in that silently used the wrong address reads as a server refusing correct credentials |
 
 ---
 
@@ -372,6 +412,9 @@ a different key and one holding none.
    `ResourceManagerLocalizationService` rather than a stub — an assertion on a user-facing
    message then also proves the resource key exists in every language. There are no
    UI-automation tests.
+5a. `GameLauncher.Views.Tests` is the **only** project with a running Avalonia (headless), and
+   it asks one question per page: can this view be constructed at all (D68). Keep it that way —
+   view-model tests that need a UI thread are view-model tests that stop being written.
 6. Stack: **xUnit v3 + NSubstitute**, using xUnit's built-in `Assert` (see D11). Async tests
    take `TestContext.Current.CancellationToken`.
 7. Two convention tests exist and must keep passing: one fails when a language is missing a
@@ -854,17 +897,379 @@ nothing about a failed release.
 target that mis-joins an absolute `PublishDir`, and PowerShell 5.1's `Compress-Archive`, whose
 backslash entry names the launcher correctly refuses.
 
+### A pass over the maintainer's own notes — verified on 2026-08-17
+
+The maintainer used the launcher end to end and wrote down eighteen things (`ClaudeContent/appunti.txt`,
+outside version control). Nine are done here; the rest need the backend and are listed under
+**Next up**. Delivered, grouped as they were built rather than as they were numbered:
+
+- ✅ **A clean start** — `TextBox.Watermark` is obsolete in Avalonia 12 and produced twelve
+  `AVLN5001` warnings on every run of `dev.ps1`. `PlaceholderText` everywhere; the build is
+  silent again.
+- ✅ **The sign-in form shows the password on request** — `TextBox.RevealPassword` behind a
+  checkbox, on the one screen where somebody is typing a password they cannot see and has no
+  other way to check it.
+- ✅ **The cover is the way into the game** — in Explore and in the library. `Button.bare` is a
+  button that paints nothing at all, which needed the template-reaching selector the disabled
+  link already needed; the automation name is the title, because a button whose content is a
+  picture is otherwise announced as the panel it is made of (§7).
+- ✅ **Play, Remove and the install folder** (D61, D63) — Play is gone while an update is
+  pending and a sentence says so; Remove-from-library is gone while the game is installed, on
+  the game page and on the library card; installing adds the game to the library; and
+  "Open folder" opens the install directory through the new `IFileBrowser`.
+- ✅ **"Installed: 0.2.0" is "Installed version: 0.2.0"** — in all three languages.
+- ✅ **Where a game is installed** (D62) — `UserSettings.AskWhereToInstall`, off by default,
+  and `InstallRequest.InstallRoot`, which is a root and not a directory for a reason the row
+  spells out.
+- ✅ **The devlog is a list of cards that open, and its Markdown is rendered** (D60) — the
+  newest one open, one line of prose under the rest. `MarkdownParser` is in Core with 22 tests;
+  `MarkdownPresenter` is the Avalonia half and holds no rules.
+
+869/869 green (318 Core, 286 Infrastructure, 254 App, 11 Updater — 3 skipped on Windows as
+always), `dotnet format --verify-no-changes` clean. **Not verified by looking at the window**:
+the devlog cards and the Markdown need a server with a published devlog, and this pass was
+driven from the suite. That is the half worth checking first next session.
+
+### Validation messages that say what to do — 2026-08-17
+
+The first of the nine notes that needed the server (D64 here, D60 there). A weak password at
+registration read *"Alcuni dei dati inseriti non sono stati accettati (riferimento 7fd59c6d…)"*;
+it now reads *"La password deve contenere almeno 8 caratteri."* — the number comes from
+`ruleArgs`, so it followed the server down when the minimum was lowered later the same day.
+
+- ✅ `ApiProblem.Rule` / `ApiProblem.RuleArgs` and their pair on `ApiException`. The server sends
+  a frozen rule name and the values its sentence needs — the limit, almost always
+- ✅ `ApiErrorPresenter` maps them to `Error.Validation.*`, 29 keys in all three languages, with
+  two fallbacks that keep the contract additive: an unknown rule and a placeholder that arrived
+  without its argument both give the generic sentence
+- ✅ **A validation failure no longer shows the request id.** Every other failure still does
+- ✅ 907/907 green (354 Core, 288 Infrastructure, 254 App, 11 Updater — 3 skipped on Windows),
+  `dotnet format --verify-no-changes` clean
+
+**Verified against the running server** with the real DI graph, because the suite has no server
+and the point of the change is what crosses between one: **7 of 7**, each sentence printed in
+English, Italian and French, plus the check that a non-validation failure keeps its reference.
+The server-side gap that mattered was found there and not in the code — a *blank* password is
+refused by the body reader before the validator ever runs, so it was the one 422 on that form
+with no rule on it.
+
+**Not exercised against a live server**: the publisher-side rules — title, summary, slug,
+version, devlog, alt text. They are covered by tests on both sides and travel the same
+`ApiTransport` path as the account fields, but nobody has watched one appear in the dashboard.
+
+### Publishing a version afterwards, and naming a build — 2026-08-17
+
+The maintainer's notes 13 and 18, the second group that needed the server (D65 here, D61 there).
+The answer to note 13 turned out to be that the button *could not* exist: there was no route.
+
+- ✅ **Publish / Withdraw on each version row.** A version created without "publish it now" is
+  no longer a dead end. Publishing twice is safe — the server keeps the original date — and
+  withdrawing is offered as the reversible thing next to Delete
+- ✅ **`VersionRowViewModel`** (D65), which is what lets a row say which builds are under it
+- ✅ **A build can be named** when it is published, and the name is what the builds list leads
+  with, because platform and architecture are what every row already says
+- ✅ `Error.Validation.BuildNameTooLong`, the first rule added since D64's mechanism landed —
+  which cost three resx entries and one switch arm, which is what "additive" was supposed to mean
+- ✅ 918/918 green (355 Core, 290 Infrastructure, 259 App, 11 Updater — 3 skipped on Windows),
+  `dotnet format --verify-no-changes` clean
+
+**Verified against the running server** with the real DI graph signing in as a publisher —
+**15 of 15**, including the line a version row renders:
+`0.1.0 Release False — Nightly, demo levels · Linux X64`. The harness swaps `ITokenStore` for an
+in-memory one so that signing in does not overwrite the session of the launcher installed on
+this machine, which is worth knowing before writing the next one.
+
+**Not verified by looking at the window**: the two new buttons on the version row and the build
+name box. Every rule behind them is tested and the server half was driven for real, but nobody
+has pressed them — and this repository's own history says that is where the bugs tests cannot
+see have twice been found. It is the first thing to check next session, together with the devlog
+cards from the previous pass.
+
+### Previews for the publisher — 2026-08-17
+
+The maintainer's notes 8 and 9, and the first group of the remaining six that needed **nothing**
+from the server: the routes were all there, and one of them was serving something nobody had
+checked. D66 has the reasoning.
+
+- ✅ **The artwork tab shows the pictures.** Both lists hold `MediaCardViewModel` — which is
+  `ScreenshotViewModel` renamed, moved to its own file and given the one property the dashboard
+  needs, rather than a second type meaning the same thing. The game page uses it unchanged
+- ✅ **A button that opens the game's own page**, as a `GameSelected` event the shell listens to
+  beside Explore's and the library's (D17). "Back" returns to the dashboard with no new code:
+  `ShowDeveloperAsync` already recorded it as the list page
+- ✅ **The draft question was answered before anything was built.** `CatalogService::gameDetail`
+  serves a game to whoever may edit it whatever its visibility — read in the code *and* driven
+  against the running server, where a draft's detail was 200 to its owner and 401 to nobody
+- ✅ `Publish.OpenGamePage` in the three resx files
+- ✅ 926/926 green (355 Core, 290 Infrastructure, 267 App, 11 Updater — 3 skipped on Windows),
+  `dotnet format --verify-no-changes` clean
+
+**Verified against the running stack** as far as a headless check reaches: a draft created
+through the API, three real PNGs uploaded to it, and every URL the dashboard will hand
+`IImageProvider` fetched back **through nginx with no token** — 200, `image/png`, byte counts
+matching what went up — with the draft and its `coverUrl` appearing in `GET /me/games`, which is
+the list the dashboard reads.
+
+**Not verified by looking at the window**, and it cannot be from here: `Bitmap` needs an
+initialised Avalonia (§7), so nothing short of opening the launcher shows that those bytes decode
+and that the templates bind. The probe game is left on the development server with its three
+pictures, so the dashboard has something to show the moment somebody opens it.
+
+### A blank page, a sliver of a card, and a UUID nobody could use — 2026-08-17
+
+Three of the maintainer's eight findings from testing the previous sessions' work, and the
+third turned out to be a page that never rendered rather than a feature that was never built.
+
+- ✅ **Cards without a cover are the size of cards with one.** `Button.bare` now sets
+  `HorizontalAlignment="Stretch"`: the Fluent theme aligns a button `Left`, so the two content
+  alignments already on that class had nothing to spread across and the frame took the width of
+  the placeholder letter — 44px inside a 300px card. It fixes the library card and, unlooked
+  for, the devlog card whose whole header the comment promised was pressable and whose button
+  ended where the text did. **Measured** with a scratch `Avalonia.Headless` project rather than
+  reasoned about, because the XAML gave no clue which of two candidates was at fault (§7)
+- ✅ **No user-facing message carries the request id any more** (D67), and `ApiErrorPresenter`
+  writes it to the launcher's log instead — the need behind the reference is an operator's and
+  it is moved, not deleted. This supersedes half of D64; `Error.WithReference` is gone from the
+  three resx files
+- ✅ **The Settings page was blank**, and had been since the install-directory work: a
+  `{loc:Tr}` used as a `StringFormat` threw while the view was being constructed, and the
+  shell's `ContentControl` drew nothing. Both settings the maintainer asked for — the default
+  install directory and "ask where to install every game" — existed, were documented (D62), and
+  could not be seen. The sentence is composed in `SettingsViewModel` now
+- ✅ **`tests/GameLauncher.Views.Tests`** (D68), one project with a headless Avalonia, seven
+  views, seven assertions. It fails against the bug it was written for, checked by reverting it
+- ✅ 936/936 green (357 Core, 290 Infrastructure, 271 App, 11 Updater, **7 Views** — 3 skipped
+  on Windows), `dotnet format --verify-no-changes` clean
+
+**Verified by looking at the window**, which is the only place any of this is visible. Every
+cover button in Explore measures 268x150 whether or not a picture arrived, with the placeholder
+letter centred; the devlog card headers measure 788 wide instead of ending at the title. A 404
+driven against the running server shows *"That is not available."* with no reference, and the
+launcher log carries `reference dc74f705-…` on the same second. The Settings page renders in
+full, and "ask where to install every game" survived a restart — ticked, launcher closed,
+reopened, still ticked, then put back as it was found.
+
+### A library card that knows about updates, and pages that forget an account (2026-08-18)
+
+The next two of the maintainer's eight findings. Both are client-side, both wanted a decision
+written before any code, and one of them wanted the *server* proved rather than asserted.
+
+- ✅ **Play is gone from a library card whose install is not the newest build** (D69, which
+  supersedes half of D61). One request per *installed* game, issued after the list and the
+  covers are on screen; the button disappears and `Detail.UpdateBeforePlaying` takes its place,
+  exactly as on the game page; and `PlayAsync` refuses as well, because the check can land
+  between the press and the click. **Offline, and on a single refused check, Play stays** —
+  D29's offline library is the rule that outranks it, and a test pins that
+- ✅ **No page keeps the previous account's anything** (D70). `IAccountScopedPage` on all six
+  pages, `MainWindowViewModel.Pages` as the list that gets reset, and the reset keyed on the
+  **account id** rather than on `SessionChanged`, which also fires on every token rotation. A
+  reflection test fails when a page property is missing from `Pages`. Two things fell out of
+  it: `ClearSelection` now clears the dashboard's artwork and devlog tabs, which also fixes a
+  *deleted* game leaving its pictures on screen, and an install in flight is cancelled when the
+  credentials behind it stop existing
+- ✅ **The server half of finding 7 was demonstrated, not asserted.** Two publishers were
+  driven against the running stack and **sixteen write routes** of a game, a version, a build,
+  the artwork and the devlog were tried from the account that owns none of them: all sixteen
+  refused — 403 where the intruder can see the game, 404 for a build, whose existence is not
+  confirmed (D26) — and the victim's game came out of it unchanged. Nine of those refusals had
+  no test; they have one now, in the backend's §11 for 2026-08-18
+- ✅ 949/949 green (357 Core, 290 Infrastructure, 284 App, 11 Updater, 7 Views — 3 skipped on
+  Windows), `dotnet format --verify-no-changes` clean
+
+**Not verified by looking at the window.** The launcher opens and draws its sign-in page, and
+the saved session on this machine is dead — its refresh token is refused, so the library cannot
+be reached without typing a password, which is not something this session did. D69 is the one
+change here whose *appearance* no test reaches, so it is unverified in that sense and is worth
+one minute with the window before it is trusted.
+
+### Mail as an option, and a crash on every sign-in (2026-08-18)
+
+The maintainer's note 14 — the fifth of the eight findings — plus two bugs the window found that
+no test could. D72 and D73 have the reasoning; the server half is the backend's D63.
+
+- ✅ **"Forgotten your password?" is gone where nothing can be sent**, and a sentence naming the
+  administrator to ask takes its place. `mail.enabled` comes off `/capabilities`, read once per
+  run on the sign-in screen and never able to fail it — the provider falls back rather than
+  throwing (D39). The fallback is **true**, unlike `crashReports.enabled`, and the row says why
+- ✅ **A screen that forces the change**, `ChangePasswordViewModel` + `Views/ChangePassword`,
+  one page for the forced and the ordinary case. No cancel while forced, no copy of the server's
+  password policy, and the one local check is that the two new passwords match — the mistake no
+  server can see, because only one of them is sent
+- ✅ **The shell routes on the session**, not on a refusal: `passwordChangeRequired` arrives on
+  the session document, and `AfterSignInAsync` — the single method the start-up restore and the
+  sign-in button both go through — sends somebody to that screen. `CanNavigate` hides the tabs
+  while it is in force, because each of them would only produce a 403
+- ✅ `IAccountApi.ChangePasswordAsync` answers with a **whole session**, and
+  `IAuthenticationService.AdoptAsync` is the seam that takes it over — the route is on the
+  authenticated client, so it cannot live on the session service at all (D47), and the composed
+  `AccountService` adopts **only on success**, which is the opposite order from the erasure and
+  for the opposite reason
+- ✅ **Every sign-in was closing the launcher** (D73), from the moment D70 landed. The session
+  change arrived on a thread-pool thread, resetting the pages touched a bound command, and
+  Avalonia's thread check threw where nothing catches it. One `OnUiThread` in the shell; the
+  test that pins it fails against the bug, checked by reverting the line
+- ✅ **A publisher's own library card had lost Play for good** (D71): the server serves an owner
+  their unpublished versions, and `BuildFor` knew nothing about which version a build belongs to.
+  Found by opening the window to check D69, which is exactly what that check was for
+- ✅ 10 new resource keys in English, Italian and French
+- ✅ **980/980 green** (365 Core, 293 Infrastructure, 303 App, 11 Updater, 8 Views — 3 skipped on
+  Windows), `dotnet format --verify-no-changes` clean
+
+**Verified by looking at the window**, which is where two of the six items above came from. With
+`MAIL_TRANSPORT=none`: the sign-in screen showed the sentence and no reset button. An operator
+issued a one-time password; signing in with it landed on the change screen with **no tabs and no
+cancel**; two different new passwords were refused locally with no request; re-entering the
+temporary one was refused by the server and shown as *"The new password has to be different from
+the current one."* with no reference code; choosing one brought the tabs back and loaded the
+library. Then the stack was put back to `smtp` and the probe accounts deleted.
+
+### Videos in the game page — verified on 2026-08-18
+
+The maintainer's note 11, and the last of the eight findings from the 2026-08-17 testing. Both
+open questions were his and were already answered: **uploaded files, not external links**, and
+**LibVLC in-app**. The server half is the backend's D64; this side is **D74**, **D75** and
+**D76**, and the pages are
+[Documentation/catalog-and-artwork.md](Documentation/catalog-and-artwork.md) and
+[Documentation/publishing.md](Documentation/publishing.md).
+
+- ✅ **A fifth `MediaKind`**, its own list on `GameDetail`, and `MediaCardViewModel.IsVideo` —
+  which is what stops a container being handed to an image decoder, in one place rather than at
+  every call site
+- ✅ **Three new capability keys**, and a fallback of *no video* whose asymmetry with
+  `mail.enabled` is written out in D74. The video size limit is enforced **before** the upload
+  because the server's refusal for an oversized body is a bare 413 with no problem document in it
+- ✅ **`VideoFormats`**, the client half of the server's container sniff: the ISO base media
+  brand rather than the `ftyp` box alone, and the EBML DocType from the first 64 bytes, so a
+  photograph is not offered as a trailer and Matroska is refused before it travels
+- ✅ **`IVideoPlayback`** and a game page that plays, stops, and stops again on Back, on another
+  game and on a change of account
+- ✅ **52 new tests** — the sniffer, the video upload rules, the two galleries, the dashboard,
+  and the whole state machine around playback. Client **1032/1032** (396 Core, 293
+  Infrastructure, 324 App, 11 Updater, 8 Views; 3 skipped on Windows)
+
+**Looked at, not inferred.** An MP4 and a WebM uploaded to the real server played in the real
+window, one replacing the other, with Stop and Back both silencing it — and the window found a
+bug no test could: a hidden `VideoView` created a native child window on **every** game page and
+crashed the launcher, because `IsVisible` does not detach a control and the manifest carried no
+`supportedOS` list (D76, and two rows in §7). That is the third bug this project has found by
+opening the window.
+
+**Not verified in the window**: uploading a video *through the dashboard's file picker*. The
+view model is covered by tests from the kind dropdown through to the request, and the picker is
+the same `IFilePicker` the image upload has used since M8 — but nobody has watched a trailer
+chosen in a file dialog reach the server. The two videos on the development stack were put there
+with `curl`, and the dashboard's list of them was looked at.
+
+### A launcher that works with the server down — verified on 2026-08-18
+
+The maintainer's report: with the backend stopped, the launcher could not be signed into, and
+somebody already signed in got no library. Both were true, and neither was a missing feature —
+D29 had decided all of this in milestone 8. What was missing is that **nobody wrote the answer
+down**, so every request rediscovered the dead server and paid for it. D77 and D78 have the
+reasoning; the failure is reproduced in the log rather than described:
+
+```
+21:19:38  POST /auth/refresh          <- start-up, sign-in screen on display
+21:20:01  "The server could not be reached"   (23 seconds)
+21:20:01  GET /library                <- and another doomed refresh behind it
+```
+
+- ✅ **`IServerReachability`** in Core, pure state over a `TimeProvider`: a 20-second circuit,
+  half-open on its own, plus `RetryNow()` for the one thing that always deserves a real
+  attempt — a button somebody pressed. `IsOnline` (what the banner says) and `AllowsRequests`
+  (whether to send) are separate on purpose
+- ✅ **`ReachabilityHandler`** on every API client, beside `BearerTokenHandler` and for D14's
+  reason. It reports every outcome, refuses to send while the circuit is open, and gives an
+  **unproven** server 8 seconds to answer — because the real failure is a proxy that accepts
+  and then says nothing (§7), which no connect timeout can catch
+- ✅ **`AuthenticationService` no longer rotates against a server known to be missing**, which
+  is what turned one dead backend into one timeout per card on a page
+- ✅ **`ILibraryCache` / `FileLibraryCache`**: the last answer to `GET /library`, per account,
+  so the offline library is the account's library rather than the corner of it that happens to
+  be installed here. Installs the stored list does not mention are appended
+- ✅ **The screens say it**: an offline banner with "Try again" on the library, the same notice
+  **before a password is typed** on the sign-in screen, and a library that reloads itself when
+  the server comes back. 2 new resource keys in English, Italian and French
+- ✅ **1071/1071 green** (408 Core, 309 Infrastructure, 332 App, 11 Updater, 8 Views — 3 skipped
+  on Windows), `dotnet format --verify-no-changes` clean
+
+**Verified by looking at the window, with the real stack.** With the API stopped: the launcher
+reaches the **library** in ~8 seconds instead of showing the sign-in screen for 45, with the
+offline banner and Play working. With the API running, a second game was added to the account
+and the cache written; the API was stopped and the launcher restarted, and the library showed
+**both** games — the installed one playable, the owned-one not — from the stored answer, with
+the summaries only a server has. "Try again" with the API back put the banner away and reloaded
+the list. And with no session at all, the sign-in screen carries the notice and its button
+instead of a form that refuses every password after a timeout.
+
+**And the way in for somebody who is not signed in** (D79), added the same evening on the
+maintainer's ask: the sign-in screen now says the server cannot be reached and offers
+**Continue offline**, which opens the library with no session at all — the installed games,
+playable, under a banner that says as much. It is offered only when the server is missing *and*
+this computer has a game on it, the header grows a **Sign in** button because there is no
+session to sign out of, and the card's **Details** button goes while offline: that page needs
+the catalog, and what it used to say was "your session has expired" about a session that never
+existed. 3 more resource keys in the three languages; **1082/1082 green**.
+
+**Not covered**: `ILibraryCache.ClearAsync` has no caller — it is there for account erasure and
+nothing calls it yet, so a library list outlives the account on a shared machine until it is
+overwritten. Explore and the game page still show their ordinary network error offline rather
+than anything cached; only the library is remembered, because it is the only page whose content
+is the thing somebody paid for.
+
 ### Next up
 
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —
 it was part of M8 in the original plan and came out of it because it cannot be built here alone.
 
-**Nothing.** As of 2026-08-07 there is no feature this repository declares and does not
-implement, and the same is true of the backend. What is left is written down as debts and
-deliberate absences rather than as work in progress: no virtualisation in Explore (open debt 21),
-`UserSettings.LaunchMinimized` still inert (open debt 13), no data export (17), the detail page
-still needing a server (11), and no automated test that touches nginx or a real swap (8, 22).
-Each of those is a choice with its reasons recorded, not a gap somebody forgot.
+**Six of the maintainer's eighteen notes, three of them now closed.** The list said every one
+needed the backend first, and item 3 turned out not to: the routes were all there and the only
+open question — whether a draft's detail reaches its owner — was answered by reading the server
+and driving it, not by changing it. The two that remain really do need the server. In the order
+they are worth doing:
+
+1. ✅ ~~**Precise validation messages** (note 1)~~ — done on 2026-08-17, above, D64.
+2. ✅ ~~**The build's name, and publishing a version later** (notes 18 and 13)~~ — done on
+   2026-08-17, above, D65. The route really did not exist.
+3. ✅ ~~**Previews for the publisher** (notes 8 and 9)~~ — done on 2026-08-17, above, D66. The
+   server needed nothing: it already served a draft's detail to its owner.
+4. ✅ ~~**Videos in the game page** (note 11)~~ — done on 2026-08-18, above, D74/D75/D76 here
+   and D64 there. What follows is what the entry said before it was done, kept because the three
+   things it predicted all turned out to be the expensive ones. Both open questions were
+   answered by the maintainer, on 2026-08-17: **uploaded files, not external links**, and
+   **LibVLC in-app, not the system player**. So the client plays video inside the game page with
+   `LibVLCSharp.Avalonia` plus a native `VideoLAN.LibVLC.*` package per platform, and the
+   ~100 MB per RID inside the self-contained build is an accepted cost rather than an open
+   trade-off. Three things follow and are worth writing down before the first line of code:
+   the dependency is **native**, so it is the first thing in this repository that has to be
+   verified per RID on real hardware (§7's rule about the self-update, met again); playback is
+   the one surface whose *behaviour* no view-model test reaches, so what is tested is the state
+   machine around it and what is checked by hand is the picture; and the server half comes
+   first — a new `game_media_kind` value, its migration, a size limit of its own in
+   `/capabilities`, and a decision about whether a video is sniffed the way an image is (D28
+   says the answer cannot be the uploader's `Content-Type`).
+5. ✅ ~~**Mail as an option** (note 14)~~ — done on 2026-08-18, above, D72 here and D63 there.
+   `/capabilities` declares whether mail works, an operator hands out a one-time password on the
+   loopback surface, `JwtAuthFilter` refuses everything but the change until it is replaced, and
+   the launcher lands on the screen that ends it instead of on a page that answers 403.
+
+**And three more from the maintainer's testing of 2026-08-17**, all three now closed — the two
+that needed a decision written first got D69 and D70:
+
+6. ✅ ~~**Play still appears on a library card when an update is pending**~~ — done on
+   2026-08-18, above, D69. The cost is one request per *installed* game, after the list is
+   drawn; offline and on a refused check the button stays, because D29 outranks it.
+7. ✅ ~~**The dashboard shows the previous account's game after a sign-out and a sign-in**~~ —
+   done on 2026-08-18, above, D70, and the backend half was demonstrated against the running
+   stack rather than asserted: sixteen write routes, two publishers, all sixteen refused. The
+   nine that had no test have one.
+8. ✅ ~~**Where a game installs, in Settings**~~ — the settings were there; the page was blank.
+   Done on 2026-08-17, above, D68.
+
+The older debts and deliberate absences are unchanged: no virtualisation in Explore (open debt
+21), `UserSettings.LaunchMinimized` still inert (13), no data export (17), the detail page still
+needing a server (11), and no automated test that touches nginx or a real swap (8, 22). Each of
+those is a choice with its reasons recorded, not a gap somebody forgot.
 
 - ✅ ~~**The self-update swap**~~ — done on 2026-08-07, above
 - ✅ ~~**The language switch that does not switch**~~ — done on 2026-08-07, above

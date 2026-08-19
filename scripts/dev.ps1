@@ -8,9 +8,9 @@
     things that otherwise get discovered the slow way.
 
     It checks that the API named in launcher.config.json is actually answering, and says so
-    *before* the window opens — the launcher works offline by design (D29), so a stopped
-    backend does not produce an error, it produces a sign-in screen that refuses every
-    password for no visible reason.
+    *before* the window opens — the launcher works offline by design (D29, D77), so a stopped
+    backend does not produce an error: a stored session opens the library from the cached one,
+    and a launcher with no session shows a sign-in screen saying the server is unreachable.
 
     And it can reset the per-user state, which is the only way to get back to a first-run
     launcher: the session, the settings and the SQLite install store all live outside the
@@ -73,7 +73,7 @@ try {
         } catch {
             Write-Host "    No API at $healthUrl" -ForegroundColor Yellow
             Write-Host "    The launcher will still start, and will behave as if offline: signing in is" -ForegroundColor DarkGray
-            Write-Host "    impossible and the library falls back to what this disk already holds." -ForegroundColor DarkGray
+            Write-Host "    impossible and the library is the last one this account was given." -ForegroundColor DarkGray
             Write-Host "    Start the backend with its own scripts/dev.ps1." -ForegroundColor DarkGray
         }
     }

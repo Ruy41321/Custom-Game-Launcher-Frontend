@@ -18,6 +18,22 @@ public sealed record ApiProblem
 
     public string? Detail { get; init; }
 
+    /// <summary>
+    /// The stable name of the *specific* rule that refused, where <see cref="Code"/> names only
+    /// the category — <c>password_too_short</c> under <c>invalid_input</c>. Null on a refusal
+    /// that names no rule and on a server older than the field, which are the same thing from
+    /// here: both mean fall back to the category. The backend's
+    /// <c>domain/ValidationRules.h</c> is the list.
+    /// </summary>
+    public string? Rule { get; init; }
+
+    /// <summary>
+    /// The values the rule's sentence needs, in order — almost always the limit that was
+    /// exceeded. They are what lets a translated message say <em>how</em> long a password has
+    /// to be instead of only that this one is too short.
+    /// </summary>
+    public IReadOnlyList<string>? RuleArgs { get; init; }
+
     public string? RequestId { get; init; }
 
     /// <summary>
@@ -29,6 +45,7 @@ public sealed record ApiProblem
         "invalid_input" => ApiErrorCode.InvalidInput,
         "unauthenticated" => ApiErrorCode.Unauthenticated,
         "forbidden" => ApiErrorCode.Forbidden,
+        "password_change_required" => ApiErrorCode.PasswordChangeRequired,
         "not_found" => ApiErrorCode.NotFound,
         "conflict" => ApiErrorCode.Conflict,
         "quota_exceeded" => ApiErrorCode.QuotaExceeded,

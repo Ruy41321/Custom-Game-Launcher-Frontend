@@ -3,6 +3,7 @@ using GameLauncher.App.ViewModels;
 using GameLauncher.Core.Api;
 using GameLauncher.Core.Localization;
 using GameLauncher.Core.Models;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 
@@ -24,7 +25,7 @@ public sealed class ExploreViewModelTests
         new(
             _catalog,
             _library,
-            new ApiErrorPresenter(_localization),
+            new ApiErrorPresenter(_localization, NullLogger<ApiErrorPresenter>.Instance),
             _localization,
             _images,
             _clock);
@@ -326,6 +327,51 @@ public sealed class ExploreViewModelTests
         Assert.Equal("g1", requested);
     }
 
+    // The only way to reach an unlisted game: it is in no listing and the search box only ever
+    // asks for public ones, so a typed identifier is the whole feature.
+    [Fact]
+    public void AnIdentifierTypedByHandIsOpenedAsItIs()
+    {
+        ExploreViewModel model = CreateViewModel();
+        string? requested = null;
+        model.GameSelected += (_, idOrSlug) => requested = idOrSlug;
+
+        model.IdentifierText = "  orbital-drift  ";
+        model.OpenIdentifierCommand.Execute(null);
+
+        Assert.Equal("orbital-drift", requested);
+    }
+
+    // The button is the one thing standing between an empty box and a request for nothing.
+    [Fact]
+    public void AnIdentifierOfWhitespaceCannotBeOpened()
+    {
+        ExploreViewModel model = CreateViewModel();
+
+        Assert.False(model.OpenIdentifierCommand.CanExecute(null));
+
+        model.IdentifierText = "   ";
+        Assert.False(model.OpenIdentifierCommand.CanExecute(null));
+
+        model.IdentifierText = "g1";
+        Assert.True(model.OpenIdentifierCommand.CanExecute(null));
+    }
+
+    // Typing an identifier must not disturb the list underneath it: the debounce belongs to the
+    // search box alone, and a reload here would replace the results while somebody is reading.
+    [Fact]
+    public async Task TypingAnIdentifierAsksTheServerForNothing()
+    {
+        ExploreViewModel model = CreateViewModel();
+
+        model.IdentifierText = "orbital-drift";
+        _clock.Advance(TimeSpan.FromSeconds(5));
+        await Task.Yield();
+
+        await _catalog.DidNotReceive().ExploreAsync(
+            Arg.Any<GameQuery>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task AddingToTheLibraryUsesTheGameId()
     {
@@ -516,7 +562,7 @@ public sealed class ExploreViewModelTests
         var model = new ExploreViewModel(
             _catalog,
             _library,
-            new ApiErrorPresenter(localization),
+            new ApiErrorPresenter(localization, NullLogger<ApiErrorPresenter>.Instance),
             localization,
             _images,
             _clock);

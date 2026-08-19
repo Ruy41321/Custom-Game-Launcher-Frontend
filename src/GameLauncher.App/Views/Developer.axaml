@@ -34,8 +34,8 @@
       <Border Grid.Row="2" Classes="card" Margin="0,12,0,0">
         <StackPanel Spacing="8">
           <TextBlock Text="{loc:Tr Publish.NewGame}" FontWeight="SemiBold" FontSize="13" />
-          <TextBox Watermark="{loc:Tr Publish.GameTitle}" Text="{Binding NewGameTitle}" />
-          <TextBox Watermark="{loc:Tr Publish.GameSummary}" Text="{Binding NewGameSummary}" />
+          <TextBox PlaceholderText="{loc:Tr Publish.GameTitle}" Text="{Binding NewGameTitle}" />
+          <TextBox PlaceholderText="{loc:Tr Publish.GameSummary}" Text="{Binding NewGameSummary}" />
           <ComboBox ItemsSource="{Binding Visibilities}" SelectedItem="{Binding NewGameVisibility}"
                     HorizontalAlignment="Stretch" />
           <Button Content="{loc:Tr Publish.Create}" Classes="accent"
@@ -71,6 +71,28 @@
 
         <TextBlock Text="{loc:Tr Publish.SelectGame}" Opacity="0.5" Margin="0,8"
                    IsVisible="{Binding !!!Selected}" />
+
+        <!-- The dashboard shows fields and lists; only the game's own page shows the result.
+             Offered for a draft too — the server serves it to whoever may edit the game. -->
+        <StackPanel Orientation="Horizontal" Spacing="10" Margin="0,4,0,0"
+                    IsVisible="{Binding Selected, Converter={x:Static ObjectConverters.IsNotNull}}">
+          <TextBlock Text="{Binding Selected.Game.Title}" FontSize="16" FontWeight="Light"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+          <!-- The only place the slug is shown at all, and this is the only place it belongs:
+               the dashboard lists /me/games, so nobody but the publisher is reading it. It is
+               what somebody is given to reach an unlisted game, which appears in no listing and
+               is opened by typing an identifier into Explore. Selectable rather than a button
+               that copies: a clipboard is one more thing no test can press (D32). -->
+          <SelectableTextBlock Text="{Binding Selected.Game.Slug}" FontSize="12" Opacity="0.6"
+                               VerticalAlignment="Center"
+                               ToolTip.Tip="{loc:Tr Publish.SlugHint}"
+                               IsVisible="{Binding Selected.Game.Slug,
+                                           Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Button Content="{loc:Tr Publish.OpenGamePage}" FontSize="12"
+                  Command="{Binding OpenGamePageCommand}"
+                  IsEnabled="{Binding CanOpenGamePage}" />
+        </StackPanel>
       </StackPanel>
 
       <!-- Tabs rather than pages: a publisher works on one game at a time, and the selected
@@ -87,16 +109,30 @@
               <ListBox ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}"
                        MaxHeight="160">
                 <ListBox.ItemTemplate>
-                  <DataTemplate x:DataType="models:GameVersion">
-                    <Grid ColumnDefinitions="*,Auto">
+                  <DataTemplate x:DataType="vm:VersionRowViewModel">
+                    <Grid ColumnDefinitions="*,Auto,Auto">
                       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
                         <TextBlock Text="{Binding Semver}" FontWeight="SemiBold" />
                         <TextBlock Text="{Binding Stage}" Opacity="0.6" FontSize="12"
                                    VerticalAlignment="Center" />
                         <TextBlock Text="{Binding Published}" Opacity="0.4" FontSize="12"
                                    VerticalAlignment="Center" />
+                        <!-- Which builds are under this version, which is what tells two rows
+                             of the same stage apart. -->
+                        <TextBlock Text="{Binding BuildsSummary}" Opacity="0.5" FontSize="12"
+                                   VerticalAlignment="Center" IsVisible="{Binding HasBuilds}" />
                       </StackPanel>
-                      <Button Grid.Column="1" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                      <Button Grid.Column="1" FontSize="11" Margin="0,0,6,0"
+                              Content="{loc:Tr Publish.PublishVersion}"
+                              IsVisible="{Binding !Published}"
+                              Command="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).SetVersionPublishedCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="1" FontSize="11" Margin="0,0,6,0"
+                              Content="{loc:Tr Publish.WithdrawVersion}"
+                              IsVisible="{Binding Published}"
+                              Command="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).SetVersionPublishedCommand}"
+                              CommandParameter="{Binding}" />
+                      <Button Grid.Column="2" Content="{loc:Tr Publish.Delete}" FontSize="11"
                               Command="{Binding $parent[TabControl].((vm:DeveloperViewModel)DataContext).AskToDeleteVersionCommand}"
                               CommandParameter="{Binding}" />
                     </Grid>
@@ -109,11 +145,11 @@
                   <TextBlock Text="{loc:Tr Publish.NewVersion}" FontWeight="SemiBold" FontSize="13" />
                   <Grid ColumnDefinitions="*,*">
                     <TextBox Grid.Column="0" Margin="0,0,8,0"
-                             Watermark="{loc:Tr Publish.Semver}" Text="{Binding NewVersionSemver}" />
+                             PlaceholderText="{loc:Tr Publish.Semver}" Text="{Binding NewVersionSemver}" />
                     <ComboBox Grid.Column="1" ItemsSource="{Binding Stages}"
                               SelectedItem="{Binding NewVersionStage}" HorizontalAlignment="Stretch" />
                   </Grid>
-                  <TextBox Watermark="{loc:Tr Publish.ReleaseNotes}" Text="{Binding NewVersionNotes}"
+                  <TextBox PlaceholderText="{loc:Tr Publish.ReleaseNotes}" Text="{Binding NewVersionNotes}"
                            AcceptsReturn="True" Height="70" TextWrapping="Wrap" />
                   <CheckBox Content="{loc:Tr Publish.PublishNow}"
                             IsChecked="{Binding PublishVersionImmediately}" />
@@ -130,14 +166,15 @@
 
               <Border Classes="card">
                 <StackPanel Spacing="8">
+                  <TextBox PlaceholderText="{loc:Tr Publish.BuildName}" Text="{Binding BuildName}" />
                   <Grid ColumnDefinitions="*,Auto">
                     <TextBox Grid.Column="0" Margin="0,0,8,0"
-                             Watermark="{loc:Tr Publish.Directory}" Text="{Binding BuildDirectory}" />
+                             PlaceholderText="{loc:Tr Publish.Directory}" Text="{Binding BuildDirectory}" />
                     <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}"
                             Command="{Binding ChooseDirectoryCommand}" />
                   </Grid>
-                  <TextBox Watermark="{loc:Tr Publish.Entrypoint}" Text="{Binding Entrypoint}" />
-                  <TextBox Watermark="{loc:Tr Publish.LaunchArgs}" Text="{Binding LaunchArgs}" />
+                  <TextBox PlaceholderText="{loc:Tr Publish.Entrypoint}" Text="{Binding Entrypoint}" />
+                  <TextBox PlaceholderText="{loc:Tr Publish.LaunchArgs}" Text="{Binding LaunchArgs}" />
                   <Grid ColumnDefinitions="*,*">
                     <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Platforms}"
                               SelectedItem="{Binding BuildPlatform}" HorizontalAlignment="Stretch" />
@@ -172,6 +209,10 @@
                     <Border Classes="card" Margin="0,0,0,8">
                       <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="14">
+                          <!-- The name goes first: it is the only thing that tells this row
+                               from another one of the same platform on another version. -->
+                          <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                                     IsVisible="{Binding Name, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                           <TextBlock Text="{Binding Platform}" FontWeight="SemiBold" />
                           <TextBlock Text="{Binding Architecture}" Opacity="0.7" />
                           <TextBlock Text="{Binding Status}" Opacity="0.7" />
@@ -270,11 +311,15 @@
                   <!-- What this deployment accepts, said before a file is chosen rather than
                        after an upload is refused. -->
                   <TextBlock Text="{Binding LimitsText}" Opacity="0.6" FontSize="12"
-                             TextWrapping="Wrap" />
+                             TextWrapping="Wrap" IsVisible="{Binding !UploadIsVideo}" />
+                  <!-- A trailer is measured against different numbers, and a publisher told the
+                       picture limit while choosing one has been told the wrong thing. -->
+                  <TextBlock Text="{Binding VideoLimitsText}" Opacity="0.6" FontSize="12"
+                             TextWrapping="Wrap" IsVisible="{Binding UploadIsVideo}" />
                   <Grid ColumnDefinitions="Auto,*">
                     <ComboBox Grid.Column="0" Margin="0,0,8,0" ItemsSource="{Binding Kinds}"
                               SelectedItem="{Binding UploadKind}" />
-                    <TextBox Grid.Column="1" Watermark="{loc:Tr Publish.AltText}"
+                    <TextBox Grid.Column="1" PlaceholderText="{loc:Tr Publish.AltText}"
                              Text="{Binding UploadAltText}" MaxLength="{Binding MaxAltTextLength}" />
                   </Grid>
                   <Button Content="{loc:Tr Publish.AddImage}" Classes="accent"
@@ -290,14 +335,23 @@
 
               <ItemsControl ItemsSource="{Binding Identity}">
                 <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="models:GameMedia">
+                  <DataTemplate x:DataType="vm:MediaCardViewModel">
                     <Border Classes="card" Margin="0,0,0,6">
-                      <Grid ColumnDefinitions="Auto,*,Auto">
-                        <TextBlock Grid.Column="0" Text="{Binding Kind}" FontWeight="SemiBold"
+                      <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                        <!-- The picture itself. Until this was here a publisher arranged their
+                             own artwork by reading the descriptions they had typed. -->
+                        <Border Grid.Column="0" Width="96" Height="54" CornerRadius="4"
+                                ClipToBounds="True" Margin="0,0,12,0"
+                                Background="{DynamicResource SystemChromeMediumColor}">
+                          <Image Source="{Binding Image}" Stretch="UniformToFill"
+                                 IsVisible="{Binding HasImage}" />
+                        </Border>
+                        <TextBlock Grid.Column="1" Text="{Binding Kind}" FontWeight="SemiBold"
                                    VerticalAlignment="Center" Margin="0,0,12,0" />
-                        <TextBlock Grid.Column="1" Text="{Binding AltText}" Opacity="0.7"
+                        <TextBlock Grid.Column="2" Text="{Binding AltText}" Opacity="0.7"
                                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
-                        <Button Grid.Column="2" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                        <Button Grid.Column="3" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                                VerticalAlignment="Center"
                                 Command="{Binding $parent[ItemsControl].((vm:GameMediaViewModel)DataContext).AskToDeleteCommand}"
                                 CommandParameter="{Binding}" />
                       </Grid>
@@ -314,20 +368,57 @@
 
               <ListBox ItemsSource="{Binding Gallery}" SelectedItem="{Binding Selected}">
                 <ListBox.ItemTemplate>
-                  <DataTemplate x:DataType="models:GameMedia">
-                    <Grid ColumnDefinitions="*,Auto,Auto,Auto">
-                      <TextBlock Grid.Column="0" Text="{Binding AltText}" Opacity="0.8"
+                  <DataTemplate x:DataType="vm:MediaCardViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto,Auto,Auto">
+                      <Border Grid.Column="0" Width="96" Height="54" CornerRadius="4"
+                              ClipToBounds="True" Margin="0,4,12,4"
+                              Background="{DynamicResource SystemChromeMediumColor}">
+                        <Image Source="{Binding Image}" Stretch="UniformToFill"
+                               IsVisible="{Binding HasImage}" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Text="{Binding AltText}" Opacity="0.8"
                                  VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                       <!-- Two arrows rather than a drag: a swap is two deterministic PATCHes,
                            and a command is something a test can press. -->
-                      <Button Grid.Column="1" Content="{loc:Tr Publish.MoveUp}" FontSize="11"
+                      <Button Grid.Column="2" Content="{loc:Tr Publish.MoveUp}" FontSize="11"
+                              VerticalAlignment="Center"
                               Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).MoveUpCommand}"
                               CommandParameter="{Binding}" />
-                      <Button Grid.Column="2" Content="{loc:Tr Publish.MoveDown}" FontSize="11"
-                              Margin="6,0"
+                      <Button Grid.Column="3" Content="{loc:Tr Publish.MoveDown}" FontSize="11"
+                              Margin="6,0" VerticalAlignment="Center"
                               Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).MoveDownCommand}"
                               CommandParameter="{Binding}" />
-                      <Button Grid.Column="3" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                      <Button Grid.Column="4" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                              VerticalAlignment="Center"
+                              Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).AskToDeleteCommand}"
+                              CommandParameter="{Binding}" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <!-- Offered only where the server said it stores videos. A deployment that
+                   names no video limits cannot take one, so the whole section goes rather than
+                   standing there producing refusals. -->
+              <StackPanel Orientation="Horizontal" Spacing="10" IsVisible="{Binding SupportsVideo}">
+                <TextBlock Text="{loc:Tr Publish.Videos}" FontSize="14" FontWeight="Light" />
+                <TextBlock Text="{Binding VideoCountText}" Opacity="0.5" FontSize="12"
+                           VerticalAlignment="Center" />
+              </StackPanel>
+
+              <ListBox ItemsSource="{Binding Videos}" SelectedItem="{Binding Selected}"
+                       IsVisible="{Binding SupportsVideo}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MediaCardViewModel">
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                      <!-- No thumbnail frame here: the server stores the container and nothing
+                           else, so there is no picture to put in one. -->
+                      <TextBlock Grid.Column="0" Text="{Binding Kind}" FontWeight="SemiBold"
+                                 VerticalAlignment="Center" Margin="0,4,12,4" />
+                      <TextBlock Grid.Column="1" Text="{Binding AltText}" Opacity="0.8"
+                                 VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                      <Button Grid.Column="2" Content="{loc:Tr Publish.Delete}" FontSize="11"
+                              VerticalAlignment="Center"
                               Command="{Binding $parent[ListBox].((vm:GameMediaViewModel)DataContext).AskToDeleteCommand}"
                               CommandParameter="{Binding}" />
                     </Grid>
@@ -380,8 +471,8 @@
                   <TextBlock Text="{loc:Tr Publish.EditEntry}" FontWeight="SemiBold" FontSize="13"
                              IsVisible="{Binding IsEditing}" />
 
-                  <TextBox Watermark="{loc:Tr Publish.EntryTitle}" Text="{Binding EntryTitle}" />
-                  <TextBox Watermark="{loc:Tr Publish.EntryBody}" Text="{Binding EntryBody}"
+                  <TextBox PlaceholderText="{loc:Tr Publish.EntryTitle}" Text="{Binding EntryTitle}" />
+                  <TextBox PlaceholderText="{loc:Tr Publish.EntryBody}" Text="{Binding EntryBody}"
                            AcceptsReturn="True" Height="160" TextWrapping="Wrap" />
 
                   <TextBlock Text="{loc:Tr Publish.LinkedVersion}" FontSize="12" Opacity="0.6" />

@@ -29,6 +29,12 @@ namespace GameLauncher.App.ViewModels;
 /// **A picture is never replaced in place.** There is no route that swaps bytes under an
 /// existing id, so changing a cover is uploading a new one; only the description and the
 /// position are editable.
+///
+/// The lists hold <see cref="MediaCardViewModel"/> rather than <see cref="GameMedia"/> because
+/// this page used to show a gallery as **alt text and nothing else** — a publisher arranging
+/// screenshots was reading their own descriptions and guessing which picture each one was. The
+/// cards are the same type the game page uses, so what is arranged here and what a player sees
+/// there are decoded by one piece of code.
 /// </summary>
 public sealed partial class GameMediaViewModel : ViewModelBase
 {
@@ -38,6 +44,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     private readonly IApiErrorPresenter _errors;
     private readonly ILocalizationService _localization;
     private readonly IFilePicker _files;
+    private readonly IImageProvider _images;
 
     private Game? _game;
     private MediaCapabilities _limits = ServerCapabilities.Fallback.Media;
@@ -61,7 +68,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     private string _uploadAltText = string.Empty;
 
     [ObservableProperty]
-    private GameMedia? _selected;
+    private MediaCardViewModel? _selected;
 
     /// <summary>The alt text being edited on <see cref="Selected"/>, before it is saved.</summary>
     [ObservableProperty]
@@ -73,7 +80,8 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         IServerCapabilityProvider capabilities,
         IApiErrorPresenter errors,
         ILocalizationService localization,
-        IFilePicker files)
+        IFilePicker files,
+        IImageProvider images)
     {
         _catalog = catalog;
         _publishing = publishing;
@@ -81,21 +89,37 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         _errors = errors;
         _localization = localization;
         _files = files;
+        _images = images;
     }
 
     /// <summary>Raised when the artwork changed, so a cover shown elsewhere can be refreshed.</summary>
     public event EventHandler? ArtworkChanged;
 
     /// <summary>Ordered exactly as the game page orders it, so what is arranged is what is seen.</summary>
-    public ObservableCollection<GameMedia> Gallery { get; } = [];
+    public ObservableCollection<MediaCardViewModel> Gallery { get; } = [];
 
-    public ObservableCollection<GameMedia> Identity { get; } = [];
+    public ObservableCollection<MediaCardViewModel> Identity { get; } = [];
 
-    public IReadOnlyList<MediaKind> Kinds { get; } = Enum.GetValues<MediaKind>();
+    /// <summary>
+    /// What may be uploaded here. Video is offered only where the server said it stores one:
+    /// a deployment that names no video limits cannot take one, and an option whose only
+    /// outcome is a refusal is the dead end D61 removes from buttons.
+    /// </summary>
+    public IReadOnlyList<MediaKind> Kinds =>
+        _limits.SupportsVideo
+            ? Enum.GetValues<MediaKind>()
+            : [.. Enum.GetValues<MediaKind>().Where(kind => kind != MediaKind.Video)];
+
+    /// <summary>The videos, which are a gallery of their own with a cap of their own.</summary>
+    public ObservableCollection<MediaCardViewModel> Videos { get; } = [];
+
+    public bool SupportsVideo => _limits.SupportsVideo;
+
+    public bool UploadIsVideo => UploadKind == MediaKind.Video;
 
     public bool HasGame => _game is not null;
 
-    public bool HasArtwork => Gallery.Count + Identity.Count > 0;
+    public bool HasArtwork => Gallery.Count + Identity.Count + Videos.Count > 0;
 
     public bool CanUpload => HasGame && !IsBusy && PendingDeletion is null;
 
@@ -119,7 +143,51 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         Gallery.Count.ToString(CultureInfo.CurrentCulture),
         _limits.MaxScreenshotsPerGame.ToString(CultureInfo.CurrentCulture));
 
+    /// <summary>
+    /// The video limits, in their own sentence and shown while video is the chosen kind. Its
+    /// own numbers because they are not the picture ones: a publisher told "5 MB" while
+    /// choosing a trailer has been told the wrong thing.
+    /// </summary>
+    public string VideoLimitsText => _limits.SupportsVideo
+        ? _localization.Translate(
+            "Publish.VideoLimits",
+            string.Join(", ", _limits.VideoContentTypes.Select(ShortFormatName)),
+            ByteSize.Format(_limits.MaxVideoBytes, CultureInfo.CurrentCulture),
+            _limits.MaxVideosPerGame.ToString(CultureInfo.CurrentCulture))
+        : string.Empty;
+
+    public string VideoCountText => _localization.Translate(
+        "Publish.VideoCount",
+        Videos.Count.ToString(CultureInfo.CurrentCulture),
+        _limits.MaxVideosPerGame.ToString(CultureInfo.CurrentCulture));
+
     public int MaxAltTextLength => _limits.MaxAltTextLength;
+
+    /// <summary>
+    /// Puts the tab back to "no game", without a request. <see cref="ShowAsync"/> with null
+    /// does the same thing and reads the capabilities on the way, which is right when a
+    /// publisher deselects a game and wrong when there is no longer an account to ask with.
+    /// The limits are left as they are: they describe the deployment, not the game and not
+    /// the person, and the next <see cref="ShowAsync"/> refreshes them anyway.
+    /// </summary>
+    public void Clear()
+    {
+        _game = null;
+
+        Gallery.Clear();
+        Identity.Clear();
+        Videos.Clear();
+        Selected = null;
+        PendingDeletion = null;
+        ErrorMessage = null;
+        StatusMessage = null;
+        IsBusy = false;
+        UploadAltText = string.Empty;
+        UploadKind = MediaKind.Screenshot;
+        EditedAltText = string.Empty;
+
+        RaiseDerived();
+    }
 
     /// <summary>Loads the limits and then the game's pictures. Safe to call with null.</summary>
     public async Task ShowAsync(Game? game, CancellationToken cancellationToken = default)
@@ -139,6 +207,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         {
             Gallery.Clear();
             Identity.Clear();
+            Videos.Clear();
             RaiseDerived();
             return;
         }
@@ -157,10 +226,12 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         ErrorMessage = null;
         StatusMessage = null;
 
+        bool video = UploadKind == MediaKind.Video;
+
         PickedFile? picked = await _files
             .PickAsync(
-                _localization.Translate("Publish.ChooseImage"),
-                ImageFormats.PickerExtensions,
+                _localization.Translate(video ? "Publish.ChooseVideo" : "Publish.ChooseImage"),
+                video ? VideoFormats.PickerExtensions : ImageFormats.PickerExtensions,
                 cancellationToken)
             .ConfigureAwait(true);
 
@@ -169,9 +240,15 @@ public sealed partial class GameMediaViewModel : ViewModelBase
             return;
         }
 
-        // Checked against the numbers this deployment announced, before a byte travels.
+        // Checked against the numbers this deployment announced, before a byte travels — and for
+        // a video that check is the only one that can produce a sentence, because the server's
+        // refusal for an oversized body comes from the framework in front of it as a bare 413.
         MediaRejection? rejection = MediaUploadRules.Reject(
-            picked.Content, UploadKind, UploadAltText.Trim(), Gallery.Count, _limits);
+            picked.Content,
+            UploadKind,
+            UploadAltText.Trim(),
+            video ? Videos.Count : Gallery.Count,
+            _limits);
 
         if (rejection is not null)
         {
@@ -191,9 +268,14 @@ public sealed partial class GameMediaViewModel : ViewModelBase
                     Kind = UploadKind,
                     Content = picked.Content,
                     AltText = UploadAltText.Trim(),
-                    // Onto the end of the gallery: a new screenshot going to the front would
-                    // rearrange an order the publisher already chose.
-                    SortOrder = UploadKind == MediaKind.Screenshot ? NextSortOrder() : 0,
+                    // Onto the end of its own gallery: a new screenshot — or a new video —
+                    // going to the front would rearrange an order the publisher already chose.
+                    SortOrder = UploadKind switch
+                    {
+                        MediaKind.Screenshot => NextSortOrder(Gallery),
+                        MediaKind.Video => NextSortOrder(Videos),
+                        _ => 0,
+                    },
                 },
                 cancellationToken).ConfigureAwait(true);
 
@@ -245,22 +327,22 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     /// renumber the whole list, and a command is something a test can press.
     /// </summary>
     [RelayCommand]
-    private Task MoveUpAsync(GameMedia media) => SwapAsync(media, -1);
+    private Task MoveUpAsync(MediaCardViewModel card) => SwapAsync(card, -1);
 
     [RelayCommand]
-    private Task MoveDownAsync(GameMedia media) => SwapAsync(media, +1);
+    private Task MoveDownAsync(MediaCardViewModel card) => SwapAsync(card, +1);
 
-    public bool CanMoveUp(GameMedia media) => Gallery.IndexOf(media) > 0;
+    public bool CanMoveUp(MediaCardViewModel card) => Gallery.IndexOf(card) > 0;
 
-    public bool CanMoveDown(GameMedia media)
+    public bool CanMoveDown(MediaCardViewModel card)
     {
-        int index = Gallery.IndexOf(media);
+        int index = Gallery.IndexOf(card);
         return index >= 0 && index < Gallery.Count - 1;
     }
 
-    private async Task SwapAsync(GameMedia media, int direction)
+    private async Task SwapAsync(MediaCardViewModel card, int direction)
     {
-        int index = Gallery.IndexOf(media);
+        int index = Gallery.IndexOf(card);
         int target = index + direction;
 
         if (index < 0 || target < 0 || target >= Gallery.Count || IsBusy)
@@ -268,7 +350,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
             return;
         }
 
-        GameMedia other = Gallery[target];
+        MediaCardViewModel other = Gallery[target];
 
         // Both positions are written explicitly rather than one of them being nudged: two
         // screenshots left at the default order share a sort order, and moving one "past" the
@@ -281,7 +363,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         try
         {
             await _publishing.UpdateMediaAsync(
-                media.Id, new MediaChanges { SortOrder = target }, CancellationToken.None)
+                card.Id, new MediaChanges { SortOrder = target }, CancellationToken.None)
                 .ConfigureAwait(true);
 
             await _publishing.UpdateMediaAsync(
@@ -307,7 +389,7 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     /// the prompt says which picture goes and that it cannot be brought back.
     /// </summary>
     [RelayCommand]
-    private void AskToDelete(GameMedia media)
+    private void AskToDelete(MediaCardViewModel card)
     {
         ErrorMessage = null;
         StatusMessage = null;
@@ -315,15 +397,15 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         PendingDeletion = new PendingDeletion(
             _localization.Translate(
                 "Publish.ConfirmDeleteImage",
-                media.AltText.Length > 0
-                    ? media.AltText
-                    : _localization.Translate("Publish.Kind." + media.Kind)),
+                card.AltText.Length > 0
+                    ? card.AltText
+                    : _localization.Translate("Publish.Kind." + card.Kind)),
             async cancellationToken =>
             {
-                await _publishing.DeleteMediaAsync(media.Id, cancellationToken)
+                await _publishing.DeleteMediaAsync(card.Id, cancellationToken)
                     .ConfigureAwait(true);
 
-                if (ReferenceEquals(Selected, media))
+                if (ReferenceEquals(Selected, card))
                 {
                     Selected = null;
                 }
@@ -391,6 +473,10 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     /// Re-reads the game detail, which is where the media list lives. Rereading rather than
     /// patching the local list is what keeps the order the *server* reports — including the
     /// tie-break on upload time — instead of a second ordering invented here.
+    ///
+    /// The pictures are fetched **after** the rows exist, in the order they are shown: the list
+    /// appears at once and fills in, rather than the page waiting on a dozen downloads before
+    /// anything is on screen. A picture that never arrives leaves its card without one.
     /// </summary>
     private async Task ReloadAsync(CancellationToken cancellationToken)
     {
@@ -409,7 +495,13 @@ public sealed partial class GameMediaViewModel : ViewModelBase
             Gallery.Clear();
             foreach (GameMedia media in detail.Screenshots)
             {
-                Gallery.Add(media);
+                Gallery.Add(new MediaCardViewModel(media));
+            }
+
+            Videos.Clear();
+            foreach (GameMedia media in detail.Videos)
+            {
+                Videos.Add(new MediaCardViewModel(media));
             }
 
             Identity.Clear();
@@ -417,12 +509,22 @@ public sealed partial class GameMediaViewModel : ViewModelBase
             {
                 if (detail.Artwork(kind) is { } artwork)
                 {
-                    Identity.Add(artwork);
+                    Identity.Add(new MediaCardViewModel(artwork));
                 }
             }
 
-            Selected = Gallery.Concat(Identity)
-                .FirstOrDefault(media => string.Equals(media.Id, selectedId, StringComparison.Ordinal));
+            Selected = Gallery.Concat(Identity).Concat(Videos)
+                .FirstOrDefault(card => string.Equals(card.Id, selectedId, StringComparison.Ordinal));
+
+            RaiseDerived();
+
+            // The videos are in the list because their descriptions are editable and their rows
+            // deletable; LoadAsync skips the fetch for them, since a container is not a
+            // thumbnail.
+            foreach (MediaCardViewModel card in Gallery.Concat(Identity).Concat(Videos).ToList())
+            {
+                await card.LoadAsync(_images, cancellationToken).ConfigureAwait(true);
+            }
         }
         catch (ApiException exception)
         {
@@ -434,16 +536,17 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         }
     }
 
-    /// <summary>One past the end, so a new screenshot lands where the publisher expects it.</summary>
-    private int NextSortOrder() =>
-        Gallery.Count == 0 ? 0 : Gallery.Max(media => media.SortOrder) + 1;
+    /// <summary>One past the end, so a new item lands where the publisher expects it.</summary>
+    private static int NextSortOrder(ObservableCollection<MediaCardViewModel> list) =>
+        list.Count == 0 ? 0 : list.Max(card => card.Media.SortOrder) + 1;
 
     private string Describe(MediaRejection rejection) => rejection.Reason switch
     {
-        MediaFailure.TooLarge => _localization.Translate(
-            "Publish.Media.TooLarge",
+        MediaFailure.TooLarge or MediaFailure.VideoTooLarge => _localization.Translate(
+            "Publish.Media." + rejection.Reason,
             ByteSize.Format(rejection.Limit, CultureInfo.CurrentCulture)),
-        MediaFailure.GalleryFull or MediaFailure.AltTextTooLong => _localization.Translate(
+        MediaFailure.GalleryFull or MediaFailure.VideoGalleryFull
+            or MediaFailure.AltTextTooLong => _localization.Translate(
             "Publish.Media." + rejection.Reason,
             rejection.Limit.ToString(CultureInfo.CurrentCulture)),
         _ => _localization.Translate("Publish.Media." + rejection.Reason),
@@ -453,7 +556,10 @@ public sealed partial class GameMediaViewModel : ViewModelBase
     private static string ShortFormatName(string contentType) =>
         contentType.Split('/')[^1].ToUpperInvariant();
 
-    partial void OnSelectedChanged(GameMedia? value)
+    partial void OnUploadKindChanged(MediaKind value) =>
+        OnPropertyChanged(nameof(UploadIsVideo));
+
+    partial void OnSelectedChanged(MediaCardViewModel? value)
     {
         EditedAltText = value?.AltText ?? string.Empty;
         RaiseDerived();
@@ -470,6 +576,11 @@ public sealed partial class GameMediaViewModel : ViewModelBase
         OnPropertyChanged(nameof(CanSaveDescription));
         OnPropertyChanged(nameof(LimitsText));
         OnPropertyChanged(nameof(GalleryCountText));
+        OnPropertyChanged(nameof(VideoLimitsText));
+        OnPropertyChanged(nameof(VideoCountText));
         OnPropertyChanged(nameof(MaxAltTextLength));
+        OnPropertyChanged(nameof(Kinds));
+        OnPropertyChanged(nameof(SupportsVideo));
+        OnPropertyChanged(nameof(UploadIsVideo));
     }
 }

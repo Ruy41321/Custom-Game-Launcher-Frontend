@@ -14,6 +14,18 @@ public sealed record InstallRequest
 
     /// <summary>Null installs under the launcher's default root, in a directory of its own.</summary>
     public string? InstallDirectory { get; init; }
+
+    /// <summary>
+    /// A directory to put this game's <em>own</em> directory inside, for the one install the
+    /// player was asked about. The launcher names that directory itself, exactly as it does
+    /// under the default root, because a build unpacked loose into a folder somebody picked
+    /// would make uninstalling it a recursive delete of that folder and of whatever else was
+    /// already in it.
+    ///
+    /// Ignored when <see cref="InstallDirectory"/> is set, and when the game is already
+    /// installed: an update goes where the game already lives (D33).
+    /// </summary>
+    public string? InstallRoot { get; init; }
 }
 
 /// <summary>What an install or update turned out to cost.</summary>

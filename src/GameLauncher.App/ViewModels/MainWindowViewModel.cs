@@ -32,6 +32,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly IApplicationShutdown _shutdown;
     private readonly IApiErrorPresenter _errors;
 
+    /// <summary>
+    /// Whose data is on the pages. Compared rather than the event trusted: the session changes
+    /// on every token rotation as well, with the same account behind it, and resetting there
+    /// would empty the library under somebody's hands roughly once an hour.
+    /// </summary>
+    private string? _accountId;
+
     /// <summary>The verified release the banner is about; null when there is nothing to offer.</summary>
     private UpdateCheckResult? _availableUpdate;
 
@@ -51,10 +58,21 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsSignedIn))]
     [NotifyPropertyChangedFor(nameof(CanPublish))]
+    [NotifyPropertyChangedFor(nameof(MustChangePassword))]
+    [NotifyPropertyChangedFor(nameof(CanNavigate))]
     private ViewModelBase _currentPage;
 
     [ObservableProperty]
     private string _accountName = string.Empty;
+
+    /// <summary>
+    /// In the launcher with no session, because the server could not be reached and somebody
+    /// asked to carry on anyway. The games on this disk are theirs and play perfectly well; the
+    /// account's own surfaces — Explore, publishing, settings that talk to a server — are not
+    /// offered, because there is nobody to offer them to.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isOfflineGuest;
 
     /// <summary>
     /// Whether the update line is showing. An update is never applied silently: a swap needs
@@ -96,7 +114,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         LibraryViewModel library,
         GameDetailViewModel gameDetail,
         DeveloperViewModel developer,
-        SettingsViewModel settings)
+        SettingsViewModel settings,
+        ChangePasswordViewModel changePassword)
     {
         _localization = localization;
         _settingsStore = settingsStore;
@@ -115,6 +134,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         GameDetail = gameDetail;
         Developer = developer;
         Settings = settings;
+        ChangePassword = changePassword;
         _currentPage = login;
 
         AppName = configuration.AppName;
@@ -124,9 +144,29 @@ public sealed partial class MainWindowViewModel : ViewModelBase
                 language => language.CultureName == localization.CurrentCulture.TwoLetterISOLanguageName)
             ?? Languages[0];
 
-        Login.SignedIn += (_, _) => ShowLibraryCommand.Execute(null);
+        // Every page the shell owns, in one list, because the reset below must not be able to
+        // miss one — a page that keeps an account's data after somebody else signs in is the
+        // bug this exists for, and the next page added is the one that would forget.
+        Pages = [Login, Explore, Library, GameDetail, Developer, Settings, ChangePassword];
+
+        Login.SignedIn += (_, _) => AfterSignInCommand.Execute(null);
+
+        // Not a sign-in and never treated as one: no session exists, and the library will say
+        // so. The shell navigates rather than the page, as everywhere else (D17).
+        Login.ContinueOfflineRequested += (_, _) => ContinueOfflineCommand.Execute(null);
+
+        // A password change ends with a live session and nothing else pending, so it lands
+        // exactly where a sign-in does; cancelling is only ever possible when it was not
+        // forced, and then the library is where somebody was on their way to anyway.
+        ChangePassword.Changed += (_, _) => ShowLibraryCommand.Execute(null);
+        ChangePassword.Cancelled += (_, _) => ShowLibraryCommand.Execute(null);
         Explore.GameSelected += async (_, idOrSlug) => await ShowGameAsync(idOrSlug).ConfigureAwait(true);
         Library.GameSelected += async (_, idOrSlug) => await ShowGameAsync(idOrSlug).ConfigureAwait(true);
+
+        // The publisher's dashboard opens the same page for the same reason, and "back" already
+        // works: showing the dashboard records it as the list page to return to.
+        Developer.GameSelected += async (_, idOrSlug) => await ShowGameAsync(idOrSlug).ConfigureAwait(true);
+
         GameDetail.BackRequested += (_, _) => CurrentPage = _lastListPage ?? Library;
 
         _authentication.SessionChanged += (_, args) => OnSessionChanged(args.Session);
@@ -136,6 +176,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     public string AppName { get; }
+
+    /// <summary>
+    /// The pages, as the thing that gets reset. Public so a test can hold this list against
+    /// the properties below and fail when they disagree.
+    /// </summary>
+    public IReadOnlyList<IAccountScopedPage> Pages { get; }
 
     public IReadOnlyList<LanguageOption> Languages { get; }
 
@@ -151,14 +197,33 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public SettingsViewModel Settings { get; }
 
+    public ChangePasswordViewModel ChangePassword { get; }
+
     public bool IsSignedIn => _authentication.IsAuthenticated;
+
+    /// <summary>
+    /// Whether the tabs are worth offering: signed in, and not held on the one screen the
+    /// server will answer for. A tab that only ever produces a 403 is the dead end this rule
+    /// exists to remove, and hiding it is the same answer D61 gives about a button.
+    /// </summary>
+    public bool CanNavigate => IsSignedIn && !MustChangePassword;
+
+    /// <summary>
+    /// Whether the account may reach anything but the password screen. The server refuses every
+    /// other route with `password_change_required` until it is done, so the tabs are hidden
+    /// rather than left to lead somewhere that only answers no.
+    /// </summary>
+    public bool MustChangePassword =>
+        _authentication.CurrentSession?.User.PasswordChangeRequired ?? false;
 
     /// <summary>
     /// Advisory, like every client-side permission check: the publish routes refuse the same
     /// account again. Hiding the tab keeps a player from finding a page that only says no.
     /// </summary>
     public bool CanPublish =>
-        IsSignedIn && _authentication.HasPermission(Permissions.GamePublish);
+        IsSignedIn
+        && !MustChangePassword
+        && _authentication.HasPermission(Permissions.GamePublish);
 
     /// <summary>Where "back" returns to, so opening a game from Explore does not land in Library.</summary>
     private ViewModelBase? _lastListPage;
@@ -202,7 +267,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         if (restored)
         {
-            await ShowLibraryAsync(cancellationToken).ConfigureAwait(true);
+            await AfterSignInAsync(cancellationToken).ConfigureAwait(true);
+        }
+        else
+        {
+            // Only when the sign-in screen is what somebody is about to look at: it decides
+            // whether to offer "forgotten your password?", and asking on a start-up that goes
+            // straight to the library would be a request for a button nobody will see.
+            await Login.LoadAsync(cancellationToken).ConfigureAwait(true);
         }
 
         // Last, and for the same reason the crash uploader can never throw: a launcher that
@@ -305,6 +377,62 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             () => _localization.Translate("Update.Downloading", percent)));
     }
 
+    /// <summary>
+    /// Where a launcher goes once a session exists — the library, unless the session says the
+    /// password is somebody else's choice, in which case there is exactly one screen the
+    /// server will answer for.
+    ///
+    /// One place rather than two: the restore at start-up and the sign-in button both arrive
+    /// here, and a rule enforced in one of them is a rule the other forgets.
+    /// </summary>
+    [RelayCommand]
+    private async Task AfterSignInAsync(CancellationToken cancellationToken)
+    {
+        if (MustChangePassword)
+        {
+            ShowForcedPasswordChange();
+            return;
+        }
+
+        await ShowLibraryAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    private void ShowForcedPasswordChange()
+    {
+        ChangePassword.IsForced = true;
+        CurrentPage = ChangePassword;
+
+        // Deliberately not remembered as a list page: "back" from anywhere must never land on
+        // a screen that only exists until it is finished.
+        _lastListPage = null;
+    }
+
+    /// <summary>
+    /// Into the library with nobody signed in. It is the same page: it reads the install store
+    /// first and unconditionally (D29), so what it shows is what this machine can play, under
+    /// the banner that says the rest of the library is not here.
+    /// </summary>
+    [RelayCommand]
+    private async Task ContinueOfflineAsync(CancellationToken cancellationToken)
+    {
+        IsOfflineGuest = true;
+        await ShowLibraryAsync(cancellationToken).ConfigureAwait(true);
+    }
+
+    /// <summary>
+    /// Back to the sign-in screen from the offline library, which is the only way out of it —
+    /// there is no session to sign out of. It asks the server its one question again, which is
+    /// also how somebody finds out the network came back.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowLoginAsync(CancellationToken cancellationToken)
+    {
+        IsOfflineGuest = false;
+        CurrentPage = Login;
+        _lastListPage = null;
+        await Login.LoadAsync(cancellationToken).ConfigureAwait(true);
+    }
+
     [RelayCommand]
     private async Task ShowLibraryAsync(CancellationToken cancellationToken)
     {
@@ -329,6 +457,14 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await Developer.LoadAsync(cancellationToken).ConfigureAwait(true);
     }
 
+    /// <summary>The ordinary way in, for somebody who simply wants a new password.</summary>
+    [RelayCommand]
+    private void ShowChangePassword()
+    {
+        ChangePassword.IsForced = false;
+        CurrentPage = ChangePassword;
+    }
+
     [RelayCommand]
     private async Task ShowSettingsAsync(CancellationToken cancellationToken)
     {
@@ -343,6 +479,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await _authentication.SignOutAsync(cancellationToken).ConfigureAwait(true);
         CurrentPage = Login;
         _lastListPage = null;
+
+        // The sign-in screen is on screen again and a different server may be behind the next
+        // password, so its one question is asked again rather than answered from a run ago.
+        await Login.LoadAsync(cancellationToken).ConfigureAwait(true);
     }
 
     /// <summary>
@@ -370,14 +510,49 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         await GameDetail.LoadAsync(idOrSlug).ConfigureAwait(true);
     }
 
-    private void OnSessionChanged(AuthSession? session)
+    /// <summary>
+    /// Everything that follows touches bound properties and re-evaluates bound commands, and
+    /// the event that starts it does **not** arrive on the UI thread: `AuthenticationService`
+    /// awaits its token store with `ConfigureAwait(false)`, so a sign-in publishes from the
+    /// thread pool. `Button.get_Command()` then throws "the calling thread cannot access this
+    /// object", which is an unhandled exception on a pool thread — the launcher does not show
+    /// an error, it closes. Marshalled here, once, rather than at each of the callees.
+    /// </summary>
+    private void OnSessionChanged(AuthSession? session) =>
+        OnUiThread(() => ApplySessionChange(session));
+
+    private void ApplySessionChange(AuthSession? session)
     {
         AccountName = session?.User.DisplayName ?? string.Empty;
+
+        // A session ends the offline visit, whichever way it arrived.
+        if (session is not null)
+        {
+            IsOfflineGuest = false;
+        }
         OnPropertyChanged(nameof(IsSignedIn));
         OnPropertyChanged(nameof(CanPublish));
+        OnPropertyChanged(nameof(MustChangePassword));
+        OnPropertyChanged(nameof(CanNavigate));
+
+        // The pages live as long as the window and keep what they were shown, which is right
+        // for one account and wrong for the next: the dashboard was still showing the previous
+        // publisher's game after a sign-out and a sign-in. Keyed on *who*, not on the event —
+        // a rotated token is the same person and must change nothing on screen.
+        string? accountId = session?.User.Id;
+        if (!string.Equals(accountId, _accountId, StringComparison.Ordinal))
+        {
+            _accountId = accountId;
+
+            foreach (IAccountScopedPage page in Pages)
+            {
+                page.ResetForAccountChange();
+            }
+        }
 
         if (session is null)
         {
+            IsOfflineGuest = false;
             CurrentPage = Login;
         }
     }
