@@ -172,6 +172,11 @@ public partial class App : Application
     /// </summary>
     private Bitmap? LoadBitmap(string? configuredPath)
     {
+        if (_services is null)
+        {
+            return null;
+        }
+
         string? path = BrandingPaths.Resolve(
             _services.GetRequiredService<IPathProvider>().ApplicationDirectory, configuredPath);
 
