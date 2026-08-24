@@ -40,7 +40,14 @@ public static class BrandingPaths
 
         try
         {
-            return PathSafety.ResolveInside(applicationDirectory, configuredPath.Trim());
+            // Both separators, because this string comes out of a file that ships to both
+            // platforms unchanged: `PathSafety` maps `/` to the platform's own, and on Linux
+            // a `\` is an ordinary character in a filename rather than a separator, so a
+            // path written on Windows would name one file that does not exist instead of a
+            // file inside a directory.
+            string normalised = configuredPath.Trim().Replace('\\', '/');
+
+            return PathSafety.ResolveInside(applicationDirectory, normalised);
         }
         catch (ApiException)
         {
