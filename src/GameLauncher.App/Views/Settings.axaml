@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Settings"
+             x:DataType="vm:SettingsViewModel">
+
+  <ScrollViewer>
+    <StackPanel Spacing="20" Margin="24,20" MaxWidth="640" HorizontalAlignment="Left">
+
+      <TextBlock Text="{loc:Tr Settings.Title}" FontSize="20" FontWeight="Light" />
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.InstallDirectory}" FontSize="13" FontWeight="SemiBold" />
+
+        <Grid ColumnDefinitions="*,Auto,Auto">
+          <TextBox Grid.Column="0" Text="{Binding InstallDirectory}" Margin="0,0,8,0" />
+          <Button Grid.Column="1" Content="{loc:Tr Publish.Browse}" Margin="0,0,8,0"
+                  Command="{Binding ChooseInstallDirectoryCommand}" />
+          <Button Grid.Column="2" Content="{loc:Tr Settings.Reset}"
+                  Command="{Binding ResetInstallDirectoryCommand}" />
+        </Grid>
+
+        <TextBlock Opacity="0.55" FontSize="11" TextWrapping="Wrap"
+                   Text="{Binding DefaultInstallDirectoryNotice}" />
+
+        <TextBlock Text="{Binding InstalledElsewhereNotice}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" IsVisible="{Binding HasInstalledElsewhere}" />
+
+        <CheckBox Content="{loc:Tr Settings.AskWhereToInstall}"
+                  IsChecked="{Binding AskWhereToInstall}" Margin="0,6,0,0" />
+        <TextBlock Text="{loc:Tr Settings.AskWhereToInstallExplain}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.Theme}" FontSize="13" FontWeight="SemiBold" />
+        <ComboBox ItemsSource="{Binding Themes}" SelectedItem="{Binding ThemeVariant}"
+                  MinWidth="180" HorizontalAlignment="Left" />
+      </StackPanel>
+
+      <!-- Opt-in and off by default. It appears here now because it finally does something. -->
+      <StackPanel Spacing="8">
+        <TextBlock Text="{loc:Tr Settings.Diagnostics}" FontSize="13" FontWeight="SemiBold" />
+        <CheckBox Content="{loc:Tr Settings.SendCrashReports}"
+                  IsChecked="{Binding SendCrashReports}" />
+        <TextBlock Text="{loc:Tr Settings.SendCrashReportsExplain}" Opacity="0.55" FontSize="11"
+                   TextWrapping="Wrap" />
+      </StackPanel>
+
+      <TextBlock Text="{Binding StatusMessage}" Opacity="0.7" FontSize="12"
+                 IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+      <!-- The account. Last on the page and behind two presses: the first arms the deletion and
+           says what disappears, the second sends it. -->
+      <StackPanel Spacing="8" Margin="0,16,0,0">
+        <TextBlock Text="{loc:Tr Settings.Account}" FontSize="13" FontWeight="SemiBold" />
+
+        <TextBlock Text="{loc:Tr Settings.DeleteAccountExplain}" Opacity="0.7" FontSize="12"
+                   TextWrapping="Wrap" />
+
+        <TextBox PasswordChar="•" PlaceholderText="{loc:Tr Settings.DeletePassword}"
+                 Text="{Binding DeletePassword}" MaxWidth="320" HorizontalAlignment="Left" />
+
+        <TextBox PlaceholderText="{loc:Tr Settings.DeleteReason}" Text="{Binding DeleteReason}"
+                 MaxWidth="320" HorizontalAlignment="Left" />
+
+        <Button Content="{loc:Tr Settings.DeleteAccount}" HorizontalAlignment="Left"
+                Command="{Binding AskToDeleteAccountCommand}"
+                IsEnabled="{Binding CanDeleteAccount}" />
+
+        <Border Classes="card" IsVisible="{Binding HasPendingDeletion}">
+          <StackPanel Spacing="10">
+            <TextBlock Text="{Binding PendingDeletion.Prompt}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Button Content="{loc:Tr Settings.ConfirmDeleteAccountButton}"
+                      Command="{Binding ConfirmDeletionCommand}" />
+              <Button Content="{loc:Tr Settings.KeepAccount}" Classes="accent"
+                      Command="{Binding CancelDeletionCommand}" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <ProgressBar IsIndeterminate="True" Height="2" IsVisible="{Binding IsDeleting}" />
+
+        <TextBlock Classes="error" Text="{Binding ErrorMessage}" TextWrapping="Wrap"
+                   IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+
+</UserControl>

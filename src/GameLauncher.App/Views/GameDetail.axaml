@@ -1,0 +1,294 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             xmlns:controls="clr-namespace:GameLauncher.App.Controls"
+             xmlns:vlc="clr-namespace:LibVLCSharp.Avalonia;assembly=LibVLCSharp.Avalonia"
+             xmlns:vlcshared="clr-namespace:LibVLCSharp.Shared;assembly=LibVLCSharp"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.GameDetail"
+             x:DataType="vm:GameDetailViewModel">
+
+  <Grid RowDefinitions="Auto,Auto,*" Margin="24,20">
+
+    <Button Grid.Row="0" Content="{loc:Tr Detail.Back}" Classes="link"
+            Command="{Binding BackCommand}" HorizontalAlignment="Left" Margin="0,0,0,10" />
+
+    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="2" IsVisible="{Binding IsBusy}" />
+
+    <TextBlock Grid.Row="2" Classes="error" Text="{Binding ErrorMessage}"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+    <ScrollViewer Grid.Row="2" IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}">
+      <StackPanel Spacing="18" MaxWidth="820" HorizontalAlignment="Left">
+
+        <Border CornerRadius="6" ClipToBounds="True" Height="260" IsVisible="{Binding HasHero}">
+          <Image Source="{Binding Hero}" Stretch="UniformToFill" />
+        </Border>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="{Binding Title}" FontSize="28" FontWeight="Light" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding Summary}" Opacity="0.75" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="24">
+          <StackPanel Spacing="2">
+            <TextBlock Text="{loc:Tr Detail.Publisher}" Opacity="0.5" FontSize="11" />
+            <TextBlock Text="{Binding PublisherName}" />
+          </StackPanel>
+          <StackPanel Spacing="2">
+            <TextBlock Text="{loc:Tr Detail.ReleaseDate}" Opacity="0.5" FontSize="11" />
+            <TextBlock Text="{Binding ReleaseDate}" />
+          </StackPanel>
+          <StackPanel Spacing="2" IsVisible="{Binding HasInstallableBuild}">
+            <TextBlock Text="{loc:Tr Detail.DownloadSize}" Opacity="0.5" FontSize="11" />
+            <TextBlock Text="{Binding DownloadSize}" />
+          </StackPanel>
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Button Content="{loc:Tr Explore.AddToLibrary}" Classes="accent"
+                  Command="{Binding AddToLibraryCommand}" IsVisible="{Binding !InLibrary}" />
+          <Button Content="{loc:Tr Library.Remove}"
+                  Command="{Binding RemoveFromLibraryCommand}"
+                  IsVisible="{Binding CanRemoveFromLibrary}" />
+          <Button Content="{loc:Tr Library.Play}" Classes="accent"
+                  Command="{Binding PlayCommand}" IsVisible="{Binding CanPlay}" />
+          <Button Content="{loc:Tr Library.Install}" Classes="accent"
+                  Command="{Binding InstallCommand}" IsVisible="{Binding CanInstall}" />
+          <Button Content="{loc:Tr Library.Update}" Classes="accent"
+                  Command="{Binding InstallCommand}" IsVisible="{Binding CanUpdate}" />
+          <Button Content="{loc:Tr Detail.Verify}"
+                  Command="{Binding VerifyCommand}" IsVisible="{Binding CanVerify}" />
+          <Button Content="{loc:Tr Library.Uninstall}"
+                  Command="{Binding UninstallCommand}" IsVisible="{Binding CanUninstall}" />
+          <Button Content="{loc:Tr Detail.OpenFolder}"
+                  Command="{Binding OpenFolderCommand}" IsVisible="{Binding CanOpenFolder}" />
+          <Button Content="{loc:Tr Detail.CancelDownload}"
+                  Command="{Binding CancelInstallCommand}" IsVisible="{Binding IsWorking}" />
+        </StackPanel>
+
+        <StackPanel Spacing="6" IsVisible="{Binding IsWorking}">
+          <TextBlock Text="{Binding PhaseText}" FontSize="12" />
+          <ProgressBar Minimum="0" Maximum="1" Value="{Binding ProgressFraction}"
+                       IsIndeterminate="{Binding IsProgressIndeterminate}" Height="4" />
+          <TextBlock Text="{Binding ProgressDetail}" Opacity="0.6" FontSize="12"
+                     IsVisible="{Binding ProgressDetail, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+
+        <TextBlock Text="{loc:Tr Detail.Running}" Opacity="0.7" FontSize="12"
+                   IsVisible="{Binding IsRunning}" />
+
+        <TextBlock Text="{Binding InstalledVersion}" Opacity="0.7" FontSize="12"
+                   IsVisible="{Binding IsInstalled}" />
+
+        <!-- Where the Play button would have been, saying why it is not there. -->
+        <TextBlock Text="{loc:Tr Detail.UpdateBeforePlaying}" Opacity="0.7" FontSize="12"
+                   TextWrapping="Wrap" IsVisible="{Binding MustUpdateBeforePlaying}" />
+
+        <TextBlock Text="{loc:Tr Detail.Broken}" Classes="error" TextWrapping="Wrap"
+                   IsVisible="{Binding IsBroken}" />
+
+        <StackPanel Spacing="4" IsVisible="{Binding CanEditLaunchOptions}">
+          <TextBlock Text="{loc:Tr Detail.LaunchOptions}" Opacity="0.5" FontSize="11" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox Grid.Column="0" Text="{Binding LaunchOptions}" Margin="0,0,8,0" />
+            <Button Grid.Column="1" Content="{loc:Tr Common.Save}"
+                    Command="{Binding SaveLaunchOptionsCommand}"
+                    IsEnabled="{Binding LaunchOptionsChanged}" />
+          </Grid>
+          <TextBlock Text="{Binding LaunchOptionsHint}" Opacity="0.5" FontSize="11"
+                     TextWrapping="Wrap" />
+        </StackPanel>
+
+        <TextBlock Text="{Binding StatusMessage}" Opacity="0.8" TextWrapping="Wrap"
+                   IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <TextBlock Text="{loc:Tr Detail.NoBuildForPlatform}" Opacity="0.6" TextWrapping="Wrap"
+                   IsVisible="{Binding !HasInstallableBuild}" />
+
+        <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Opacity="0.85"
+                   IsVisible="{Binding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <StackPanel Spacing="8" IsVisible="{Binding HasScreenshots}">
+          <TextBlock Text="{loc:Tr Detail.Screenshots}" FontSize="18" FontWeight="Light"
+                     Margin="0,10,0,0" />
+
+          <Border CornerRadius="6" ClipToBounds="True" MaxHeight="420"
+                  IsVisible="{Binding SelectedScreenshot, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <Image Source="{Binding SelectedScreenshot.Image}" Stretch="Uniform"
+                   ToolTip.Tip="{Binding SelectedScreenshot.AltText}" />
+          </Border>
+
+          <!-- The strip is only worth showing when there is more than one thing in it. -->
+          <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding Screenshots}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal" Spacing="8" />
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:MediaCardViewModel">
+                  <Button Classes="link" Padding="0"
+                          Command="{Binding $parent[ItemsControl].((vm:GameDetailViewModel)DataContext).ShowScreenshotCommand}"
+                          CommandParameter="{Binding}">
+                    <Border Width="132" Height="76" CornerRadius="4" ClipToBounds="True"
+                            Background="{DynamicResource SystemChromeMediumColor}">
+                      <Image Source="{Binding Image}" Stretch="UniformToFill"
+                             IsVisible="{Binding HasImage}" />
+                    </Border>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </StackPanel>
+
+        <!-- Videos. Their own section rather than rows in the screenshot strip: one is played
+             and the other is decoded, and the player is a native surface that has nothing in
+             common with an Image. The surface is only in the tree while something is playing —
+             a NativeControlHost draws above everything around it, so an idle one would sit on
+             top of the page for no reason. -->
+        <StackPanel Spacing="8" IsVisible="{Binding HasVideos}">
+          <TextBlock Text="{loc:Tr Detail.Videos}" FontSize="18" FontWeight="Light"
+                     Margin="0,10,0,0" />
+
+          <!-- A ContentControl and not a VideoView sitting here hidden. `IsVisible` does not
+               take a control out of the visual tree, and a NativeControlHost creates its child
+               window the moment it is attached — which crashed the launcher on every game page
+               until the manifest gained its supportedOS list. Bound to null until something
+               plays, this creates nothing at all. -->
+          <Border CornerRadius="6" ClipToBounds="True" Height="360" Background="Black"
+                  IsVisible="{Binding IsPlayingVideo}">
+            <ContentControl Content="{Binding VideoPlayer}">
+              <ContentControl.DataTemplates>
+                <DataTemplate DataType="vlcshared:MediaPlayer">
+                  <vlc:VideoView MediaPlayer="{Binding}" />
+                </DataTemplate>
+              </ContentControl.DataTemplates>
+            </ContentControl>
+          </Border>
+
+          <Button Content="{loc:Tr Detail.StopVideo}" Classes="link"
+                  Command="{Binding StopVideoCommand}"
+                  IsVisible="{Binding IsPlayingVideo}" HorizontalAlignment="Left" />
+
+          <TextBlock Classes="error" Text="{Binding VideoError}" TextWrapping="Wrap" FontSize="12"
+                     IsVisible="{Binding VideoError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+          <ItemsControl ItemsSource="{Binding Videos}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <StackPanel Orientation="Horizontal" Spacing="8" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:MediaCardViewModel">
+                <Button Classes="bare" Padding="0"
+                        Command="{Binding $parent[ItemsControl].((vm:GameDetailViewModel)DataContext).PlayVideoCommand}"
+                        CommandParameter="{Binding}"
+                        ToolTip.Tip="{Binding AltText}">
+                  <Border Width="180" Height="76" CornerRadius="4" Padding="10"
+                          Background="{DynamicResource SystemChromeMediumColor}">
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                      <TextBlock Text="{loc:Tr Detail.PlayVideo}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding AltText}" FontSize="11" Opacity="0.7"
+                                 TextTrimming="CharacterEllipsis" MaxLines="2"
+                                 TextWrapping="Wrap" />
+                    </StackPanel>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <TextBlock Text="{loc:Tr Detail.VideoUnavailable}" Opacity="0.6" FontSize="12"
+                     TextWrapping="Wrap" IsVisible="{Binding ShowVideoUnavailable}" />
+        </StackPanel>
+
+        <TextBlock Text="{loc:Tr Detail.Devlog}" FontSize="18" FontWeight="Light" Margin="0,10,0,0" />
+
+        <TextBlock Text="{loc:Tr Detail.DevlogEmpty}" Opacity="0.5" FontSize="12"
+                   IsVisible="{Binding DevlogIsEmpty}" />
+
+        <TextBlock Classes="error" Text="{Binding DevlogError}" TextWrapping="Wrap" FontSize="12"
+                   IsVisible="{Binding DevlogError, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+        <!-- Cards that open, rather than every post's full text one after another. The whole
+             header is the toggle: a small chevron would be the only thing on the card worth
+             pressing and the hardest thing on it to hit. -->
+        <ItemsControl ItemsSource="{Binding Devlog}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:PatchNoteCardViewModel">
+              <Border Classes="card" Margin="0,0,0,10">
+                <StackPanel Spacing="6">
+
+                  <Button Classes="bare" Command="{Binding ToggleCommand}"
+                          AutomationProperties.Name="{Binding Title}">
+                    <StackPanel Spacing="6">
+                      <StackPanel Orientation="Horizontal" Spacing="10">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
+                                   TextWrapping="Wrap" />
+                        <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3"
+                                Padding="6,1" IsVisible="{Binding ShowVersion}"
+                                VerticalAlignment="Center">
+                          <TextBlock Text="{Binding VersionLabel}" FontSize="11" />
+                        </Border>
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding PublishedOn}" Opacity="0.5" FontSize="12" />
+                        <TextBlock Text="{Binding Author}" Opacity="0.5" FontSize="12" />
+                      </StackPanel>
+                    </StackPanel>
+                  </Button>
+
+                  <!-- One line of the post while it is shut, so a list of them is a list. -->
+                  <TextBlock Text="{Binding Preview}" Opacity="0.6" FontSize="12"
+                             TextTrimming="CharacterEllipsis" MaxLines="1"
+                             IsVisible="{Binding !IsExpanded}" />
+
+                  <controls:MarkdownPresenter Markdown="{Binding Body}" Opacity="0.9"
+                                              IsVisible="{Binding IsExpanded}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Button Content="{loc:Tr Detail.DevlogMore}" Classes="link" HorizontalAlignment="Left"
+                Command="{Binding LoadMoreDevlogCommand}" IsVisible="{Binding HasMoreDevlog}" />
+
+        <TextBlock Text="{loc:Tr Detail.Versions}" FontSize="18" FontWeight="Light" Margin="0,10,0,0" />
+
+        <ItemsControl ItemsSource="{Binding Versions}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:VersionCardViewModel">
+              <Border Classes="card" Margin="0,0,0,10">
+                <StackPanel Spacing="6">
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <TextBlock Text="{Binding Semver}" FontWeight="SemiBold" />
+                    <Border Background="{DynamicResource SystemAccentColor}" CornerRadius="3"
+                            Padding="6,1" IsVisible="{Binding ShowStage}">
+                      <TextBlock Text="{Binding Stage}" FontSize="11" />
+                    </Border>
+                    <TextBlock Text="{Binding PublishedOn}" Opacity="0.5" FontSize="12"
+                               VerticalAlignment="Center" />
+                  </StackPanel>
+                  <TextBlock Text="{Binding ReleaseNotes}" TextWrapping="Wrap" Opacity="0.8"
+                             IsVisible="{Binding HasReleaseNotes}" />
+                </StackPanel>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+      </StackPanel>
+    </ScrollViewer>
+
+  </Grid>
+
+</UserControl>

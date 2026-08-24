@@ -1,0 +1,31 @@
+{
+  "appName": "Custom Game Launcher",
+  "apiBaseUrl": "http://localhost:8080/api/v1/",
+
+  "serviceRegistry": {
+    "url": null,
+    "serviceKey": "game-launcher-api",
+    "environment": "production"
+  },
+
+  "theme": {
+    "variant": "dark",
+    "accentColor": "#7C5CFF"
+  },
+
+  "branding": {
+    "logoPath": null,
+    "windowIconPath": null
+  },
+
+  "localization": {
+    "defaultLanguage": null,
+    "supportedLanguages": ["en", "it", "fr"]
+  },
+
+  "updates": {
+    "channel": "stable"
+  },
+
+  "defaultInstallDirectory": null
+}

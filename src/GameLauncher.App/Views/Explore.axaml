@@ -1,0 +1,134 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:loc="clr-namespace:GameLauncher.App.Localization"
+             xmlns:vm="clr-namespace:GameLauncher.App.ViewModels"
+             xmlns:models="clr-namespace:GameLauncher.Core.Models;assembly=GameLauncher.Core"
+             xmlns:views="clr-namespace:GameLauncher.App.Views"
+             mc:Ignorable="d"
+             x:Class="GameLauncher.App.Views.Explore"
+             x:DataType="vm:ExploreViewModel">
+
+  <Grid RowDefinitions="Auto,*" Margin="24,20">
+
+    <Grid Grid.Row="0" RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto,Auto"
+          ColumnSpacing="10" Margin="0,0,0,16">
+      <TextBox Grid.Row="0" Grid.Column="0" Text="{Binding SearchText}"
+               PlaceholderText="{loc:Tr Explore.SearchPlaceholder}">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+
+      <ComboBox Grid.Row="0" Grid.Column="1" MinWidth="170"
+                ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="vm:SortOption">
+            <TextBlock Text="{Binding Name}" />
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+
+      <Button Grid.Row="0" Grid.Column="2"
+              Content="{loc:Tr Common.Search}" Command="{Binding SearchCommand}" />
+
+      <!-- The search box above never finds an unlisted game: the server lists only public ones.
+           This one takes the identifier the publisher shared and opens it directly. -->
+      <TextBox Grid.Row="1" Grid.Column="0" Margin="0,8,0,0" Text="{Binding IdentifierText}"
+               PlaceholderText="{loc:Tr Explore.IdentifierPlaceholder}">
+        <TextBox.KeyBindings>
+          <KeyBinding Gesture="Enter" Command="{Binding OpenIdentifierCommand}" />
+        </TextBox.KeyBindings>
+      </TextBox>
+
+      <Button Grid.Row="1" Grid.Column="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+              HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+              Content="{loc:Tr Explore.OpenIdentifier}"
+              Command="{Binding OpenIdentifierCommand}" />
+    </Grid>
+
+    <ProgressBar Grid.Row="1" IsIndeterminate="True" Height="2" VerticalAlignment="Top"
+                 IsVisible="{Binding IsBusy}" />
+
+    <TextBlock Grid.Row="1" Classes="error" Text="{Binding ErrorMessage}"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+    <TextBlock Grid.Row="1" Text="{loc:Tr Explore.Empty}" Opacity="0.5"
+               HorizontalAlignment="Center" VerticalAlignment="Center"
+               IsVisible="{Binding IsEmpty}" />
+
+    <ScrollViewer Grid.Row="1"
+                  views:InfiniteScroll.Command="{Binding LoadMoreCommand}"
+                  views:InfiniteScroll.Items="{Binding Games}">
+      <StackPanel>
+      <ItemsControl ItemsSource="{Binding Games}">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate>
+            <WrapPanel />
+          </ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:StoreCardViewModel">
+            <Border Classes="card" Width="300" Margin="0,0,14,14">
+              <Grid RowDefinitions="Auto,Auto,*,Auto">
+
+                <!-- The frame is there whether or not the picture is, so a grid of cards keeps
+                     its shape while the covers are still arriving. It is also the way into the
+                     game, which is where a pointer goes first: the button carries the title as
+                     its automation name because its content is a picture and would otherwise
+                     be announced as the panel it is made of. -->
+                <Button Grid.Row="0" Classes="bare" Margin="0,0,0,8"
+                        AutomationProperties.Name="{Binding Title}"
+                        Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).OpenGameCommand}"
+                        CommandParameter="{Binding}">
+                  <Border Height="150" CornerRadius="4" ClipToBounds="True"
+                          Background="{DynamicResource SystemChromeMediumColor}">
+                    <Panel>
+                      <TextBlock Text="{Binding CoverPlaceholder}" FontSize="44" Opacity="0.25"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 IsVisible="{Binding !HasCover}" />
+                      <Image Source="{Binding Cover}" Stretch="UniformToFill"
+                             IsVisible="{Binding HasCover}" />
+                    </Panel>
+                  </Border>
+                </Button>
+
+                <TextBlock Grid.Row="1" Text="{Binding Title}" FontSize="16" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Row="2" Text="{Binding Summary}" Opacity="0.7" FontSize="12"
+                           TextWrapping="Wrap" Margin="0,6" MaxHeight="52" />
+                <StackPanel Grid.Row="3" Orientation="Horizontal" Spacing="8">
+                  <Button Content="{loc:Tr Explore.Details}" Classes="link"
+                          Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).OpenGameCommand}"
+                          CommandParameter="{Binding}" />
+                  <Button Content="{loc:Tr Explore.AddToLibrary}" Classes="link"
+                          Command="{Binding $parent[ItemsControl].((vm:ExploreViewModel)DataContext).AddToLibraryCommand}"
+                          CommandParameter="{Binding}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+
+      <!-- The foot of the list, and the reason it is inside the scrolled content: reaching it
+           is what asking for another page means, and a fixed bar at the bottom of the window
+           would say "loading" without ever being scrolled to. -->
+      <StackPanel Spacing="6" Margin="0,4,0,12" HorizontalAlignment="Center">
+        <ProgressBar IsIndeterminate="True" Width="160" Height="2"
+                     IsVisible="{Binding IsLoadingMore}" />
+        <TextBlock Text="{loc:Tr Explore.LoadingMore}" Opacity="0.6" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding IsLoadingMore}" />
+        <TextBlock Text="{loc:Tr Explore.EndOfResults}" Opacity="0.45" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding HasEnded}" />
+        <TextBlock Text="{Binding ResultsLabel}" Opacity="0.45" FontSize="12"
+                   HorizontalAlignment="Center" IsVisible="{Binding HasEnded}" />
+      </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+
+  </Grid>
+
+</UserControl>

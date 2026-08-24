@@ -1,0 +1,39 @@
+## Build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+publish/
+*.user
+*.suo
+
+## Release payload and installer output (DISTRIBUTING.md, installer.iss)
+dist/
+Output/
+
+## Test / coverage
+TestResults/
+coverage*.json
+coverage*.xml
+*.trx
+
+## Local runtime data
+logs/
+*.log
+launcher.settings.json
+
+## Editors / IDEs
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.DotSettings.user
+
+## OS
+.DS_Store
+Thumbs.db
+
+## NuGet
+*.nupkg
+.nuget/

@@ -1,0 +1,1013 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <data name="Nav.Library" xml:space="preserve">
+    <value>Library</value>
+  </data>
+  <data name="Nav.Explore" xml:space="preserve">
+    <value>Explore</value>
+  </data>
+  <data name="Nav.Settings" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Common.Search" xml:space="preserve">
+    <value>Search</value>
+  </data>
+  <data name="Common.Cancel" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Common.Retry" xml:space="preserve">
+    <value>Retry</value>
+  </data>
+  <data name="Common.Language" xml:space="preserve">
+    <value>Language</value>
+  </data>
+  <data name="Library.Empty" xml:space="preserve">
+    <value>Nothing installed yet. Head to Explore to find something to play.</value>
+  </data>
+  <data name="Library.Install" xml:space="preserve">
+    <value>Install</value>
+  </data>
+  <data name="Library.Uninstall" xml:space="preserve">
+    <value>Uninstall</value>
+  </data>
+  <data name="Library.Play" xml:space="preserve">
+    <value>Play</value>
+  </data>
+  <data name="Library.Update" xml:space="preserve">
+    <value>Update</value>
+  </data>
+  <data name="Status.Offline" xml:space="preserve">
+    <value>Offline — you can still launch installed games</value>
+  </data>
+  <data name="Status.Retry" xml:space="preserve">
+    <value>Try again</value>
+  </data>
+  <data name="Auth.ServerUnreachable" xml:space="preserve">
+    <value>The server cannot be reached, so signing in is not possible right now. Check your connection and try again.</value>
+  </data>
+  <data name="Auth.OfflineGamesAvailable" xml:space="preserve">
+    <value>Games already installed on this computer can still be played without signing in.</value>
+  </data>
+  <data name="Auth.ContinueOffline" xml:space="preserve">
+    <value>Continue offline</value>
+  </data>
+  <data name="Status.OfflineNotSignedIn" xml:space="preserve">
+    <value>Offline and not signed in — this is what is installed on this computer, not your whole library</value>
+  </data>
+  <data name="Status.Connecting" xml:space="preserve">
+    <value>Connecting…</value>
+  </data>
+  <data name="Shell.Welcome" xml:space="preserve">
+    <value>Welcome to {0}</value>
+  </data>
+  <data name="Shell.Tagline" xml:space="preserve">
+    <value>Your games, your builds, your server.</value>
+  </data>
+  <data name="Error.Generic" xml:space="preserve">
+    <value>Something went wrong. Please try again.</value>
+  </data>
+  <data name="Error.Network" xml:space="preserve">
+    <value>The server could not be reached.</value>
+  </data>
+  <data name="Error.Integrity" xml:space="preserve">
+    <value>What arrived did not match what was expected. Please try again.</value>
+  </data>
+  <data name="Error.LinkExpired" xml:space="preserve">
+    <value>The download link has expired. Please start the download again.</value>
+  </data>
+  <data name="Error.InvalidInput" xml:space="preserve">
+    <value>Some of what you entered was not accepted.</value>
+  </data>
+  <data name="Error.Unauthenticated" xml:space="preserve">
+    <value>Your session has expired. Please sign in again.</value>
+  </data>
+  <data name="Error.Forbidden" xml:space="preserve">
+    <value>Your account is not allowed to do that.</value>
+  </data>
+  <data name="Error.NotFound" xml:space="preserve">
+    <value>That is not available.</value>
+  </data>
+  <data name="Error.Conflict" xml:space="preserve">
+    <value>That conflicts with something that already exists.</value>
+  </data>
+  <data name="Error.QuotaExceeded" xml:space="preserve">
+    <value>That would exceed your upload quota.</value>
+  </data>
+  <data name="Error.RateLimited" xml:space="preserve">
+    <value>Too many attempts. Please wait a moment and try again.</value>
+  </data>
+  <data name="Error.DependencyFailure" xml:space="preserve">
+    <value>The server is temporarily unavailable. Please try again shortly.</value>
+  </data>
+  <data name="Error.Validation.EmailRequired" xml:space="preserve">
+    <value>Please enter an email address.</value>
+  </data>
+  <data name="Error.Validation.EmailTooLong" xml:space="preserve">
+    <value>That email address is too long: at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.EmailInvalid" xml:space="preserve">
+    <value>That does not look like an email address.</value>
+  </data>
+  <data name="Error.Validation.PasswordRequired" xml:space="preserve">
+    <value>Please enter a password.</value>
+  </data>
+  <data name="Error.Validation.PasswordTooShort" xml:space="preserve">
+    <value>The password must be at least {0} characters.</value>
+  </data>
+  <data name="Error.Validation.PasswordTooLong" xml:space="preserve">
+    <value>The password must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.PasswordBlank" xml:space="preserve">
+    <value>The password cannot be made of spaces alone.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameRequired" xml:space="preserve">
+    <value>Please enter a display name.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameTooShort" xml:space="preserve">
+    <value>The display name must be at least {0} characters.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameTooLong" xml:space="preserve">
+    <value>The display name must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.DisplayNameInvalid" xml:space="preserve">
+    <value>The display name contains characters that are not allowed.</value>
+  </data>
+  <data name="Error.Validation.ErasureReasonTooLong" xml:space="preserve">
+    <value>The reason must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.TitleRequired" xml:space="preserve">
+    <value>The title cannot be empty.</value>
+  </data>
+  <data name="Error.Validation.TitleTooLong" xml:space="preserve">
+    <value>The title must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.SummaryTooLong" xml:space="preserve">
+    <value>The summary must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.DescriptionTooLong" xml:space="preserve">
+    <value>The description must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.SlugRequired" xml:space="preserve">
+    <value>The title needs at least one letter or digit, so that the game can have a web address.</value>
+  </data>
+  <data name="Error.Validation.SlugTooLong" xml:space="preserve">
+    <value>The web address must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.SlugInvalid" xml:space="preserve">
+    <value>The web address may only use lowercase letters, digits and single hyphens.</value>
+  </data>
+  <data name="Error.Validation.ReleaseDateInvalid" xml:space="preserve">
+    <value>The release date is not a real date.</value>
+  </data>
+  <data name="Error.Validation.VersionRequired" xml:space="preserve">
+    <value>Please enter a version number.</value>
+  </data>
+  <data name="Error.Validation.VersionInvalid" xml:space="preserve">
+    <value>A version number is up to three numbers separated by dots, like 1.2.3.</value>
+  </data>
+  <data name="Error.Validation.VersionTooLarge" xml:space="preserve">
+    <value>Each part of the version number must be {0} or less.</value>
+  </data>
+  <data name="Error.Validation.ReleaseNotesTooLong" xml:space="preserve">
+    <value>The release notes must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.BuildNameTooLong" xml:space="preserve">
+    <value>The build name must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteTitleRequired" xml:space="preserve">
+    <value>The devlog entry needs a title.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteTitleTooLong" xml:space="preserve">
+    <value>The devlog title must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.PatchNoteBodyTooLong" xml:space="preserve">
+    <value>The devlog entry must be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.AltTextTooLong" xml:space="preserve">
+    <value>The description may be at most {0} characters.</value>
+  </data>
+  <data name="Error.Validation.AltTextInvalid" xml:space="preserve">
+    <value>The description contains characters that are not allowed.</value>
+  </data>
+  <data name="Common.Previous" xml:space="preserve">
+    <value>Previous</value>
+  </data>
+  <data name="Common.Next" xml:space="preserve">
+    <value>Next</value>
+  </data>
+  <data name="Common.Refresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="Auth.SignIn" xml:space="preserve">
+    <value>Sign in</value>
+  </data>
+  <data name="Auth.Register" xml:space="preserve">
+    <value>Create an account</value>
+  </data>
+  <data name="Auth.SignOut" xml:space="preserve">
+    <value>Sign out</value>
+  </data>
+  <data name="Auth.Email" xml:space="preserve">
+    <value>Email address</value>
+  </data>
+  <data name="Auth.Password" xml:space="preserve">
+    <value>Password</value>
+  </data>
+  <data name="Auth.DisplayName" xml:space="preserve">
+    <value>Display name</value>
+  </data>
+  <data name="Auth.NoAccount" xml:space="preserve">
+    <value>No account yet? Create one</value>
+  </data>
+  <data name="Auth.HaveAccount" xml:space="preserve">
+    <value>Already have an account? Sign in</value>
+  </data>
+  <data name="Auth.InvalidCredentials" xml:space="preserve">
+    <value>That email address and password do not match an account.</value>
+  </data>
+  <data name="Auth.VerifyEmailNotice" xml:space="preserve">
+    <value>Account created. Check {0} for the verification link, then sign in.</value>
+  </data>
+  <data name="Auth.VerifyEmailNotSent" xml:space="preserve">
+    <value>Account created, but the verification message could not be sent to {0} just now. Ask for the link again in a moment.</value>
+  </data>
+  <data name="Auth.ForgotPassword" xml:space="preserve">
+    <value>Forgotten your password?</value>
+  </data>
+  <data name="Auth.ResendVerification" xml:space="preserve">
+    <value>Send the confirmation link again</value>
+  </data>
+  <data name="Auth.PasswordResetRequested" xml:space="preserve">
+    <value>If {0} belongs to an account, a reset link is on its way. Open it from your inbox.</value>
+  </data>
+  <data name="Auth.VerificationLinkRequested" xml:space="preserve">
+    <value>If {0} still needs confirming, a new link is on its way. Open it from your inbox.</value>
+  </data>
+  <data name="Auth.MailThrottled" xml:space="preserve">
+    <value>A link was already requested a moment ago. Wait about {0} minutes, then ask again.</value>
+  </data>
+  <data name="Auth.MailThrottledSoon" xml:space="preserve">
+    <value>A link was already requested a moment ago. Wait a little, then ask again.</value>
+  </data>
+  <data name="Auth.MailUnavailable" xml:space="preserve">
+    <value>This server does not send email, so a link cannot be requested here.</value>
+  </data>
+  <data name="Auth.ConfirmAddressFirst" xml:space="preserve">
+    <value>Confirm your email address before signing in.</value>
+  </data>
+  <data name="Explore.SearchPlaceholder" xml:space="preserve">
+    <value>Search by title</value>
+  </data>
+  <data name="Explore.IdentifierPlaceholder" xml:space="preserve">
+    <value>Game id or slug, for a game shared with you</value>
+  </data>
+  <data name="Explore.OpenIdentifier" xml:space="preserve">
+    <value>Open</value>
+  </data>
+  <data name="Explore.Empty" xml:space="preserve">
+    <value>Nothing matches that search.</value>
+  </data>
+  <data name="Explore.Details" xml:space="preserve">
+    <value>Details</value>
+  </data>
+  <data name="Explore.AddToLibrary" xml:space="preserve">
+    <value>Add to library</value>
+  </data>
+  <data name="Explore.EndOfResults" xml:space="preserve">
+    <value>That is everything</value>
+  </data>
+  <data name="Explore.LoadingMore" xml:space="preserve">
+    <value>Loading more…</value>
+  </data>
+  <data name="Explore.Results" xml:space="preserve">
+    <value>{0} of {1} games</value>
+  </data>
+  <data name="Explore.Sort.ReleaseDate" xml:space="preserve">
+    <value>Release date</value>
+  </data>
+  <data name="Explore.Sort.Title" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Explore.Sort.Recent" xml:space="preserve">
+    <value>Recently added</value>
+  </data>
+  <data name="Library.Remove" xml:space="preserve">
+    <value>Remove</value>
+  </data>
+  <data name="Detail.Back" xml:space="preserve">
+    <value>Back</value>
+  </data>
+  <data name="Detail.Publisher" xml:space="preserve">
+    <value>Published by</value>
+  </data>
+  <data name="Detail.ReleaseDate" xml:space="preserve">
+    <value>Released</value>
+  </data>
+  <data name="Detail.DownloadSize" xml:space="preserve">
+    <value>Download size</value>
+  </data>
+  <data name="Detail.Screenshots" xml:space="preserve">
+    <value>Screenshots</value>
+  </data>
+  <data name="Detail.Devlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Detail.DevlogEmpty" xml:space="preserve">
+    <value>Nothing has been posted yet.</value>
+  </data>
+  <data name="Detail.DevlogMore" xml:space="preserve">
+    <value>Show older posts</value>
+  </data>
+  <data name="Detail.DevlogDraft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Detail.DevlogBy" xml:space="preserve">
+    <value>by {0}</value>
+  </data>
+  <data name="Detail.Versions" xml:space="preserve">
+    <value>Versions</value>
+  </data>
+  <data name="Detail.NoBuildForPlatform" xml:space="preserve">
+    <value>There is no build for this machine yet.</value>
+  </data>
+  <data name="Detail.Unreleased" xml:space="preserve">
+    <value>Not announced</value>
+  </data>
+  <data name="Detail.Unpublished" xml:space="preserve">
+    <value>Not published</value>
+  </data>
+  <data name="Stage.Demo" xml:space="preserve">
+    <value>Demo</value>
+  </data>
+  <data name="Stage.Alpha" xml:space="preserve">
+    <value>Alpha</value>
+  </data>
+  <data name="Stage.Beta" xml:space="preserve">
+    <value>Beta</value>
+  </data>
+  <data name="Stage.Release" xml:space="preserve">
+    <value>Release</value>
+  </data>
+  <data name="Error.NotEnoughSpace" xml:space="preserve">
+    <value>Not enough space: {0} is needed and {1} is free on {2}.</value>
+  </data>
+  <data name="Error.Cancelled" xml:space="preserve">
+    <value>Cancelled.</value>
+  </data>
+  <data name="Detail.Verify" xml:space="preserve">
+    <value>Verify files</value>
+  </data>
+  <data name="Detail.CancelDownload" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="Detail.InstalledVersion" xml:space="preserve">
+    <value>Installed version: {0}</value>
+  </data>
+  <data name="Detail.UpdateAvailable" xml:space="preserve">
+    <value>An update to {0} is available.</value>
+  </data>
+  <data name="Detail.Broken" xml:space="preserve">
+    <value>This installation is damaged. Install it again to repair it.</value>
+  </data>
+  <data name="Detail.InstallComplete" xml:space="preserve">
+    <value>Ready to play.</value>
+  </data>
+  <data name="Detail.Uninstalled" xml:space="preserve">
+    <value>Uninstalled, freeing {0}.</value>
+  </data>
+  <data name="Detail.VerifyIntact" xml:space="preserve">
+    <value>Everything is where it should be.</value>
+  </data>
+  <data name="Detail.VerifyBroken" xml:space="preserve">
+    <value>{0} missing and {1} damaged. Install it again to repair it.</value>
+  </data>
+  <data name="Download.Planning" xml:space="preserve">
+    <value>Working out what to download…</value>
+  </data>
+  <data name="Download.CheckingSpace" xml:space="preserve">
+    <value>Checking free space…</value>
+  </data>
+  <data name="Download.Downloading" xml:space="preserve">
+    <value>Downloading</value>
+  </data>
+  <data name="Download.Applying" xml:space="preserve">
+    <value>Installing files…</value>
+  </data>
+  <data name="Download.Verifying" xml:space="preserve">
+    <value>Verifying…</value>
+  </data>
+  <data name="Download.Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Download.Progress" xml:space="preserve">
+    <value>{0} of {1}</value>
+  </data>
+  <data name="Download.Remaining" xml:space="preserve">
+    <value>{0} left</value>
+  </data>
+  <data name="Launch.NotInstalled" xml:space="preserve">
+    <value>That game is not installed on this machine.</value>
+  </data>
+  <data name="Launch.NotPlayable" xml:space="preserve">
+    <value>This installation is not finished. Install it again before playing.</value>
+  </data>
+  <data name="Launch.EntrypointMissing" xml:space="preserve">
+    <value>The game's executable is missing. Install it again to repair it.</value>
+  </data>
+  <data name="Launch.AlreadyRunning" xml:space="preserve">
+    <value>That game is already running.</value>
+  </data>
+  <data name="Launch.StartFailed" xml:space="preserve">
+    <value>The game could not be started.</value>
+  </data>
+  <data name="Detail.Running" xml:space="preserve">
+    <value>Running…</value>
+  </data>
+  <data name="Library.Damaged" xml:space="preserve">
+    <value>Damaged</value>
+  </data>
+  <data name="Library.Unfinished" xml:space="preserve">
+    <value>Install unfinished</value>
+  </data>
+  <data name="Detail.LaunchOptions" xml:space="preserve">
+    <value>Launch options</value>
+  </data>
+  <data name="Detail.LaunchOptionsHint" xml:space="preserve">
+    <value>Added after the arguments the build carries: {0}</value>
+  </data>
+  <data name="Detail.LaunchOptionsNone" xml:space="preserve">
+    <value>the build passes none</value>
+  </data>
+  <data name="Detail.LaunchOptionsSaved" xml:space="preserve">
+    <value>Launch options saved.</value>
+  </data>
+  <data name="Common.Save" xml:space="preserve">
+    <value>Save</value>
+  </data>
+  <data name="Nav.Developer" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Publish.MyGames" xml:space="preserve">
+    <value>My games</value>
+  </data>
+  <data name="Publish.NewGame" xml:space="preserve">
+    <value>New game</value>
+  </data>
+  <data name="Publish.GameTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Publish.GameSummary" xml:space="preserve">
+    <value>Summary</value>
+  </data>
+  <data name="Publish.Visibility" xml:space="preserve">
+    <value>Visibility</value>
+  </data>
+  <data name="Publish.Create" xml:space="preserve">
+    <value>Create</value>
+  </data>
+  <data name="Publish.SlugHint" xml:space="preserve">
+    <value>Give this identifier to somebody so they can open the game. An unlisted game is in no listing, so this is the only way to reach it.</value>
+  </data>
+  <data name="Publish.GameCreated" xml:space="preserve">
+    <value>Created {0}.</value>
+  </data>
+  <data name="Publish.Versions" xml:space="preserve">
+    <value>Versions</value>
+  </data>
+  <data name="Publish.NewVersion" xml:space="preserve">
+    <value>New version</value>
+  </data>
+  <data name="Publish.Semver" xml:space="preserve">
+    <value>Version number</value>
+  </data>
+  <data name="Publish.Stage" xml:space="preserve">
+    <value>Stage</value>
+  </data>
+  <data name="Publish.ReleaseNotes" xml:space="preserve">
+    <value>Release notes</value>
+  </data>
+  <data name="Publish.PublishNow" xml:space="preserve">
+    <value>Publish it now</value>
+  </data>
+  <data name="Publish.PublishVersion" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Publish.WithdrawVersion" xml:space="preserve">
+    <value>Withdraw</value>
+  </data>
+  <data name="Publish.VersionPublished" xml:space="preserve">
+    <value>Version {0} is published.</value>
+  </data>
+  <data name="Publish.VersionWithdrawn" xml:space="preserve">
+    <value>Version {0} is no longer published.</value>
+  </data>
+  <data name="Publish.BuildName" xml:space="preserve">
+    <value>Build name (optional)</value>
+  </data>
+  <data name="Publish.VersionCreated" xml:space="preserve">
+    <value>Created version {0}.</value>
+  </data>
+  <data name="Publish.Builds" xml:space="preserve">
+    <value>Builds</value>
+  </data>
+  <data name="Publish.NewBuild" xml:space="preserve">
+    <value>Publish a build</value>
+  </data>
+  <data name="Publish.Directory" xml:space="preserve">
+    <value>Build directory</value>
+  </data>
+  <data name="Publish.ChooseDirectory" xml:space="preserve">
+    <value>Choose the directory to publish</value>
+  </data>
+  <data name="Publish.Browse" xml:space="preserve">
+    <value>Browse…</value>
+  </data>
+  <data name="Publish.Entrypoint" xml:space="preserve">
+    <value>Executable</value>
+  </data>
+  <data name="Publish.LaunchArgs" xml:space="preserve">
+    <value>Launch arguments</value>
+  </data>
+  <data name="Publish.Platform" xml:space="preserve">
+    <value>Platform</value>
+  </data>
+  <data name="Publish.Architecture" xml:space="preserve">
+    <value>Architecture</value>
+  </data>
+  <data name="Publish.Start" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Publish.BuildReady" xml:space="preserve">
+    <value>Build published: {0} uploaded, {1} files the server already had.</value>
+  </data>
+  <data name="Publish.NoGames" xml:space="preserve">
+    <value>You have not created a game yet.</value>
+  </data>
+  <data name="Publish.SelectGame" xml:space="preserve">
+    <value>Select a game to see its versions.</value>
+  </data>
+  <data name="Publish.SelectVersion" xml:space="preserve">
+    <value>A build belongs to a version, so choose one first.</value>
+  </data>
+  <data name="Publish.Packaging" xml:space="preserve">
+    <value>Reading and hashing the build…</value>
+  </data>
+  <data name="Publish.Negotiating" xml:space="preserve">
+    <value>Asking what the server already has…</value>
+  </data>
+  <data name="Publish.Uploading" xml:space="preserve">
+    <value>Uploading</value>
+  </data>
+  <data name="Publish.Finalizing" xml:space="preserve">
+    <value>Finishing the build…</value>
+  </data>
+  <data name="Publish.Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="Publish.NothingToPublish" xml:space="preserve">
+    <value>There is nothing to publish there.</value>
+  </data>
+  <data name="Publish.TooManyFiles" xml:space="preserve">
+    <value>That build has more files than one manifest can carry.</value>
+  </data>
+  <data name="Publish.InvalidPath" xml:space="preserve">
+    <value>One of the file names cannot be published.</value>
+  </data>
+  <data name="Publish.EntrypointMissing" xml:space="preserve">
+    <value>The executable is not one of the files being published.</value>
+  </data>
+  <data name="Publish.FileTooLarge" xml:space="preserve">
+    <value>One of the files is larger than a single upload may carry.</value>
+  </data>
+  <data name="Publish.Unreadable" xml:space="preserve">
+    <value>One of the files could not be read.</value>
+  </data>
+  <data name="Settings.Title" xml:space="preserve">
+    <value>Settings</value>
+  </data>
+  <data name="Settings.InstallDirectory" xml:space="preserve">
+    <value>Where new games are installed</value>
+  </data>
+  <data name="Settings.InstallDirectoryDefault" xml:space="preserve">
+    <value>Leave empty to use {0}</value>
+  </data>
+  <data name="Settings.ChooseInstallDirectory" xml:space="preserve">
+    <value>Choose where new games are installed</value>
+  </data>
+  <data name="Settings.Reset" xml:space="preserve">
+    <value>Use the default</value>
+  </data>
+  <data name="Settings.InstalledElsewhere" xml:space="preserve">
+    <value>{0} game(s) already installed stay where they are.</value>
+  </data>
+  <data name="Settings.Theme" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="Settings.Saved" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="Publish.TabBuilds" xml:space="preserve">
+    <value>Builds</value>
+  </data>
+  <data name="Publish.TabDetails" xml:space="preserve">
+    <value>Game details</value>
+  </data>
+  <data name="Publish.TabArtwork" xml:space="preserve">
+    <value>Artwork</value>
+  </data>
+  <data name="Publish.TabDevlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Publish.Description" xml:space="preserve">
+    <value>Description</value>
+  </data>
+  <data name="Publish.ReleaseDate" xml:space="preserve">
+    <value>Release date</value>
+  </data>
+  <data name="Publish.SaveChanges" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
+  <data name="Publish.GameUpdated" xml:space="preserve">
+    <value>Saved.</value>
+  </data>
+  <data name="Publish.NoChanges" xml:space="preserve">
+    <value>Nothing has changed yet.</value>
+  </data>
+  <data name="Publish.Artwork" xml:space="preserve">
+    <value>Artwork</value>
+  </data>
+  <data name="Publish.Gallery" xml:space="preserve">
+    <value>Screenshots</value>
+  </data>
+  <data name="Publish.Identity" xml:space="preserve">
+    <value>Cover, banner and logo</value>
+  </data>
+  <data name="Publish.AddImage" xml:space="preserve">
+    <value>Add an image</value>
+  </data>
+  <data name="Publish.ChooseImage" xml:space="preserve">
+    <value>Choose an image</value>
+  </data>
+  <data name="Publish.ImageKind" xml:space="preserve">
+    <value>Kind</value>
+  </data>
+  <data name="Publish.AltText" xml:space="preserve">
+    <value>Description for screen readers</value>
+  </data>
+  <data name="Publish.SaveDescription" xml:space="preserve">
+    <value>Save description</value>
+  </data>
+  <data name="Publish.MoveUp" xml:space="preserve">
+    <value>Move earlier</value>
+  </data>
+  <data name="Publish.MoveDown" xml:space="preserve">
+    <value>Move later</value>
+  </data>
+  <data name="Publish.NoArtwork" xml:space="preserve">
+    <value>This game has no artwork yet.</value>
+  </data>
+  <data name="Publish.OpenGamePage" xml:space="preserve">
+    <value>Open the game page</value>
+  </data>
+  <data name="Publish.ImageUploaded" xml:space="preserve">
+    <value>{0} uploaded.</value>
+  </data>
+  <data name="Publish.ImageUpdated" xml:space="preserve">
+    <value>Description saved.</value>
+  </data>
+  <data name="Publish.ImageDeleted" xml:space="preserve">
+    <value>Image removed.</value>
+  </data>
+  <data name="Publish.MediaLimits" xml:space="preserve">
+    <value>{0}, up to {1}. At most {2} screenshots per game.</value>
+  </data>
+  <data name="Publish.GalleryCount" xml:space="preserve">
+    <value>{0} of {1} screenshots</value>
+  </data>
+  <data name="Publish.NoReplaceInPlace" xml:space="preserve">
+    <value>An image is never replaced: upload another one and remove this.</value>
+  </data>
+  <data name="Publish.Kind.Cover" xml:space="preserve">
+    <value>Cover</value>
+  </data>
+  <data name="Publish.Kind.Banner" xml:space="preserve">
+    <value>Banner</value>
+  </data>
+  <data name="Publish.Kind.Logo" xml:space="preserve">
+    <value>Logo</value>
+  </data>
+  <data name="Detail.Videos" xml:space="preserve">
+    <value>Videos</value>
+  </data>
+  <data name="Detail.PlayVideo" xml:space="preserve">
+    <value>Play</value>
+  </data>
+  <data name="Detail.StopVideo" xml:space="preserve">
+    <value>Stop</value>
+  </data>
+  <data name="Detail.VideoUnavailable" xml:space="preserve">
+    <value>Video playback is not available on this machine.</value>
+  </data>
+  <data name="Detail.VideoFailed" xml:space="preserve">
+    <value>That video could not be played.</value>
+  </data>
+  <data name="Publish.ChooseVideo" xml:space="preserve">
+    <value>Choose a video</value>
+  </data>
+  <data name="Publish.Videos" xml:space="preserve">
+    <value>Videos</value>
+  </data>
+  <data name="Publish.Kind.Video" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="Publish.VideoLimits" xml:space="preserve">
+    <value>{0}, up to {1}. At most {2} videos per game.</value>
+  </data>
+  <data name="Publish.VideoCount" xml:space="preserve">
+    <value>{0} of {1} videos</value>
+  </data>
+  <data name="Publish.Media.VideoTooLarge" xml:space="preserve">
+    <value>This server accepts videos up to {0}.</value>
+  </data>
+  <data name="Publish.Media.UnsupportedVideoFormat" xml:space="preserve">
+    <value>Only MP4 and WebM are accepted. Matroska and QuickTime files are refused even where a player would open them.</value>
+  </data>
+  <data name="Publish.Media.VideoGalleryFull" xml:space="preserve">
+    <value>This game already has the {0} videos this server allows.</value>
+  </data>
+  <data name="Publish.Media.VideoNotSupported" xml:space="preserve">
+    <value>This server does not store videos.</value>
+  </data>
+  <data name="Publish.Kind.Screenshot" xml:space="preserve">
+    <value>Screenshot</value>
+  </data>
+  <data name="Publish.Media.Empty" xml:space="preserve">
+    <value>That file is empty.</value>
+  </data>
+  <data name="Publish.Media.TooLarge" xml:space="preserve">
+    <value>This server accepts images up to {0}.</value>
+  </data>
+  <data name="Publish.Media.UnsupportedFormat" xml:space="preserve">
+    <value>Only PNG, JPEG and WebP are accepted. SVG is not an image as far as the server is concerned.</value>
+  </data>
+  <data name="Publish.Media.AltTextTooLong" xml:space="preserve">
+    <value>The description may be at most {0} characters.</value>
+  </data>
+  <data name="Publish.Media.GalleryFull" xml:space="preserve">
+    <value>This game already has the {0} screenshots this server allows.</value>
+  </data>
+  <data name="Publish.Devlog" xml:space="preserve">
+    <value>Devlog</value>
+  </data>
+  <data name="Publish.NewEntry" xml:space="preserve">
+    <value>New entry</value>
+  </data>
+  <data name="Publish.EntryTitle" xml:space="preserve">
+    <value>Title</value>
+  </data>
+  <data name="Publish.EntryBody" xml:space="preserve">
+    <value>Body (Markdown)</value>
+  </data>
+  <data name="Publish.LinkedVersion" xml:space="preserve">
+    <value>About the version</value>
+  </data>
+  <data name="Publish.NoVersion" xml:space="preserve">
+    <value>The game in general</value>
+  </data>
+  <data name="Publish.Draft" xml:space="preserve">
+    <value>Draft</value>
+  </data>
+  <data name="Publish.PublishEntry" xml:space="preserve">
+    <value>Publish</value>
+  </data>
+  <data name="Publish.WithdrawEntry" xml:space="preserve">
+    <value>Withdraw</value>
+  </data>
+  <data name="Publish.SaveEntry" xml:space="preserve">
+    <value>Save entry</value>
+  </data>
+  <data name="Publish.EditEntry" xml:space="preserve">
+    <value>Edit</value>
+  </data>
+  <data name="Publish.NoEntries" xml:space="preserve">
+    <value>Nothing written yet.</value>
+  </data>
+  <data name="Publish.ShowOlder" xml:space="preserve">
+    <value>Show older</value>
+  </data>
+  <data name="Publish.EntryCreated" xml:space="preserve">
+    <value>Entry written.</value>
+  </data>
+  <data name="Publish.EntrySaved" xml:space="preserve">
+    <value>Entry saved.</value>
+  </data>
+  <data name="Publish.EntryPublished" xml:space="preserve">
+    <value>Published.</value>
+  </data>
+  <data name="Publish.EntryWithdrawn" xml:space="preserve">
+    <value>Withdrawn. It is a draft again and can be published later.</value>
+  </data>
+  <data name="Publish.EntryDeleted" xml:space="preserve">
+    <value>Entry deleted.</value>
+  </data>
+  <data name="Publish.RepublishKeepsTheDate" xml:space="preserve">
+    <value>Publishing again keeps the original date: it says when readers saw the entry, not when it was last edited.</value>
+  </data>
+  <data name="Publish.Delete" xml:space="preserve">
+    <value>Delete</value>
+  </data>
+  <data name="Publish.ConfirmDelete" xml:space="preserve">
+    <value>Delete for good</value>
+  </data>
+  <data name="Publish.KeepIt" xml:space="preserve">
+    <value>Keep it</value>
+  </data>
+  <data name="Publish.ConfirmDeleteImage" xml:space="preserve">
+    <value>Delete "{0}"? The image is removed from the game and cannot be brought back â€” you would have to upload the file again.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteEntry" xml:space="preserve">
+    <value>Delete "{0}"? The entry is gone for good. To stop showing it without losing it, withdraw it instead.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteBuild" xml:space="preserve">
+    <value>Delete the {1}/{2} build of {0}? Anyone who has it installed keeps their copy, but nobody can download or update to it again.</value>
+  </data>
+  <data name="Publish.ConfirmDeleteVersion" xml:space="preserve">
+    <value>Delete version {0}? Its {1} build(s) go with it, and none of them can be downloaded again.</value>
+  </data>
+  <data name="Publish.BuildDeleted" xml:space="preserve">
+    <value>Build deleted. The space it used is credited back to your quota.</value>
+  </data>
+  <data name="Publish.VersionDeleted" xml:space="preserve">
+    <value>Version deleted.</value>
+  </data>
+  <data name="Settings.Account" xml:space="preserve">
+    <value>Account</value>
+  </data>
+  <data name="Settings.DeleteAccount" xml:space="preserve">
+    <value>Delete my account</value>
+  </data>
+  <data name="Settings.DeleteAccountExplain" xml:space="preserve">
+    <value>Your account, your library and every signed-in device are removed, and this cannot be undone. Type your password to continue.</value>
+  </data>
+  <data name="Settings.DeletePassword" xml:space="preserve">
+    <value>Your password</value>
+  </data>
+  <data name="Settings.DeleteReason" xml:space="preserve">
+    <value>Why are you leaving? (optional)</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccount" xml:space="preserve">
+    <value>Delete this account for good? Your library and every signed-in device go with it, and nobody can sign in with this address again. There is no way to bring it back.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountPublisher" xml:space="preserve">
+    <value>Delete this account for good? Your library and every signed-in device go with it, and there is no way to bring it back. Anything you published stays online under a deleted name, so that the people who installed it can still update — delete those games first if you want them gone.</value>
+  </data>
+  <data name="Settings.ConfirmDeleteAccountButton" xml:space="preserve">
+    <value>Delete my account</value>
+  </data>
+  <data name="Settings.KeepAccount" xml:space="preserve">
+    <value>Keep my account</value>
+  </data>
+  <data name="Publish.DeleteGame" xml:space="preserve">
+    <value>Delete this game</value>
+  </data>
+  <data name="Publish.ConfirmDeleteGame" xml:space="preserve">
+    <value>Delete "{0}"? Its {1} version(s) and every build, picture and devlog entry go with it, and anyone who has it installed can never update or verify it again — although what is already on their disk keeps working. To hide it instead without losing anything, set it back to draft.</value>
+  </data>
+  <data name="Publish.GameDeleted" xml:space="preserve">
+    <value>"{0}" was deleted. The space its builds used is credited back to your quota.</value>
+  </data>
+  <data name="Settings.Diagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="Settings.SendCrashReports" xml:space="preserve">
+    <value>Send crash reports</value>
+  </data>
+  <data name="Settings.SendCrashReportsExplain" xml:space="preserve">
+    <value>When the launcher crashes it writes a report next to its logs. With this on, the report is sent the next time the launcher starts. It carries the error and where it happened, never your name, your account or your file paths — and nothing is sent while this is off.</value>
+  </data>
+  <data name="Update.Available" xml:space="preserve">
+    <value>Version {0} of {1} is available.</value>
+  </data>
+  <data name="Update.Download" xml:space="preserve">
+    <value>Update and restart</value>
+  </data>
+  <data name="Update.Downloading" xml:space="preserve">
+    <value>Downloading… {0}%</value>
+  </data>
+  <data name="Update.Restarting" xml:space="preserve">
+    <value>Version {0} is ready. {1} will close and start again to finish updating.</value>
+  </data>
+  <data name="Update.Dismiss" xml:space="preserve">
+    <value>Not now</value>
+  </data>
+  <data name="Auth.ShowPassword" xml:space="preserve">
+    <value>Show password</value>
+  </data>
+  <data name="Detail.OpenFolder" xml:space="preserve">
+    <value>Open folder</value>
+  </data>
+  <data name="Detail.OpenFolderFailed" xml:space="preserve">
+    <value>The install folder could not be opened.</value>
+  </data>
+  <data name="Detail.UpdateBeforePlaying" xml:space="preserve">
+    <value>Update this game before playing it: what is installed is no longer the newest build.</value>
+  </data>
+  <data name="Detail.ChooseInstallDirectory" xml:space="preserve">
+    <value>Where should {0} be installed?</value>
+  </data>
+  <data name="Settings.AskWhereToInstall" xml:space="preserve">
+    <value>Ask where to install every game</value>
+  </data>
+  <data name="Settings.AskWhereToInstallExplain" xml:space="preserve">
+    <value>Off, a game goes into the folder above without asking. On, that folder is only where the question starts, and cancelling the question cancels the install.</value>
+  </data>
+  <data name="Account.ChangePassword" xml:space="preserve">
+    <value>Change your password</value>
+  </data>
+  <data name="Account.PasswordChangeRequired" xml:space="preserve">
+    <value>This account is using a temporary password an administrator set for it. Choose one of your own to carry on.</value>
+  </data>
+  <data name="Account.CurrentPassword" xml:space="preserve">
+    <value>Current password</value>
+  </data>
+  <data name="Account.NewPassword" xml:space="preserve">
+    <value>New password</value>
+  </data>
+  <data name="Account.ConfirmPassword" xml:space="preserve">
+    <value>Repeat the new password</value>
+  </data>
+  <data name="Account.SavePassword" xml:space="preserve">
+    <value>Save the new password</value>
+  </data>
+  <data name="Account.PasswordsDoNotMatch" xml:space="preserve">
+    <value>The two new passwords are not the same.</value>
+  </data>
+  <data name="Account.CurrentPasswordWrong" xml:space="preserve">
+    <value>That is not your current password.</value>
+  </data>
+  <data name="Auth.NoMailContactAdministrator" xml:space="preserve">
+    <value>This server does not send email. If you have forgotten your password, ask an administrator for a temporary one.</value>
+  </data>
+  <data name="Error.Validation.PasswordUnchanged" xml:space="preserve">
+    <value>The new password has to be different from the current one.</value>
+  </data>
+</root>

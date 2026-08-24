@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>GameLauncher.Updater</RootNamespace>
+    <AssemblyName>GameLauncher.Updater</AssemblyName>
+
+    <!-- This ships inside every installation and is copied again on every update, so it is the
+         one project in the solution worth shrinking. Trimming is safe here because there is no
+         reflection to lose, and the invariant globalization mode drops ICU: the updater's only
+         output is a handful of English lines on a console nobody usually sees. Together they
+         take it from about 75 MB to a fraction of that. -->
+    <PublishTrimmed>true</PublishTrimmed>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TrimMode>full</TrimMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\GameLauncher.Core\GameLauncher.Core.csproj" />
+  </ItemGroup>
+
+</Project>

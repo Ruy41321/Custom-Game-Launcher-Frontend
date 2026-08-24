@@ -1,0 +1,60 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <ItemGroup Label="UI">
+    <PackageVersion Include="Avalonia" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+    <PackageVersion Include="Avalonia.Fonts.Inter" Version="12.1.1" />
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <!-- Playback. The first native dependency in this repository, and the only one: LibVLCSharp is
+       managed, VideoLAN.LibVLC.Windows is ~100 MB of libvlc and its plugins per RID (measured:
+       102 MB for win-x64), and it is the accepted cost of playing a trailer inside the launcher
+       instead of handing the URL to whatever the machine calls a video player.
+
+       There is deliberately no Linux entry, because **no such package exists**: VideoLAN ships
+       native packages for Windows, Android, iOS, macOS and UWP and not for Linux, where libvlc
+       comes from the distribution. So a Linux launcher plays video where VLC is installed and
+       says it cannot where it is not — which is why IVideoPlayback.IsAvailable exists and why
+       nothing above it treats false as an error. -->
+  <ItemGroup Label="Playback">
+    <PackageVersion Include="LibVLCSharp" Version="3.10.1" />
+    <PackageVersion Include="LibVLCSharp.Avalonia" Version="3.10.1" />
+    <PackageVersion Include="VideoLAN.LibVLC.Windows" Version="3.0.23.1" />
+  </ItemGroup>
+
+  <ItemGroup Label="Hosting">
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="9.0.18" />
+    <PackageVersion Include="Microsoft.Extensions.Http" Version="9.0.18" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.18" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.18" />
+  </ItemGroup>
+
+  <ItemGroup Label="Local state">
+    <PackageVersion Include="Microsoft.Data.Sqlite" Version="9.0.18" />
+    <PackageVersion Include="Dapper" Version="2.1.79" />
+  </ItemGroup>
+
+  <ItemGroup Label="Logging">
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Logging" Version="9.0.2" />
+  </ItemGroup>
+
+  <ItemGroup Label="Testing">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageVersion Include="NSubstitute" Version="6.0.0" />
+    <!-- Only tests/GameLauncher.Views.Tests takes this: it is the one project that needs a
+         running Avalonia, and it is kept apart so that nothing else gets one (D68). -->
+    <PackageVersion Include="Avalonia.Headless" Version="12.1.1" />
+  </ItemGroup>
+
+</Project>
