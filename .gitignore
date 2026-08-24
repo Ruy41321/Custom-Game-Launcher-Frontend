@@ -8,6 +8,10 @@ publish/
 *.user
 *.suo
 
+## Release payload and installer output (DISTRIBUTING.md, installer.iss)
+dist/
+Output/
+
 ## Test / coverage
 TestResults/
 coverage*.json

@@ -409,6 +409,73 @@ On Linux, make sure the file is executable if your zip tool dropped the bit:
 chmod +x GameLauncher
 ```
 
+### An installer instead, on Windows
+
+A zip is enough and always works. If you would rather hand people something that looks like an
+installation — a Start-menu entry, a shortcut, a line in *Installed apps*, an uninstaller —
+`installer.iss` in the repository root builds one with [Inno Setup](https://jrsoftware.org/isinfo.php)
+6.3 or later. Build the payload as in Step 4, then:
+
+```bash
+ISCC.exe installer.iss
+```
+
+`Output\CustomGameLauncher-Setup-<version>.exe` is the file you send. It reads its version out of
+the executable you just published, so there is no second number to keep in step, and it refuses to
+build if `dist/win-x64` is missing or has no `updater/` in it.
+
+**It installs per-user, into `%LOCALAPPDATA%\Programs\CustomGameLauncher`, and that is not a
+preference.** A self-update renames the installation directory aside and puts the new one in its
+place, so the user has to be able to write both that directory *and its parent* without
+elevation — the swap happens as the launcher exits, with nobody there to answer a UAC prompt.
+Installed under `C:\Program Files`, this launcher would install once and never update again. The
+installer sets `PrivilegesRequired=lowest` for that reason, and warns on the directory page if you
+point it somewhere its parent is not writable.
+
+Three things it deliberately does not do:
+
+- **It is not part of the release loop.** Updates are the signed archive of Step 7, unpacked by
+  the launcher itself. You do not rebuild the installer to ship an update, and the installer is
+  never published to the server.
+- **It does not delete the user's data on uninstall.** Settings, logs and installed games live
+  under `%LOCALAPPDATA%\CustomGameLauncher` and stay. Removing the launcher is not a request to
+  delete somebody's library.
+- **It does not make SmartScreen go away.** An unsigned executable downloaded from the internet
+  is flagged whether it is a zip or a setup — that needs a code-signing certificate, which is a
+  yearly bill and a different problem from the release signing in Step 2.
+
+### And a tarball, on Linux
+
+`scripts/package-linux.sh` builds the same thing in the shape Linux takes it in — the payload,
+plus the `install.sh` that puts it in place. Publish as in Step 4, then:
+
+```bash
+scripts/package-linux.sh
+```
+
+`Output/CustomGameLauncher-<version>-linux-x64.tar.gz` is what you send. It takes its version
+from `Directory.Build.props`, and refuses to build a payload that has no `updater/` in it. Your
+testers run:
+
+```bash
+tar xzf CustomGameLauncher-1.0.0-linux-x64.tar.gz && cd CustomGameLauncher-1.0.0-linux-x64 && ./install.sh
+```
+
+That installs into `~/.local/opt/CustomGameLauncher`, writes a menu entry and a
+`~/.local/bin/custom-game-launcher` symlink, and forces the executable bit — which an archive
+built on Windows for a Linux runtime identifier does not carry, and whose absence looks exactly
+like a new version that crashed. `--prefix DIR` puts it somewhere else; `./install.sh
+--uninstall` removes it, keeping the user's data.
+
+**It refuses to install into `~/.local/share/CustomGameLauncher`**, or anywhere under it. That is
+where the launcher keeps settings, logs and installed games, and a self-update replaces its
+installation directory wholesale — so the two sharing a path would mean an update that deletes
+somebody's library. It checks that the parent directory is writable for the same reason the
+Windows installer does.
+
+**An AppImage would not work here.** A single immutable file is precisely what a self-update
+cannot replace, and adopting one would mean giving up the updater this launcher already has.
+
 ---
 
 ## Step 6 — Publish a game
@@ -560,7 +627,10 @@ Stated so you do not go looking:
 
 - **No payments, no licences, no DRM.** Anybody who can reach your server and see a game can
   install it. Visibility is `draft` / `unlisted` / `public`, and that is the whole model.
-- **No installer.** The first copy is a zip somebody unzips.
+- **No app store, and nothing signed with a code-signing certificate.** The first copy is a zip
+  somebody unzips, or the Windows installer and the Linux tarball of Step 5 — unsigned either
+  way, so SmartScreen has a word to say about it. That is a different thing from the release
+  signing of Step 2, which protects updates and is not optional.
 - **No automatic retention.** Nothing deletes an old build on its own — you delete them, and the
   disk is reclaimed after a grace period. Retired launcher artifacts are never swept at all.
 - **No data export.** Account erasure exists; the other half does not.
@@ -587,6 +657,8 @@ Stated so you do not go looking:
 | No update is ever offered | The public key is empty in the build, or the version in the document is not strictly newer, or the release is for another platform |
 | `--publish-release` refuses the document | A trailing newline, usually. Use `printf` |
 | The update downloads and then fails | The archive has `\` in its entry names, or no `updater/` in the build |
+| `ISCC` or `package-linux.sh` refuses to build | The payload is not there, or was published without `updater/` — build Step 4 first |
+| A launcher never sees an update, and it was installed by the installer | It was moved, or installed, somewhere its parent directory is not user-writable — reinstall under `%LOCALAPPDATA%\Programs` |
 | An update rolls back every time on Linux | The archive lost the executable bit and the launcher could not start — the installer forces it now, so make sure you are on a build from 2026-08-07 or later |
 
 The launcher writes a log next to its own data — `%LOCALAPPDATA%\CustomGameLauncher\logs` on
