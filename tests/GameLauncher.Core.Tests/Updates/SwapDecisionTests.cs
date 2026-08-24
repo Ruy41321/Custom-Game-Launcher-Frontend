@@ -42,10 +42,16 @@ public sealed class SwapDecisionTests
     [Fact]
     public void TheOldInstallationIsRenamedBesideTheTargetSoTheMoveStaysOnOneFilesystem()
     {
-        string previous = UpdateSwapPaths.PreviousOf(
-            Path.Combine("C:", "Apps", "Launcher"));
+        // Rooted at the platform's own temporary directory rather than at a literal `C:`,
+        // which is a drive on one of the two supported platforms and an ordinary relative
+        // segment on the other: there `PreviousOf` resolved it against the working directory
+        // and the assertion compared an absolute path with a relative one. It failed only on
+        // Linux, where this suite does not run — see CLAUDE.md §9.
+        string parent = Path.Combine(Path.GetTempPath(), "Apps");
 
-        Assert.Equal(Path.Combine("C:", "Apps", "Launcher.previous"), previous);
+        string previous = UpdateSwapPaths.PreviousOf(Path.Combine(parent, "Launcher"));
+
+        Assert.Equal(Path.Combine(parent, "Launcher.previous"), previous);
     }
 
     [Fact]
