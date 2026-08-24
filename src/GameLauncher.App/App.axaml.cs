@@ -1,6 +1,8 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using GameLauncher.App.Localization;
@@ -10,6 +12,7 @@ using GameLauncher.App.Views;
 using GameLauncher.Core.Configuration;
 using GameLauncher.Core.Discovery;
 using GameLauncher.Core.Localization;
+using GameLauncher.Core.Platform;
 using GameLauncher.Infrastructure.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,7 +46,14 @@ public partial class App : Application
         {
             MainWindowViewModel shell = _services.GetRequiredService<MainWindowViewModel>();
 
-            desktop.MainWindow = new MainWindow { DataContext = shell };
+            // Before the window exists, so the logo is there on the first frame rather than
+            // appearing a moment later.
+            shell.Logo = LoadBitmap(configuration.Branding.LogoPath);
+
+            MainWindow window = new() { DataContext = shell };
+            ApplyWindowIcon(window, configuration.Branding.WindowIconPath);
+
+            desktop.MainWindow = window;
 
             // Restoring the session is a round trip, so it happens after the window is up
             // rather than in front of it: a launcher that shows nothing until the server
@@ -151,6 +161,50 @@ public partial class App : Application
         services.AddSingleton<MainWindowViewModel>();
 
         return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// A branding asset, or null. Every failure is one: a path that does not resolve, a file
+    /// that is not there, and bytes that are not a picture all mean the same thing to the
+    /// person looking at the window, and DISTRIBUTING.md §3.3 already promises that anything
+    /// missing is simply not shown. A launcher that refused to open because a logo was the
+    /// wrong shape would be a worse answer to a fork's typo.
+    /// </summary>
+    private Bitmap? LoadBitmap(string? configuredPath)
+    {
+        if (_services is null)
+        {
+            return null;
+        }
+
+        string? path = BrandingPaths.Resolve(
+            _services.GetRequiredService<IPathProvider>().ApplicationDirectory, configuredPath);
+
+        if (path is null || !File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            return new Bitmap(path);
+        }
+        catch (Exception exception)
+        {
+            _services.GetRequiredService<ILogger<App>>()
+                .LogWarning(exception, "The branding asset at {Path} could not be read", path);
+            return null;
+        }
+    }
+
+    private void ApplyWindowIcon(Window window, string? configuredPath)
+    {
+        Bitmap? icon = LoadBitmap(configuredPath);
+
+        if (icon is not null)
+        {
+            window.Icon = new WindowIcon(icon);
+        }
     }
 
     /// <summary>
