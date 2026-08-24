@@ -470,10 +470,19 @@ dotnet test GameLauncher.sln
 dotnet format GameLauncher.sln --verify-no-changes
 ```
 
-A push made without running them is a push made on hope. What they cannot cover is the **Linux
-leg**: the suite runs here on Windows only, and three tests skip themselves where there is no
-Unix file mode to look at. A change touching platform-specific code or the publish configuration
-is worth saying out loud as unverified on Linux rather than quietly assuming.
+A push made without running them is a push made on hope.
+
+**And a third, before a merge into `main`**, because the two above run on Windows only and three
+tests skip themselves where there is no Unix file mode to look at — §6 has the command and the
+two bugs that reached `main` for want of it:
+
+```bash
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd -W):/src" -w /src mcr.microsoft.com/dotnet/sdk:9.0 bash -c "dotnet test GameLauncher.sln --nologo"
+```
+
+It is worth its few minutes on anything touching paths, the file system, or the publish
+configuration. Skipping it means saying out loud that the change is unverified on Linux, rather
+than quietly assuming it is not.
 
 ### Finishing a milestone
 
