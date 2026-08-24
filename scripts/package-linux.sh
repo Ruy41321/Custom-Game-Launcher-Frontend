@@ -17,6 +17,7 @@ PAYLOAD_DIR="$REPO_ROOT/dist/linux-x64"
 OUTPUT_DIR="$REPO_ROOT/Output"
 
 die() { printf '%s\n' "error: $*" >&2; exit 1; }
+note() { printf '%s\n' "$*" >&2; }
 
 [ -d "$PAYLOAD_DIR" ] ||
   die "no dist/linux-x64 — build it first:
