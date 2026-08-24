@@ -69,6 +69,12 @@
     <!-- Shipped read-only beside the executable: the fork-and-rebrand surface. -->
     <None Include="..\..\launcher.config.json" Link="launcher.config.json"
           CopyToOutputDirectory="PreserveNewest" />
+
+    <!-- The fork's logo and window icon, if it has any. The glob matches nothing in an
+         unmodified clone, which is the state DISTRIBUTING.md 3.3 describes: anything
+         missing is simply not shown. -->
+    <None Include="..\..\assets\**" Link="assets\%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

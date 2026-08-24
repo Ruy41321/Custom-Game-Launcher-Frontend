@@ -178,6 +178,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public string AppName { get; }
 
     /// <summary>
+    /// The fork's logo, beside the name in the top bar, or null when there is none — which is
+    /// the default and is what an unmodified build of this repository shows.
+    ///
+    /// Typed <c>object</c> for the reason <c>IVideoPlayback.Player</c> is: decoding needs an
+    /// initialised Avalonia, so the type belongs to the App layer's composition root and not
+    /// to a view model a test constructs without a toolkit. It is set once, before the window
+    /// is built, and is observable only so that a later caller cannot set it into a void.
+    /// </summary>
+    [ObservableProperty]
+    private object? _logo;
+
+    /// <summary>
     /// The pages, as the thing that gets reset. Public so a test can hold this list against
     /// the properties below and fail when they disagree.
     /// </summary>

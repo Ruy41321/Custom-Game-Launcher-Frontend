@@ -20,6 +20,8 @@
       <Grid ColumnDefinitions="Auto,*,Auto">
 
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
+          <Image Source="{Binding Logo}" Height="24" VerticalAlignment="Center"
+                 IsVisible="{Binding Logo, Converter={x:Static ObjectConverters.IsNotNull}}" />
           <TextBlock Text="{Binding AppName}" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" />
           <Button Content="{loc:Tr Nav.Library}" Command="{Binding ShowLibraryCommand}"
                   Classes="link" IsVisible="{Binding CanNavigate}" />
