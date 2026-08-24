@@ -48,6 +48,13 @@ chmod +x -- "$STAGE/$NAME/app/GameLauncher"
 [ ! -f "$STAGE/$NAME/app/updater/GameLauncher.Updater" ] ||
   chmod +x -- "$STAGE/$NAME/app/updater/GameLauncher.Updater"
 
+# Say so when the mode did not stick, which is what happens when this runs on Windows: MSYS
+# marks a file executable by looking at it, and an ELF binary is not something it recognises.
+# Harmless — install.sh forces the bit at install time, and so does the updater — but it looks
+# like a broken build in `tar tvzf` and is worth one line here rather than one hour later.
+[ -x "$STAGE/$NAME/app/GameLauncher" ] ||
+  note "note: the executable bit did not stick (building on Windows?). install.sh forces it on install."
+
 mkdir -p -- "$OUTPUT_DIR"
 ARCHIVE="$OUTPUT_DIR/$NAME.tar.gz"
 tar -C "$STAGE" -czf "$ARCHIVE" "$NAME"

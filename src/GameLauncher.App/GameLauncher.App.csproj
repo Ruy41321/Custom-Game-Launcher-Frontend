@@ -4,6 +4,12 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>GameLauncher.App</RootNamespace>
     <AssemblyName>GameLauncher</AssemblyName>
+
+    <!-- The icon Windows shows on the executable, the shortcut and the taskbar. It is a
+         compiled-in Win32 resource and therefore not the same thing as branding.windowIconPath,
+         which is read at start-up and can be a PNG: this one has to be an .ico and has to exist
+         when the build runs. A clone without one builds exactly as before. -->
+    <ApplicationIcon Condition="Exists('..\..\assets\icon.ico')">..\..\assets\icon.ico</ApplicationIcon>
     <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
