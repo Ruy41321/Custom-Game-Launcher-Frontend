@@ -1326,6 +1326,44 @@ whole reason D80 exists, seen working against a real deployment for the first ti
 DISTRIBUTING.md — bump, build, zip with Python, sign with `printf`, `--publish-release` — has
 never been run against a server anybody but the maintainer can reach.
 
+### The loop closed, on two platforms — 2026-08-25
+
+The first signed release was published, installed by a launcher that was already in somebody's
+hands, and then withdrawn. Nothing in this repository changed to make that happen, which was the
+point: every mechanism had been written and only one of them had ever been run end to end.
+
+- ✅ **A release travelled the whole path.** 0.2.0 signed here, verified by the server before it
+  stored anything, verified again by the installed 0.1.0 launcher, 218 MB fetched, refused until
+  the bytes hashed to what was signed, swapped and restarted. The change inside it was one byte
+  of configuration, which makes the run *more* informative rather than less: the swap does not
+  care how much changed
+- ✅ **`--retire-release` was exercised**, and behaved as designed: the route answers 404, the
+  row stays as the record of what was handed out, the artifact stays on disk so a download
+  already in flight can finish, and **nothing rolled backwards**. Standing still is the intended
+  outcome of withdrawing a build
+- ✅ **The installers are served from the deployment**, as static files behind `handle_path
+  /download/*` in Caddy rather than through the file server's app-managed roots
+- ✅ **A second machine, on real Linux.** The tarball installed on PopOS from the public link,
+  signed in, and the catalog behaved exactly as the platform rules say it should: the Linux build
+  of a game installed, and a Windows-only game offered nothing. That is D71's filtering seen from
+  the side nobody had looked at
+- ✅ **Documentation caught up with the code.** DISTRIBUTING.md gained the ServiceRegistry it had
+  never mentioned in 685 lines, three verification procedures it had asked for without showing,
+  and eight rows in the symptom table; `Documentation/guided-deployment.md` is new and addressed
+  to an assistant rather than a person
+
+**Found while writing it down, and it is the third time:** `theme.accentColor` is deserialized,
+validated, and applied by nothing — the complaint D33 makes about `InstallDirectory` and D81
+about branding, on a third field in the same file. It is documented as unimplemented rather than
+quietly removed, because forks have it in their configuration already.
+
+**Not done, and stated rather than left to be discovered**: there is no launcher release
+published for **either** platform right now, so the two installations in existence — a Windows
+machine and a PopOS one — will never be offered an update until one is cut. And the swap has
+**never been exercised on real Linux**: it was verified on Windows on 2026-08-07 and again this
+week, and §7's rule about verifying platform-specific things on the platform has not been met
+there. The next release should be cut for both, and watched on the Linux machine.
+
 ### Next up
 
 The numbering is shared with the backend repository. Self-update is not a numbered milestone —

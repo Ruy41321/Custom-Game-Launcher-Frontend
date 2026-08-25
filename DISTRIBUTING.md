@@ -444,6 +444,10 @@ git clone https://github.com/Ruy41321/Custom-Game-Launcher-Frontend && cd Custom
 - **`serviceRegistry.url`** is where §1.8 lives, or `null` for a launcher that asks nobody. It
   is configuration rather than code precisely because the *key* is not: an attacker who
   redirects a launcher to their own registry gains nothing, since the answer will not verify.
+- **`theme.accentColor` is read and applied to nothing.** It has shipped since the first
+  milestone and no code consults it; the views that use an accent take the toolkit's. It is left
+  in the example because forks already have it in their files, not because setting it does
+  anything. `theme.variant` — `dark`, `light`, `system` — does work.
 - **`updates.channel`** is `stable` or `beta`, and it is a shipped setting rather than a user
   preference on purpose: a player who could move themselves onto a stream you never published to
   could replace their launcher with a build that does not open, and the launcher is the program
@@ -488,7 +492,21 @@ a string that starts differently, or is not 124 long, did not survive the copy.
 
 ### 3.3 Logo and icon
 
-Drop your files where `branding` points. Anything missing simply is not shown.
+Drop your files where `branding` points. Anything missing simply is not shown — a path that does
+not resolve is answered with no logo rather than with a launcher that will not open, so a typo
+here costs you a picture and never the program. **The paths are case-sensitive on Linux** and are
+relative to the application directory; a leading `/` makes one absolute and it will find nothing.
+
+**The icon on the executable is a different thing**, and it catches everybody. What `branding`
+sets is the icon *inside* the window, at run time, and a PNG is fine for it. The icon Windows
+shows on the `.exe` itself, on the shortcut and in the taskbar is a **compiled-in Win32
+resource**: it has to be an `.ico`, and it has to exist when the build runs. Put one at
+`assets/icon.ico` and the project picks it up — `<ApplicationIcon>` is conditional on that path,
+so a clone without one builds exactly as before. The same file is what `installer.iss` gives to
+`SetupIconFile` for the installer's own icon.
+
+An `.ico` holds several sizes; generate it from a **square** source, or whatever tool you use
+will squash a wide logo to fit.
 
 ### 3.4 Languages, if you want fewer or more
 

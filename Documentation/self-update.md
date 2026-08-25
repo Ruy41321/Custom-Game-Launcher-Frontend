@@ -153,7 +153,10 @@ cannot learn which platforms a deployment builds for.
 
 ### 5. The public key is in the binary, not in `launcher.config.json`
 
-`LauncherReleaseKey.PublicKeyBase64`, and it is **the one thing a fork changes in code**.
+`LauncherReleaseKey.PublicKeyBase64`, and it is **one of the two things a fork changes in
+code** — the other is `ServiceRegistryKey.PublicKeyBase64`, which authorizes a different
+answer for the same reason and is described in
+[service-discovery.md](service-discovery.md).
 
 The reason is not that a file is easier to edit than a binary. It is that **the file the updater
 overwrites must not be the file that authorizes the update**: `launcher.config.json` ships inside
