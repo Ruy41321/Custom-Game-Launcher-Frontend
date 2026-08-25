@@ -54,7 +54,9 @@ has to be out of reach.
 | `apiBaseUrl` | `http://localhost:8080/api/v1/`. With a registry configured this becomes the **fallback** — see [service-discovery.md](service-discovery.md) |
 | `serviceRegistry.url` | no registry: the address above is used as it always was |
 | `theme.variant` | `dark` — the product default. `light` and `system` are the alternatives |
-| `branding.logoPath` | the built-in asset; the path is relative to the application directory |
+| `theme.accentColor` | nothing. **It is read and not applied** — see below |
+| `branding.logoPath` | no logo beside the app name. The path is relative to the application directory and is **case-sensitive on Linux** |
+| `branding.windowIconPath` | the toolkit's default window icon. A PNG is fine here, unlike the executable's own icon |
 | `localization.defaultLanguage` | **follow the operating system's UI language** |
 | `updates.channel` | `stable`. `beta` is the other one, and anything unrecognised is read as `stable` |
 | `defaultInstallDirectory` | decide from the platform — the right answer on a machine the packager knows nothing about |
@@ -221,29 +223,48 @@ product default; `light` and `system` are supported. The accent colour is a `#RR
 
 ## What a fork actually has to do
 
-1. Edit `launcher.config.json`: name, `apiBaseUrl`, accent colour, logo, release channel.
-2. Drop in the logo and window icon assets.
+1. Edit `launcher.config.json`: name, `apiBaseUrl`, logo, window icon, release channel, and the
+   registry's URL if it has one.
+2. Drop in the logo and window icon assets — and `assets/icon.ico` if the fork wants Windows to
+   put its icon on the executable itself, which is a compiled-in Win32 resource rather than
+   anything this file can describe.
 3. Optionally add or remove languages.
 4. **If the fork publishes launcher releases**, put its signing key's public half in
-   `LauncherReleaseKey.PublicKeyBase64` — one line in
+   `LauncherReleaseKey.PublicKeyBase64` —
    `src/GameLauncher.Core/Updates/LauncherReleaseKey.cs`.
-5. `dotnet publish -c Release -r <rid> --self-contained` for each runtime identifier.
+5. **If the fork runs a service registry**, put *its* public half in
+   `ServiceRegistryKey.PublicKeyBase64` —
+   `src/GameLauncher.Core/Discovery/ServiceRegistryKey.cs`.
+6. `dotnet publish -c Release -r <rid> --self-contained` for each runtime identifier.
 
-**Step 4 is the only code change a fork makes, and it is deliberate.** Everything else is
-configuration; the key is not, because *the file the updater overwrites must not be the file that
-authorizes the update* — `launcher.config.json` ships inside the directory a swap replaces. The
-reasoning in full is in [self-update.md](self-update.md).
+**Steps 4 and 5 are the only code changes a fork makes, and both are deliberate.** Everything
+else is configuration; a key is not, because *the file the updater overwrites must not be the
+file that authorizes the update* — `launcher.config.json` ships inside the directory a swap
+replaces. The reasoning in full is in [self-update.md](self-update.md) and
+[service-discovery.md](service-discovery.md).
 
-A fork that does not sign releases skips it: the key is empty by default, and an empty key means
-the launcher checks for no updates at all rather than checking and trusting whoever answers.
+Note the asymmetry with the registry's **URL**, which *is* configuration: pointing a launcher at
+a hostile registry gains an attacker nothing, because the answer will not verify. What
+authorizes is code; what is merely pointed at is not.
 
-Apart from that one line: no rebuild of the resource assembly, no search-and-replace across the
-tree. That is the property this whole document exists to keep true.
+A fork that does neither skips both: each key is empty by default, and an empty key means the
+launcher asks nothing at all rather than asking and trusting whoever answers.
+
+Apart from those two lines: no rebuild of the resource assembly, no search-and-replace across
+the tree. That is the property this whole document exists to keep true.
 
 ---
 
 ## What is not implemented
 
+- **`theme.accentColor` is read and applied to nothing.** It is deserialized, it is validated,
+  and no code consults it: `ApplyTheme` reads `variant` alone, and the four views that use an
+  accent bind to `SystemAccentColor`, which is the toolkit's — the operating system's — and not
+  this file's. Setting it changes nothing on screen. It is documented here rather than quietly
+  removed because the field has shipped since milestone 1 and forks have it in their files
+  already; wiring it up means overriding that resource and its Fluent variants at start-up, and
+  answering a malformed colour with the default rather than a failed launch. Until then, the
+  honest entry is this one. (`theme.variant` **is** applied, and always has been.)
 - **No settings sync.** Preferences are per machine.
 - **No configuration reload at run time.** `launcher.config.json` is read once at start-up and
   cached for the process; changing it needs a restart.

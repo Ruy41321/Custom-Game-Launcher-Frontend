@@ -12,6 +12,13 @@ publish/
 dist/
 Output/
 
+## A cut release: the archive, the signed document, its signature. Build artifacts, and the
+## document names a machine's own paths and hashes — nothing here belongs in a commit.
+launcher-*.zip
+launcher-*.tar.gz
+release.json
+release.json.sig
+
 ## Test / coverage
 TestResults/
 coverage*.json

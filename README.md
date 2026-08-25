@@ -129,6 +129,7 @@ it, and what is deliberately not implemented.
 | [logging-and-local-state.md](Documentation/logging-and-local-state.md) | What the launcher writes to disk, on Windows and Linux |
 | [self-update.md](Documentation/self-update.md) | Checking for a newer launcher, the five rules it holds, and the swap that replaces it |
 | [service-discovery.md](Documentation/service-discovery.md) | Asking a registry where the API is, so a moved backend does not need a new release |
+| [guided-deployment.md](Documentation/guided-deployment.md) | Addressed to an AI assistant helping somebody deploy: the order, the two silent failures, what never to touch |
 
 ## Project layout
 
