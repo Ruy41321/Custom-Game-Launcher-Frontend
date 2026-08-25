@@ -2,8 +2,8 @@
 
 This is the guide for shipping **your** launcher: your name on it, your server, your games,
 your testers. It assumes you can use a terminal and rent a Linux machine. It does not assume you
-write C# or C++, and you will not have to change either — except for **one line**, which has a
-section of its own and a reason.
+write C# or C++, and you will not have to change either — except for **two lines**, which have a
+section of their own and a reason.
 
 It covers the whole cycle in the order you actually have to do it in. The order matters more
 than it looks: two of these steps are hard to undo if taken late.
@@ -130,6 +130,21 @@ collapses into one shared by everybody** — one launcher stuck in a crash loop 
 testers out of signing in, and nothing reports why. `HSTS_ENABLED` is harmless before TLS
 (browsers ignore it over plain HTTP) but is listed here because the two belong together.
 
+**Prove it, because nothing else will.** There is no header, no log line and no page that says
+whether this is right; the only evidence is the limiter's own behaviour. Exhaust it from one
+machine — a wrong password against an address that does not exist, so nothing real is touched:
+
+```bash
+for i in $(seq 1 12); do curl -s -o /dev/null -w "%{http_code} " -X POST https://games.example.com/api/v1/auth/login -H "Content-Type: application/json" -d '{"email":"nobody@example.invalid","password":"wrong"}'; done; echo
+```
+
+You should see ten `401` and then `429`. Now, **within the same minute**, make the same request
+from a second machine — the server itself over its public name will do. `401` means the two
+addresses have buckets of their own and this is configured correctly. `429` means everybody
+shares one, and one launcher in a crash loop can lock out every tester you have.
+
+Worth re-running after anything changes in front of the API.
+
 ### 1.5 Email — or deliberately none
 
 There are two supported answers here and you should pick one on purpose. **With SMTP**, people
@@ -158,9 +173,36 @@ MAIL_LINK_BASE_URL=https://games.example.com
 building a link from it would let a stranger pick the domain that appears in somebody else's
 inbox. If your origin changes, change it here too.
 
+**Test the relay before anything depends on it.** This talks to it exactly as the server will —
+same host, port, TLS and credentials — without involving the API, so a failure names itself
+instead of arriving as a registration nobody can finish:
+
+```bash
+python3 - <<'EOF'
+import smtplib, ssl
+from email.message import EmailMessage
+env = dict(l.strip().split('=', 1) for l in open('.env')
+           if l.strip() and not l.startswith('#') and '=' in l)
+m = EmailMessage()
+m['From'] = env['MAIL_FROM_ADDRESS']; m['To'] = 'you@example.com'
+m['Subject'] = 'relay test'; m.set_content('It works.')
+s = smtplib.SMTP_SSL(env['SMTP_HOST'], int(env['SMTP_PORT']), timeout=20)
+s.login(env['SMTP_USERNAME'], env['SMTP_PASSWORD']); s.send_message(m); s.quit()
+print('SENT')
+EOF
+```
+
+Use `SMTP_SSL` for an implicit-TLS port such as 465 and `SMTP` plus `starttls()` for 587, which
+is the same distinction `SMTP_SECURITY` makes. A connection that hangs and then times out is
+usually the provider **blocking outbound SMTP** — many do, against spam, and they will lift it
+for a machine on request. `SMTPAuthenticationError` almost always means `SMTP_USERNAME` needs to
+be the full address rather than the part before the `@`.
+
 > **Whether the mail arrives is a DNS problem, not a code one.** SPF, DKIM and a reverse record
 > decide whether a verification link lands in an inbox or in spam. A transactional provider
-> handles all three for you; a VPS sending directly on port 25 handles none.
+> handles all three for you; a VPS sending directly on port 25 handles none. Expect the first
+> messages from a brand-new domain to be treated harshly whatever you do — especially the ones
+> carrying a link, which is every message this server sends.
 
 #### If you have no SMTP server, and do not want one
 
@@ -255,6 +297,77 @@ Then open <http://localhost:9090/admin>. Set `ADMIN_ENABLED=true` in `.env` firs
 - **`.env` is mode 0600** and never in version control.
 - **Logs grow.** `/var/log/launcher` rotates by size; the volume does not.
 
+### 1.8 The address your launchers carry forever — and how not to be stuck with it
+
+Everything above assumes your API stays where you first put it. `apiBaseUrl` is compiled into
+`launcher.config.json` and ships inside every copy you hand out, so the day you move the backend
+— a bigger machine, a different provider, a domain you would rather use — **every installation
+already out there is broken until somebody installs a new one.** Which is the situation
+self-update exists to end, arriving from the other side.
+
+[ServiceRegistry](https://github.com/Ruy41321/ServiceRegistry) is the answer: a very small
+service whose only job is to tell a launcher where the API is *right now*. The launcher asks it
+at start-up, and you change the answer from a browser panel in a few seconds.
+
+It is optional. A build with no registry configured behaves exactly as this page has described
+so far.
+
+```bash
+git clone https://github.com/Ruy41321/ServiceRegistry && cd ServiceRegistry && cp .env.example .env
+```
+
+Three secrets, and the first one is a key pair of its own:
+
+```bash
+docker compose run --rm registry keygen    # REGISTRY_SIGNING_KEY, and the public half
+docker compose run --rm registry hashpw    # ADMIN_PASSWORD_HASH
+openssl rand -base64 48                    # JWT_SECRET
+```
+
+**This private key belongs on this machine**, unlike the release key of Step 2 — it is what the
+registry signs its answers with, so it lives where the signing happens. The public half is the
+second of the two lines a fork changes in code (§3.2). Quote the Argon2id hash in `.env`:
+it contains `$`, which compose would otherwise read as a variable.
+
+Running both stacks on one host needs the ports moved, because the registry defaults to the
+API's:
+
+```bash
+HOST_PUBLIC_PORT=127.0.0.1:8082
+HOST_ADMIN_PORT=9091
+```
+
+Note the asymmetry, which will otherwise cost you ten minutes: the public mapping takes the
+`127.0.0.1:` prefix from you, while the admin one already has it written into the compose file —
+supplying it twice produces `invalid IP address: 127.0.0.1:127.0.0.1`.
+
+```bash
+docker compose up -d --build
+```
+
+Then another `reverse_proxy` block in Caddy, its own `TRUSTED_PROXIES` when you reach §1.4 (a
+comma-separated list here, not a JSON array), and one record in the panel through an SSH tunnel
+to 9091:
+
+```
+key          game-launcher-api
+environment  production
+baseUrl      https://games.example.com/api/v1/
+```
+
+**Every answer it gives is signed**, with the same ECDSA P-256 the release check already uses.
+That is what makes the *URL* safe to keep in a configuration file while the key stays in code:
+pointing a launcher at a hostile registry gains an attacker nothing, because the answer will not
+verify. A launcher with a URL and no key asks nothing at all.
+
+> **Put it on a name you are willing to keep.** It is the one address every copy carries
+> forever, so it earns a hostname of its own rather than a subdomain of the thing it exists to
+> let you move. Ideally, in time, a different host from the API.
+
+One cost, stated plainly: a backend that moves is picked up at the **next** start, not the one in
+progress, because every HTTP client binds its address when the launcher starts. The first launch
+after a move fails to reach the server.
+
 ---
 
 ## Step 2 — The signing key, before you build anything
@@ -315,6 +428,7 @@ git clone https://github.com/Ruy41321/Custom-Game-Launcher-Frontend && cd Custom
 {
   "appName": "My Studio Launcher",
   "apiBaseUrl": "https://games.example.com/api/v1/",
+  "serviceRegistry": { "url": null, "serviceKey": "game-launcher-api", "environment": "production" },
   "theme": { "variant": "dark", "accentColor": "#7C5CFF" },
   "branding": { "logoPath": "assets/logo.png", "windowIconPath": "assets/icon.ico" },
   "localization": { "defaultLanguage": null, "supportedLanguages": ["en", "it", "fr"] },
@@ -324,7 +438,12 @@ git clone https://github.com/Ruy41321/Custom-Game-Launcher-Frontend && cd Custom
 ```
 
 - **`apiBaseUrl` must end in `/api/v1/`**, trailing slash included — without it the last segment
-  is silently dropped when a relative path is resolved against it.
+  is silently dropped when a relative path is resolved against it. With a registry configured
+  this is the **fallback**: the address used when the registry cannot be reached and nothing is
+  cached yet.
+- **`serviceRegistry.url`** is where §1.8 lives, or `null` for a launcher that asks nobody. It
+  is configuration rather than code precisely because the *key* is not: an attacker who
+  redirects a launcher to their own registry gains nothing, since the answer will not verify.
 - **`updates.channel`** is `stable` or `beta`, and it is a shipped setting rather than a user
   preference on purpose: a player who could move themselves onto a stream you never published to
   could replace their launcher with a build that does not open, and the launcher is the program
@@ -334,7 +453,7 @@ git clone https://github.com/Ruy41321/Custom-Game-Launcher-Frontend && cd Custom
 User preferences — language, theme, install directory — live in a separate file under the
 platform's app-data directory, so an update never overwrites them.
 
-### 3.2 The one line of code
+### 3.2 The two lines of code
 
 `src/GameLauncher.Core/Updates/LauncherReleaseKey.cs`:
 
@@ -351,6 +470,21 @@ the signature already protects.
 
 Leave it empty and your launcher checks for no updates at all — which is the honest state for a
 fork that has not set up signing, rather than checking and trusting whoever answers.
+
+And `src/GameLauncher.Core/Discovery/ServiceRegistryKey.cs`, if you set up §1.8:
+
+```csharp
+public static string PublicKeyBase64 => "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...";
+```
+
+That one is the public half `servicereg keygen` printed, and the panel shows it again under
+**Signing key**. It is in code for exactly the reason the other one is — the file the updater
+overwrites must not be the file that authorizes what overwrites it — and empty means this build
+asks no registry anything, whatever `launcher.config.json` says.
+
+Both strings are 124 characters and both begin `MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE`, because
+that prefix names the P-256 curve rather than your key. It is a useful thing to know by sight:
+a string that starts differently, or is not 124 long, did not survive the copy.
 
 ### 3.3 Logo and icon
 
@@ -542,6 +676,15 @@ openssl dgst -sha256 -sign release-signing.key release.json | openssl base64 -A 
 
 `platform` is `windows` or `linux`; `arch` is `x64`. `notes` is one paragraph shown in the banner.
 
+**Check your own signature before uploading a few hundred megabytes.** It is the same check the
+server is about to make, and then every installed launcher makes again:
+
+```bash
+openssl ec -in release-signing.key -pubout -out pub.pem 2>/dev/null && openssl base64 -d -A -in release.json.sig -out sig.bin && openssl dgst -sha256 -verify pub.pem -signature sig.bin release.json
+```
+
+`Verified OK` is the only acceptable answer.
+
 **4. Hand the server the three files.** It verifies before it stores anything:
 
 ```bash
@@ -659,6 +802,14 @@ Stated so you do not go looking:
 | The update downloads and then fails | The archive has `\` in its entry names, or no `updater/` in the build |
 | `ISCC` or `package-linux.sh` refuses to build | The payload is not there, or was published without `updater/` — build Step 4 first |
 | A launcher never sees an update, and it was installed by the installer | It was moved, or installed, somewhere its parent directory is not user-writable — reinstall under `%LOCALAPPDATA%\Programs` |
+| A public key is 128 characters and its prefix reads `Kj9IPz0` | The DER went through a **PowerShell pipe**, which carries text and not bytes, so every byte it could not represent became `?`. Use a shell where a pipe is a pipe, or `-outform DER -out` to a file and base64 that |
+| The server refuses a secret you generated | `openssl rand -base64` can produce a `$`, and compose reads that as a variable inside `.env`. `openssl rand -hex 48` cannot |
+| `invalid IP address: 127.0.0.1:127.0.0.1` from the registry | `HOST_ADMIN_PORT` was given the prefix its compose file already writes. The public port takes one; the admin port does not — §1.8 |
+| The registry never accepts the password you hashed | The Argon2id hash was not single-quoted in `.env`. It contains `$` |
+| `rm: cannot remove '/tmp/...': Operation not permitted` after `docker compose cp` | The container does not run as root and those files were written by one. `docker compose exec -u root` |
+| The publish is refused for the version | `1.1` instead of `1.1.0`. The three-component form is the only one accepted, because two spellings of one version are two rows racing to be newest |
+| Two executables inside the installer, one of them the old name | `dist/` was not emptied before republishing. `dotnet publish` does not clean its output directory |
+| Every launcher is offered forever the version it just installed | The version in the release document and the one in the binary disagree — the document is compared against `Directory.Build.props`, not against a number you type |
 | An update rolls back every time on Linux | The archive lost the executable bit and the launcher could not start — the installer forces it now, so make sure you are on a build from 2026-08-07 or later |
 
 The launcher writes a log next to its own data — `%LOCALAPPDATA%\CustomGameLauncher\logs` on
